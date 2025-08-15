@@ -6,16 +6,42 @@
   "scripts": {
     "start": "concurrently \"npm:dev-renderer\" \"npm:dev-main\"",
     "dev-renderer": "cd renderer && npm run dev",
-    "dev-main": "electron ."
+    "dev-main": "electron .",
+    "build": "npm run build-renderer && electron-builder",
+    "build-renderer": "cd renderer && npm run build"
+  },
+  "build": {
+    "appId": "com.gsti.app",
+    "productName": "GSTI",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/dist/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "electron": "^31.7.7"
+    "electron": "^31.7.7",
+    "electron-builder": "^26.0.12"
   },
   "dependencies": {
-    "mysql2": "^3.14.3"
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.1",
+    "axios": "^1.11.0",
+    "mysql2": "^3.14.3",
+    "react-imask": "^7.6.1"
   }
 }
