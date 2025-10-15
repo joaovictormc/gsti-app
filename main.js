@@ -9,8 +9,8 @@ const isDev = process.env.NODE_ENV !== "production";
 // Lembre-se de usar os dados que você configurou (usuário e senha do BD)
 const dbPool = mysql
   .createPool({
-    host: "192.168.100.20", // ou o IP do seu servidor caseiro
-    user: "gsti_app",
+    host: "192.168.100.4", // ou o IP do seu servidor caseiro
+    user: "gsit_app",
     password: "gstiapp", // <<-- SUA SENHA AQUI
     database: "gsti_db",
     waitForConnections: true,
@@ -33,9 +33,9 @@ ipcMain.handle("get-customers", async () => {
 // Listener para adicionar um novo cliente
 ipcMain.handle("add-customer", async (event, customerData) => {
   // Agora pegamos os novos campos do objeto recebido
-  const { nome, tipo_pessoa, cpf_cnpj, telefone, email } = customerData;
+  const { nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } = customerData;
   const sql =
-    "INSERT INTO clientes (nome, tipo_pessoa, cpf_cnpj, telefone, email) VALUES (?, ?, ?, ?, ?)";
+    "INSERT INTO clientes (nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco) VALUES (?, ?, ?, ?, ?, ?)";
 
   try {
     // Passamos os novos campos como parâmetros na ordem correta
@@ -45,6 +45,7 @@ ipcMain.handle("add-customer", async (event, customerData) => {
       cpf_cnpj,
       telefone,
       email,
+      endereco,
     ]);
     console.log("Cliente adicionado com sucesso, ID:", result.insertId);
     return { success: true, id: result.insertId };

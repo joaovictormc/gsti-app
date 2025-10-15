@@ -57,7 +57,13 @@ function ProductServiceGrid() {
       alert("Descrição e Valor são obrigatórios.");
       return;
     }
-    const result = await window.api.addProduct(newProduct);
+
+    const dataToSend = {
+      ...newProduct,
+      valor: parseFloat(newProduct.valor),
+    };
+
+    const result = await window.api.addProduct(dataToSend);
     if (result.success) {
       handleCloseModal();
       fetchProducts();

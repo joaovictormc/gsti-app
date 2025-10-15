@@ -129,6 +129,7 @@ function CustomerGrid() {
       // **CORREÇÃO DEFINITIVA DA FORMATAÇÃO**
       valueFormatter: (params) => formatPhone(params.value),
     },
+    { field: "email", headerName: "E-Mail", flex: 1, minWidth: 200 },
     { field: "endereco", headerName: "Endereço", flex: 1, minWidth: 200 },
     {
       field: "actions",
