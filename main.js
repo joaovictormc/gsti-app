@@ -33,7 +33,8 @@ ipcMain.handle("get-customers", async () => {
 // Listener para adicionar um novo cliente
 ipcMain.handle("add-customer", async (event, customerData) => {
   // Agora pegamos os novos campos do objeto recebido
-  const { nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } = customerData;
+  const { nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } =
+    customerData;
   const sql =
     "INSERT INTO clientes (nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco) VALUES (?, ?, ?, ?, ?, ?)";
 
@@ -71,35 +72,44 @@ ipcMain.handle("validate-cnpj", async (event, cnpj) => {
   }
 });
 
-ipcMain.handle('update-customer', async (event, customerData) => {
-  const { id, nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } = customerData;
-  const sql = "UPDATE clientes SET nome = ?, tipo_pessoa = ?, cpf_cnpj = ?, telefone = ?, email = ?, endereco = ? WHERE id = ?";
-  
+ipcMain.handle("update-customer", async (event, customerData) => {
+  const { id, nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } =
+    customerData;
+  const sql =
+    "UPDATE clientes SET nome = ?, tipo_pessoa = ?, cpf_cnpj = ?, telefone = ?, email = ?, endereco = ? WHERE id = ?";
+
   try {
-    await dbPool.query(sql, [nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco, id]);
+    await dbPool.query(sql, [
+      nome,
+      tipo_pessoa,
+      cpf_cnpj,
+      telefone,
+      email,
+      endereco,
+      id,
+    ]);
     return { success: true };
   } catch (error) {
-    console.error('Erro ao atualizar cliente:', error);
+    console.error("Erro ao atualizar cliente:", error);
     return { success: false, error: error.message };
   }
 });
 
 // Listener para DELETAR um cliente
-ipcMain.handle('delete-customer', async (event, customerId) => {
+ipcMain.handle("delete-customer", async (event, customerId) => {
   const sql = "DELETE FROM clientes WHERE id = ?";
-  
+
   try {
     await dbPool.query(sql, [customerId]);
     return { success: true };
   } catch (error) {
-    console.error('Erro ao deletar cliente:', error);
+    console.error("Erro ao deletar cliente:", error);
     return { success: false, error: error.message };
   }
 });
 
-
 // Listener para buscar todos os produtos e serviços
-ipcMain.handle('get-products', async () => {
+ipcMain.handle("get-products", async () => {
   try {
     const [rows] = await dbPool.query("SELECT * FROM produtos_servicos");
     return rows;
@@ -110,45 +120,154 @@ ipcMain.handle('get-products', async () => {
 });
 
 // Listener para adicionar um novo produto/serviço
-ipcMain.handle('add-product', async (event, productData) => {
+ipcMain.handle("add-product", async (event, productData) => {
   const { descricao, valor, tipo } = productData;
-  const sql = "INSERT INTO produtos_servicos (descricao, valor, tipo) VALUES (?, ?, ?)";
+  const sql =
+    "INSERT INTO produtos_servicos (descricao, valor, tipo) VALUES (?, ?, ?)";
   try {
     const [result] = await dbPool.query(sql, [descricao, valor, tipo]);
     return { success: true, id: result.insertId };
   } catch (error) {
-    console.error('Erro ao adicionar produto/serviço:', error);
+    console.error("Erro ao adicionar produto/serviço:", error);
     return { success: false, error: error.message };
   }
 });
 
 // Listener para ATUALIZAR um produto/serviço existente
-ipcMain.handle('update-product', async (event, productData) => {
+ipcMain.handle("update-product", async (event, productData) => {
   const { id, descricao, valor, tipo } = productData;
-  const sql = "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ? WHERE id = ?";
-  
+  const sql =
+    "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ? WHERE id = ?";
+
   try {
     await dbPool.query(sql, [descricao, valor, tipo, id]);
     return { success: true };
   } catch (error) {
-    console.error('Erro ao atualizar produto/serviço:', error);
+    console.error("Erro ao atualizar produto/serviço:", error);
     return { success: false, error: error.message };
   }
 });
 
 // Listener para DELETAR um produto/serviço
-ipcMain.handle('delete-product', async (event, productId) => {
+ipcMain.handle("delete-product", async (event, productId) => {
   const sql = "DELETE FROM produtos_servicos WHERE id = ?";
-  
+
   try {
     await dbPool.query(sql, [productId]);
     return { success: true };
   } catch (error) {
-    console.error('Erro ao deletar produto/serviço:', error);
+    console.error("Erro ao deletar produto/serviço:", error);
     return { success: false, error: error.message };
   }
 });
 
+// Listener para buscar a LISTA de Ordens de Serviço
+ipcMain.handle("get-os-list", async () => {
+  // Este SQL une a tabela de OS com a de clientes para pegar o nome
+  const sql = `
+    SELECT 
+      os.id, 
+      os.equipamento_descricao, 
+      os.status,
+      os.data_entrada,
+      c.nome AS nome_cliente 
+    FROM 
+      ordens_servico AS os
+    JOIN 
+      clientes AS c ON os.id_cliente = c.id
+    ORDER BY 
+      os.id DESC
+  `;
+
+  try {
+    const [rows] = await dbPool.query(sql);
+    return rows;
+  } catch (error) {
+    console.error("Erro ao buscar Ordens de Serviço:", error);
+    return [];
+  }
+});
+
+// Listener para buscar os dados necessários para o formulário de OS (clientes e produtos)
+ipcMain.handle("get-active-data", async () => {
+  try {
+    const [customers] = await dbPool.query(
+      "SELECT id, nome FROM clientes ORDER BY nome ASC"
+    );
+    const [products] = await dbPool.query(
+      "SELECT id, descricao, valor, tipo FROM produtos_servicos ORDER BY descricao ASC"
+    );
+    return { success: true, customers, products };
+  } catch (error) {
+    console.error("Erro ao buscar dados ativos:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para ADICIONAR uma nova Ordem de Serviço (VERSÃO ATUALIZADA)
+ipcMain.handle("add-os", async (event, osData) => {
+  // 1. Adicionamos 'data_entrada' à desestruturação
+  const {
+    id_cliente,
+    equipamento_descricao,
+    numero_serie,
+    defeito_relatado,
+    observacoes_entrada,
+    status,
+    data_entrada,
+  } = osData;
+
+  // 2. Adicionamos o campo 'data_entrada' ao SQL
+  const sql = `
+    INSERT INTO ordens_servico 
+    (id_cliente, equipamento_descricao, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada) 
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  try {
+    // 3. Passamos o valor de 'data_entrada' como parâmetro
+    const [result] = await dbPool.query(sql, [
+      id_cliente,
+      equipamento_descricao,
+      numero_serie,
+      defeito_relatado,
+      observacoes_entrada,
+      status,
+      data_entrada,
+    ]);
+
+    return { success: true, osId: result.insertId };
+  } catch (error) {
+    console.error("Erro ao adicionar OS:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para adicionar os ITENS a uma OS
+ipcMain.handle("add-os-items", async (event, { osId, items }) => {
+  // Se não houver itens, consideramos sucesso
+  if (items.length === 0) {
+    return { success: true };
+  }
+
+  const sql =
+    "INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario) VALUES ?";
+  // Mapeia o array de itens para o formato que o driver do MySQL espera para inserção em massa
+  const values = items.map((item) => [
+    osId,
+    item.id,
+    item.quantidade,
+    item.valor,
+  ]);
+
+  try {
+    await dbPool.query(sql, [values]);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao adicionar itens à OS:", error);
+    return { success: false, error: error.message };
+  }
+});
 
 function createWindow() {
   const mainWindow = new BrowserWindow({

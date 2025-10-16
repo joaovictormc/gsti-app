@@ -18,4 +18,11 @@ contextBridge.exposeInMainWorld('api', {
   addProduct: (productData) => ipcRenderer.invoke('add-product', productData),
   updateProduct: (productData) => ipcRenderer.invoke('update-product', productData),
   deleteProduct: (productId) => ipcRenderer.invoke('delete-product', productId),  
+
+  // NOVAS FUNÇÕES DE OS
+  getOSList: () => ipcRenderer.invoke('get-os-list'),
+  getOSList: () => ipcRenderer.invoke('get-os-list'),
+  getActiveData: () => ipcRenderer.invoke('get-active-data'),
+  addOS: (osData) => ipcRenderer.invoke('add-os', osData),   
+  addOSItems: (data) => ipcRenderer.invoke('add-os-items', data),
 });
