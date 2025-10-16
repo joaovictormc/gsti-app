@@ -9,8 +9,11 @@ import {
   MenuItem,
   InputLabel,
   FormControl,
+  IconButton, // <-- Importe o IconButton
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
+import EditIcon from "@mui/icons-material/Edit"; // <-- Importe o ícone de Edição
+import DeleteIcon from "@mui/icons-material/Delete"; // <-- Importe o ícone de Deleção
 
 const modalStyle = {
   position: "absolute",
@@ -29,7 +32,8 @@ const BLANK_PRODUCT = { descricao: "", valor: "", tipo: "Serviço" };
 function ProductServiceGrid() {
   const [products, setProducts] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newProduct, setNewProduct] = useState(BLANK_PRODUCT);
+  // Renomeado para refletir que pode ser um produto novo ou existente
+  const [editingProduct, setEditingProduct] = useState(null);
 
   const fetchProducts = async () => {
     const productsData = await window.api.getProducts();
@@ -40,30 +44,59 @@ function ProductServiceGrid() {
     fetchProducts();
   }, []);
 
-  const handleOpenModal = () => {
-    setNewProduct(BLANK_PRODUCT);
+  const handleOpenAddModal = () => {
+    setEditingProduct(BLANK_PRODUCT);
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => setIsModalOpen(false);
+  const handleOpenEditModal = (product) => {
+    // Garante que o valor seja uma string para o campo de texto
+    setEditingProduct({ ...product, valor: String(product.valor) });
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingProduct(null); // Limpa o estado ao fechar
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setNewProduct((prevState) => ({ ...prevState, [name]: value }));
+    setEditingProduct((prevState) => ({ ...prevState, [name]: value }));
+  };
+  
+  const handleDelete = async (productId) => {
+    if (window.confirm("Tem certeza que deseja excluir este item?")) {
+      const result = await window.api.deleteProduct(productId);
+      if (result.success) {
+        fetchProducts(); // Atualiza a lista após a exclusão
+      } else {
+        alert(`Erro ao excluir: ${result.error}`);
+      }
+    }
   };
 
   const handleSave = async () => {
-    if (!newProduct.descricao || !newProduct.valor) {
+    if (!editingProduct.descricao || !editingProduct.valor) {
       alert("Descrição e Valor são obrigatórios.");
       return;
     }
 
+    const valorString = String(editingProduct.valor).replace(",", ".");
+    const valorNumerico = parseFloat(valorString) || 0;
+
     const dataToSend = {
-      ...newProduct,
-      valor: parseFloat(newProduct.valor),
+      ...editingProduct,
+      valor: valorNumerico,
     };
 
-    const result = await window.api.addProduct(dataToSend);
+    // Decide se deve chamar a API de 'update' ou 'add'
+    const apiCall = dataToSend.id
+      ? window.api.updateProduct
+      : window.api.addProduct;
+      
+    const result = await apiCall(dataToSend);
+
     if (result.success) {
       handleCloseModal();
       fetchProducts();
@@ -80,7 +113,31 @@ function ProductServiceGrid() {
       field: "valor",
       headerName: "Valor (R$)",
       width: 150,
-      valueFormatter: (params) => Number(params.value).toFixed(2),
+      renderCell: (params) => {
+        const value = Number(params.row.valor);
+        if (isNaN(value)) return "R$ 0,00";
+        return new Intl.NumberFormat("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        }).format(value);
+      },
+    },
+    // --- NOVA COLUNA DE AÇÕES ---
+    {
+      field: "actions",
+      headerName: "Ações",
+      width: 100,
+      sortable: false,
+      renderCell: (params) => (
+        <>
+          <IconButton onClick={() => handleOpenEditModal(params.row)}>
+            <EditIcon />
+          </IconButton>
+          <IconButton onClick={() => handleDelete(params.row.id)}>
+            <DeleteIcon />
+          </IconButton>
+        </>
+      ),
     },
   ];
 
@@ -90,7 +147,7 @@ function ProductServiceGrid() {
         <Typography variant="h4" gutterBottom>
           Gestão de Produtos e Serviços
         </Typography>
-        <Button variant="contained" onClick={handleOpenModal}>
+        <Button variant="contained" onClick={handleOpenAddModal}>
           Adicionar Novo
         </Button>
       </Box>
@@ -102,52 +159,56 @@ function ProductServiceGrid() {
         />
       </Box>
 
-      <Modal open={isModalOpen} onClose={handleCloseModal}>
-        <Box sx={modalStyle}>
-          <Typography variant="h6" component="h2">
-            Novo Produto/Serviço
-          </Typography>
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="descricao"
-            label="Descrição"
-            value={newProduct.descricao}
-            onChange={handleInputChange}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="valor"
-            label="Valor (R$)"
-            type="number"
-            value={newProduct.valor}
-            onChange={handleInputChange}
-          />
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Tipo</InputLabel>
-            <Select
-              name="tipo"
-              value={newProduct.tipo}
-              label="Tipo"
+      {/* O Modal agora só renderiza se houver um 'editingProduct' */}
+      {editingProduct && (
+        <Modal open={isModalOpen} onClose={handleCloseModal}>
+          <Box sx={modalStyle}>
+            <Typography variant="h6" component="h2">
+              {editingProduct.id ? "Editar Produto/Serviço" : "Novo Produto/Serviço"}
+            </Typography>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="descricao"
+              label="Descrição"
+              value={editingProduct.descricao}
               onChange={handleInputChange}
-            >
-              <MenuItem value="Serviço">Serviço</MenuItem>
-              <MenuItem value="Produto">Produto</MenuItem>
-            </Select>
-          </FormControl>
-          <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
-            <Button onClick={handleCloseModal} sx={{ mr: 1 }}>
-              Cancelar
-            </Button>
-            <Button variant="contained" onClick={handleSave}>
-              Salvar
-            </Button>
+            />
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="valor"
+              label="Valor (R$)"
+              type="text"
+              inputMode="decimal"
+              value={editingProduct.valor}
+              onChange={handleInputChange}
+            />
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Tipo</InputLabel>
+              <Select
+                name="tipo"
+                value={editingProduct.tipo}
+                label="Tipo"
+                onChange={handleInputChange}
+              >
+                <MenuItem value="Serviço">Serviço</MenuItem>
+                <MenuItem value="Produto">Produto</MenuItem>
+              </Select>
+            </FormControl>
+            <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
+              <Button onClick={handleCloseModal} sx={{ mr: 1 }}>
+                Cancelar
+              </Button>
+              <Button variant="contained" onClick={handleSave}>
+                Salvar
+              </Button>
+            </Box>
           </Box>
-        </Box>
-      </Modal>
+        </Modal>
+      )}
     </>
   );
 }

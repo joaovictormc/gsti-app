@@ -5,7 +5,7 @@ import CustomerForm from "./CustomerForm";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 
-// FUNÇÕES DE FORMATAÇÃO (CORRIGIDAS E MAIS ROBUSTAS)
+// --- FUNÇÕES DE FORMATAÇÃO (Seu código, já estão ótimas) ---
 const formatPhone = (phone) => {
   if (!phone) return "";
   const cleaned = String(phone).replace(/\D/g, "");
@@ -13,7 +13,7 @@ const formatPhone = (phone) => {
     return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
   if (cleaned.length === 10)
     return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-  return phone; // Retorna o original se não corresponder
+  return phone;
 };
 
 const formatDocument = (doc) => {
@@ -26,7 +26,7 @@ const formatDocument = (doc) => {
       /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
       "$1.$2.$3/$4-$5"
     );
-  return doc; // Retorna o original se não corresponder
+  return doc;
 };
 
 const modalStyle = {
@@ -54,10 +54,13 @@ function CustomerGrid() {
   const [customers, setCustomers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
-  const [formKey, setFormKey] = useState(0); // Chave para forçar o reset do formulário
+  const [formKey, setFormKey] = useState(0);
 
-  const fetchCustomers = async () =>
-    setCustomers(await window.api.getCustomers());
+  // --- LÓGICA DE BUSCA DE DADOS OTIMIZADA ---
+  const fetchCustomers = async () => {
+    const data = await window.api.getCustomers();
+    setCustomers(data);
+  };
 
   useEffect(() => {
     fetchCustomers();
@@ -65,7 +68,7 @@ function CustomerGrid() {
 
   const handleOpenAddModal = () => {
     setEditingCustomer(BLANK_CUSTOMER);
-    setFormKey((prevKey) => prevKey + 1); // Muda a key para garantir um formulário novo
+    setFormKey((prevKey) => prevKey + 1);
     setIsModalOpen(true);
   };
 
@@ -77,13 +80,13 @@ function CustomerGrid() {
       ])
     );
     setEditingCustomer(sanitizedCustomer);
-    setFormKey((prevKey) => prevKey + 1); // Muda a key para garantir um formulário novo
+    setFormKey((prevKey) => prevKey + 1);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setEditingCustomer(null); // Limpa o estado ao fechar
+    setEditingCustomer(null);
   };
 
   const handleDelete = async (customerId) => {
@@ -107,7 +110,6 @@ function CustomerGrid() {
     }
   };
 
-  // A validação agora é uma responsabilidade do formulário, mas a chamada é feita aqui
   const handleValidation = async (cnpj) => {
     return await window.api.validateCnpj(cnpj);
   };
@@ -119,15 +121,15 @@ function CustomerGrid() {
       field: "cpf_cnpj",
       headerName: "CPF/CNPJ",
       width: 160,
-      // **CORREÇÃO DEFINITIVA DA FORMATAÇÃO**
-      valueFormatter: (params) => formatDocument(params.value),
+      // --- ALTERAÇÃO PRINCIPAL: Usando renderCell para controle total ---
+      renderCell: (params) => formatDocument(params.row.cpf_cnpj),
     },
     {
       field: "telefone",
       headerName: "Telefone",
       width: 140,
-      // **CORREÇÃO DEFINITIVA DA FORMATAÇÃO**
-      valueFormatter: (params) => formatPhone(params.value),
+      // --- ALTERAÇÃO PRINCIPAL: Usando renderCell para controle total ---
+      renderCell: (params) => formatPhone(params.row.telefone),
     },
     { field: "email", headerName: "E-Mail", flex: 1, minWidth: 200 },
     { field: "endereco", headerName: "Endereço", flex: 1, minWidth: 200 },
@@ -165,10 +167,9 @@ function CustomerGrid() {
       </Box>
       <Modal open={isModalOpen} onClose={handleCloseModal}>
         <Box sx={modalStyle}>
-          {/* Renderiza o formulário apenas se houver um cliente para editar/adicionar */}
           {editingCustomer && (
             <CustomerForm
-              key={formKey} // A chave garante que o componente seja 100% novo a cada abertura
+              key={formKey}
               initialData={editingCustomer}
               onSave={handleSave}
               onClose={handleCloseModal}

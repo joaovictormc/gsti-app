@@ -47,10 +47,8 @@ ipcMain.handle("add-customer", async (event, customerData) => {
       email,
       endereco,
     ]);
-    console.log("Cliente adicionado com sucesso, ID:", result.insertId);
     return { success: true, id: result.insertId };
   } catch (error) {
-    console.error("Erro ao adicionar cliente:", error);
     return { success: false, error: error.message };
   }
 });
@@ -120,6 +118,33 @@ ipcMain.handle('add-product', async (event, productData) => {
     return { success: true, id: result.insertId };
   } catch (error) {
     console.error('Erro ao adicionar produto/serviço:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para ATUALIZAR um produto/serviço existente
+ipcMain.handle('update-product', async (event, productData) => {
+  const { id, descricao, valor, tipo } = productData;
+  const sql = "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ? WHERE id = ?";
+  
+  try {
+    await dbPool.query(sql, [descricao, valor, tipo, id]);
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao atualizar produto/serviço:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para DELETAR um produto/serviço
+ipcMain.handle('delete-product', async (event, productId) => {
+  const sql = "DELETE FROM produtos_servicos WHERE id = ?";
+  
+  try {
+    await dbPool.query(sql, [productId]);
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao deletar produto/serviço:', error);
     return { success: false, error: error.message };
   }
 });

@@ -16,4 +16,6 @@ contextBridge.exposeInMainWorld('api', {
    // NOVAS FUNÇÕES DE PRODUTOS/SERVIÇOS
   getProducts: () => ipcRenderer.invoke('get-products'),
   addProduct: (productData) => ipcRenderer.invoke('add-product', productData),
+  updateProduct: (productData) => ipcRenderer.invoke('update-product', productData),
+  deleteProduct: (productId) => ipcRenderer.invoke('delete-product', productId),  
 });
