@@ -1,7 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const mysql = require("mysql2");
 const axios = require("axios");
+const fs = require("fs");
+const PDFDocument = require("pdfkit");
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -161,34 +163,25 @@ ipcMain.handle("delete-product", async (event, productId) => {
   }
 });
 
-// Listener para buscar a LISTA de Ordens de Serviço
 ipcMain.handle("get-os-list", async () => {
-  // Este SQL une a tabela de OS com a de clientes para pegar o nome
   const sql = `
     SELECT 
       os.id, 
-      os.equipamento_descricao, 
-      os.status,
-      os.data_entrada,
+      -- Concatena os novos campos para exibição no grid
+      CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento, 
+      os.status, os.data_entrada, os.valor_total,
       c.nome AS nome_cliente 
-    FROM 
-      ordens_servico AS os
-    JOIN 
-      clientes AS c ON os.id_cliente = c.id
-    ORDER BY 
-      os.id DESC
-  `;
-
+    FROM ordens_servico AS os
+    JOIN clientes AS c ON os.id_cliente = c.id
+    ORDER BY os.id DESC`;
   try {
     const [rows] = await dbPool.query(sql);
     return rows;
   } catch (error) {
-    console.error("Erro ao buscar Ordens de Serviço:", error);
     return [];
   }
 });
 
-// Listener para buscar os dados necessários para o formulário de OS (clientes e produtos)
 ipcMain.handle("get-active-data", async () => {
   try {
     const [customers] = await dbPool.query(
@@ -199,85 +192,552 @@ ipcMain.handle("get-active-data", async () => {
     );
     return { success: true, customers, products };
   } catch (error) {
-    console.error("Erro ao buscar dados ativos:", error);
     return { success: false, error: error.message };
   }
 });
 
-// Listener para ADICIONAR uma nova Ordem de Serviço (VERSÃO ATUALIZADA)
-ipcMain.handle("add-os", async (event, osData) => {
-  // 1. Adicionamos 'data_entrada' à desestruturação
+// --- CORREÇÃO DO BUG (get-os-details) ---
+ipcMain.handle("get-os-details", async (event, osId) => {
+  try {
+    const [osRows] = await dbPool.query(
+      "SELECT * FROM ordens_servico WHERE id = ?",
+      [osId]
+    );
+    if (osRows.length === 0)
+      return { success: false, error: "OS não encontrada." };
+
+    // CORREÇÃO: Alterado de 'produtos_serviços' para 'produtos_servicos'
+    const [itemRows] = await dbPool.query(
+      `SELECT ps.id, ps.descricao, ps.valor, ps.tipo, oi.quantidade 
+       FROM os_itens oi 
+       JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id 
+       WHERE oi.id_os = ?`,
+      [osId]
+    );
+
+    return { success: true, os: osRows[0], items: itemRows };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("add-os", async (event, { osData, total }) => {
+  // Atualizado para os novos campos
   const {
     id_cliente,
-    equipamento_descricao,
+    tipo_equipamento,
+    marca,
+    modelo,
     numero_serie,
     defeito_relatado,
     observacoes_entrada,
     status,
     data_entrada,
+    garantia_dias,
   } = osData;
-
-  // 2. Adicionamos o campo 'data_entrada' ao SQL
-  const sql = `
-    INSERT INTO ordens_servico 
-    (id_cliente, equipamento_descricao, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada) 
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `;
-
+  const sql = `INSERT INTO ordens_servico 
+    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
   try {
-    // 3. Passamos o valor de 'data_entrada' como parâmetro
     const [result] = await dbPool.query(sql, [
       id_cliente,
-      equipamento_descricao,
+      tipo_equipamento,
+      marca,
+      modelo,
       numero_serie,
       defeito_relatado,
       observacoes_entrada,
       status,
       data_entrada,
+      total,
+      garantia_dias,
     ]);
-
     return { success: true, osId: result.insertId };
   } catch (error) {
-    console.error("Erro ao adicionar OS:", error);
     return { success: false, error: error.message };
   }
 });
 
-// Listener para adicionar os ITENS a uma OS
-ipcMain.handle("add-os-items", async (event, { osId, items }) => {
-  // Se não houver itens, consideramos sucesso
-  if (items.length === 0) {
-    return { success: true };
-  }
+ipcMain.handle("update-os", async (event, { osData, total }) => {
+  // Atualizado para os novos campos (incluindo laudo/solucao)
+  const {
+    id,
+    id_cliente,
+    tipo_equipamento,
+    marca,
+    modelo,
+    numero_serie,
+    defeito_relatado,
+    observacoes_entrada,
+    laudo_tecnico,
+    solucao_aplicada,
+    status,
+    data_entrada,
+    garantia_dias,
+  } = osData;
 
+  const connection = await dbPool.getConnection();
+  try {
+    const [rows] = await connection.query(
+      "SELECT status, data_saida, garantia_dias FROM ordens_servico WHERE id = ?",
+      [id]
+    );
+    const osAtual = rows[0];
+
+    if (osAtual.status === "Entregue" && osAtual.data_saida) {
+      const dataSaida = new Date(osAtual.data_saida);
+      const dataExpiracaoGarantia = new Date(
+        dataSaida.setDate(dataSaida.getDate() + osAtual.garantia_dias)
+      );
+      const hoje = new Date();
+      if (hoje > dataExpiracaoGarantia) {
+        throw new Error(
+          "Esta OS está fora da garantia e não pode ser alterada."
+        );
+      }
+    }
+
+    let sqlDataSaida = "";
+    if (status === "Entregue" && osAtual.status !== "Entregue") {
+      sqlDataSaida = ", data_saida = NOW()";
+    }
+
+    const sql = `
+      UPDATE ordens_servico SET 
+      id_cliente = ?, tipo_equipamento = ?, marca = ?, modelo = ?, 
+      numero_serie = ?, defeito_relatado = ?, observacoes_entrada = ?, 
+      laudo_tecnico = ?, solucao_aplicada = ?, status = ?, 
+      data_entrada = ?, valor_total = ?, garantia_dias = ?
+      ${sqlDataSaida}
+      WHERE id = ?`;
+
+    await connection.query(sql, [
+      id_cliente,
+      tipo_equipamento,
+      marca,
+      modelo,
+      numero_serie,
+      defeito_relatado,
+      observacoes_entrada,
+      laudo_tecnico,
+      solucao_aplicada,
+      status,
+      data_entrada,
+      total,
+      garantia_dias,
+      id,
+    ]);
+
+    connection.release();
+    return { success: true };
+  } catch (error) {
+    connection.release();
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("add-os-items", async (event, { osId, items }) => {
+  if (items.length === 0) return { success: true };
   const sql =
     "INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario) VALUES ?";
-  // Mapeia o array de itens para o formato que o driver do MySQL espera para inserção em massa
   const values = items.map((item) => [
     osId,
     item.id,
     item.quantidade,
     item.valor,
   ]);
-
   try {
     await dbPool.query(sql, [values]);
     return { success: true };
   } catch (error) {
-    console.error("Erro ao adicionar itens à OS:", error);
     return { success: false, error: error.message };
   }
 });
 
+ipcMain.handle("update-os-items", async (event, { osId, items }) => {
+  const connection = await dbPool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query("DELETE FROM os_itens WHERE id_os = ?", [osId]);
+    if (items.length > 0) {
+      const sql =
+        "INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario) VALUES ?";
+      const values = items.map((item) => [
+        osId,
+        item.id,
+        item.quantidade,
+        item.valor,
+      ]);
+      await connection.query(sql, [values]);
+    }
+    await connection.commit();
+    return { success: true };
+  } catch (error) {
+    await connection.rollback();
+    return { success: false, error: error.message };
+  } finally {
+    connection.release();
+  }
+});
+
+ipcMain.handle("delete-os", async (event, osId) => {
+  try {
+    await dbPool.query("DELETE FROM ordens_servico WHERE id = ?", [osId]);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// --- FUNÇÃO PDF ATUALIZADA ---
+ipcMain.handle("generate-entry-receipt", async (event, osId) => {
+  // 1. Buscar todos os dados necessários (SQL ATUALIZADO)
+  const sql = `
+    SELECT 
+      os.*, 
+      c.nome AS nome_cliente, 
+      c.telefone AS telefone_cliente, 
+      c.cpf_cnpj,
+      c.email AS email_cliente,      -- <-- CAMPO ADICIONADO
+      c.endereco AS endereco_cliente  -- <-- CAMPO ADICIONADO
+    FROM ordens_servico os
+    JOIN clientes c ON os.id_cliente = c.id
+    WHERE os.id = ?
+  `;
+  let osData;
+  try {
+    const [rows] = await dbPool.query(sql, [osId]);
+    if (rows.length === 0) throw new Error("OS não encontrada.");
+    osData = rows[0];
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+
+  // 2. Perguntar onde salvar o arquivo
+  const { filePath } = await dialog.showSaveDialog({
+    title: "Salvar Comprovante de Entrada",
+    defaultPath: `os_entrada_${osId}.pdf`,
+    filters: [{ name: "Arquivos PDF", extensions: ["pdf"] }],
+  });
+
+  if (!filePath) {
+    return { success: false, error: "Usuário cancelou a gravação." };
+  }
+
+  // 3. Gerar o PDF
+  try {
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
+
+    // Seus Termos de Serviço (do passo anterior)
+    const termosDeServico = `
+TERMOS PARA ORÇAMENTO E SERVIÇO (Baseado na Lei 8.078/90 - CDC)
+1. ORÇAMENTO PRÉVIO (Art. 40, CDC): O presente documento registra o recebimento do equipamento para análise. O fornecedor é obrigado a entregar ao CLIENTE um orçamento prévio discriminando o valor da mão-de-obra, materiais, condições de pagamento e prazo de execução.
+2. PRAZO DE ORÇAMENTO: O prazo para apresentação do orçamento é de até 5 (cinco) dias úteis. O orçamento apresentado terá validade de 10 (dez) dias, a contar do seu recebimento (aprovação) pelo CLIENTE.
+3. AUTORIZAÇÃO DE SERVIÇO (Art. 39, CDC): Nenhum serviço será executado sem a autorização expressa e prévia do CLIENTE. Serviços executados sem autorização são equiparados a amostras grátis, não gerando ônus ao consumidor.
+4. DADOS E SOFTWARE: O CLIENTE é o único responsável por realizar o backup prévio de seus dados (arquivos, fotos, etc.). A empresa não se responsabiliza por qualquer perda de dados.
+5. ABANDONO DE EQUIPAMENTO: O CLIENTE deve retirar o equipamento em até 90 (noventa) dias após ser notificado da conclusão do serviço (ou da recusa do orçamento). Após este prazo, o equipamento será considerado abandonado, podendo a empresa tomar as medidas legais cabíveis para cobrir custos de serviço e armazenamento.
+6. GARANTIA PÓS-SERVIÇO (Art. 26, CDC): Se o orçamento for aprovado e o serviço executado, a garantia legal para os serviços e peças é de 90 (noventa) dias a contar da data de efetiva entrega do equipamento. Esta garantia cobre exclusivamente o defeito solucionado e as peças substituídas, conforme descrito no laudo de saída.
+`;
+
+    // --- Função para desenhar o conteúdo (para as 2 vias) ---
+    const drawReceipt = (isCliente) => {
+      const via = isCliente ? "Via do Cliente" : "Via da Empresa";
+      doc
+        .fontSize(16)
+        .text("Comprovante de Entrada de Equipamento", { align: "center" });
+      doc.fontSize(10).text(via, { align: "right" });
+      doc.fontSize(12).text(`OS Nº: ${osData.id}`, { align: "left" });
+      doc.moveDown(1);
+
+      // --- Dados do Cliente (ATUALIZADO) ---
+      doc.fontSize(14).text("Dados do Cliente", { underline: true });
+      doc.fontSize(10).text(`Nome: ${osData.nome_cliente}`);
+      doc.text(`CPF/CNPJ: ${osData.cpf_cnpj || "Não informado"}`);
+      doc.text(`Telefone: ${osData.telefone_cliente || "Não informado"}`);
+      doc.text(`Email: ${osData.email_cliente || "Não informado"}`);
+      doc.text(`Endereço: ${osData.endereco_cliente || "Não informado"}`);
+      doc.moveDown(1);
+      // --- FIM DA ATUALIZAÇÃO ---
+
+      // Dados do Equipamento
+      doc.fontSize(14).text("Dados do Equipamento", { underline: true });
+      const dataEntrada = new Date(osData.data_entrada).toLocaleString(
+        "pt-BR",
+        {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+      );
+      doc.fontSize(10).text(`Data de Entrada: ${dataEntrada}`);
+      doc.text(`Tipo: ${osData.tipo_equipamento || "Não informado"}`);
+      doc.text(`Marca: ${osData.marca || "Não informado"}`);
+      doc.text(`Modelo: ${osData.modelo || "Não informado"}`);
+      doc.text(`Nº de Série: ${osData.numero_serie || "Não informado"}`);
+      doc.moveDown(0.5);
+      doc.text(`Defeito Relatado: ${osData.defeito_relatado || "Nenhum"}`);
+      doc.moveDown(0.5);
+      doc.text(`Observações: ${osData.observacoes_entrada || "Nenhuma"}`);
+      doc.moveDown(2);
+
+      // Termos de Serviço
+      doc
+        .fontSize(12)
+        .text("Termos de Serviço e Orçamento", { underline: true });
+      doc.fontSize(8).text(termosDeServico, { align: "justify" });
+      doc.moveDown(2);
+
+      // Assinatura
+      doc.fontSize(10);
+      doc.text("___________________________________________", {
+        align: "center",
+      });
+      doc.text("Assinatura do Cliente", { align: "center" });
+      doc.text(
+        "Declaro estar ciente e de acordo com os termos acima e das condições do equipamento descrito.",
+        { align: "center", width: 450 }
+      );
+    };
+
+    // --- Desenha as duas vias ---
+    drawReceipt(false); // Via da Empresa
+    doc
+      .addPage()
+      .fontSize(10)
+      .text(
+        "----------------------------------------------------------------------------------------------------------",
+        { align: "center" }
+      );
+    doc.moveDown(2);
+    drawReceipt(true); // Via do Cliente
+
+    doc.end();
+
+    // 4. Abrir o PDF após salvar
+    stream.on("finish", () => {
+      shell.openPath(filePath);
+    });
+
+    return { success: true, path: filePath };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// --- NOVA FUNÇÃO: GERAR PDF DE SAÍDA/GARANTIA ---
+ipcMain.handle("generate-exit-receipt", async (event, osId) => {
+  // 1. Buscar dados da OS, Cliente e Itens
+  let osData, itemsData;
+  try {
+    const osSql = `
+      SELECT os.*, c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj,
+             c.email AS email_cliente, c.endereco AS endereco_cliente
+      FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id
+      WHERE os.id = ?`;
+    const [osRows] = await dbPool.query(osSql, [osId]);
+    if (osRows.length === 0) throw new Error("OS não encontrada.");
+    osData = osRows[0];
+
+    // Verifica se a OS tem data de saída (necessária para garantia)
+    if (!osData.data_saida) {
+      // Define a data de saída como AGORA se ainda não tiver sido definida
+      await dbPool.query(
+        "UPDATE ordens_servico SET data_saida = NOW() WHERE id = ?",
+        [osId]
+      );
+      // Busca novamente os dados para pegar a data_saida atualizada
+      const [updatedOsRows] = await dbPool.query(osSql, [osId]);
+      osData = updatedOsRows[0];
+    }
+
+    const itemsSql = `
+      SELECT ps.descricao, oi.quantidade, oi.valor_unitario
+      FROM os_itens oi JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id
+      WHERE oi.id_os = ?`;
+    const [itemRows] = await dbPool.query(itemsSql, [osId]);
+    itemsData = itemRows;
+  } catch (error) {
+    return { success: false, error: `Erro ao buscar dados: ${error.message}` };
+  }
+
+  // 2. Perguntar onde salvar
+  const { filePath } = await dialog.showSaveDialog({
+    title: "Salvar Recibo de Saída e Garantia",
+    defaultPath: `os_saida_garantia_${osId}.pdf`,
+    filters: [{ name: "Arquivos PDF", extensions: ["pdf"] }],
+  });
+
+  if (!filePath) return { success: false, error: "Usuário cancelou." };
+
+  // 3. Gerar o PDF
+  try {
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
+
+    // --- Cabeçalho ---
+    doc
+      .fontSize(18)
+      .text("Recibo de Entrega e Termo de Garantia", { align: "center" });
+    doc.fontSize(12).text(`OS Nº: ${osData.id}`, { align: "left" });
+    const dataSaida = new Date(osData.data_saida);
+    doc
+      .fontSize(10)
+      .text(`Data de Entrega: ${dataSaida.toLocaleDateString("pt-BR")}`, {
+        align: "right",
+      });
+    doc.moveDown(1);
+
+    // --- Dados do Cliente ---
+    doc.fontSize(14).text("Cliente", { underline: true });
+    doc.fontSize(10).text(`Nome: ${osData.nome_cliente}`);
+    doc.text(`CPF/CNPJ: ${osData.cpf_cnpj || "Não informado"}`);
+    doc.text(`Telefone: ${osData.telefone_cliente || "Não informado"}`);
+    doc.text(`Email: ${osData.email_cliente || "Não informado"}`);
+    doc.text(`Endereço: ${osData.endereco_cliente || "Não informado"}`);
+    doc.moveDown(1);
+
+    // --- Dados do Equipamento ---
+    doc.fontSize(14).text("Equipamento", { underline: true });
+    doc
+      .fontSize(10)
+      .text(
+        `Tipo: ${osData.tipo_equipamento || ""} ${osData.marca || ""} ${
+          osData.modelo || ""
+        }`
+      );
+    doc.text(`Nº de Série: ${osData.numero_serie || "Não informado"}`);
+    doc.moveDown(1);
+
+    // --- Detalhes do Serviço ---
+    doc.fontSize(14).text("Serviço Realizado", { underline: true });
+    doc
+      .fontSize(10)
+      .text("Defeito Relatado:", { continued: true })
+      .text(osData.defeito_relatado || "Não informado.");
+    doc.moveDown(0.5);
+    doc
+      .text("Laudo Técnico:", { continued: true })
+      .text(osData.laudo_tecnico || "Não informado.");
+    doc.moveDown(0.5);
+    doc
+      .text("Solução Aplicada:", { continued: true })
+      .text(osData.solucao_aplicada || "Não informada.");
+    doc.moveDown(1);
+
+    // --- Itens/Custos ---
+    doc.fontSize(14).text("Itens e Custos", { underline: true });
+    const tableTop = doc.y;
+    const itemX = 50;
+    const qtyX = 350;
+    const priceX = 420;
+    const totalX = 500;
+
+    doc.fontSize(10);
+    doc.text("Descrição", itemX, tableTop);
+    doc.text("Qtd.", qtyX, tableTop, { width: 50, align: "right" });
+    doc.text("Vlr. Unit.", priceX, tableTop, { width: 70, align: "right" });
+    doc.text("Subtotal", totalX, tableTop, { width: 70, align: "right" });
+    doc
+      .moveTo(itemX, doc.y + 5)
+      .lineTo(doc.page.width - itemX, doc.y + 5)
+      .stroke();
+    doc.moveDown(1);
+
+    let currentY = doc.y;
+    itemsData.forEach((item) => {
+      const subtotal = item.quantidade * item.valor_unitario;
+      doc.text(item.descricao, itemX, currentY, { width: 300 });
+      doc.text(item.quantidade, qtyX, currentY, { width: 50, align: "right" });
+      doc.text(
+        Number(item.valor_unitario).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        }),
+        priceX,
+        currentY,
+        { width: 70, align: "right" }
+      );
+      doc.text(
+        subtotal.toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        }),
+        totalX,
+        currentY,
+        { width: 70, align: "right" }
+      );
+      currentY += 20; // Ajuste o espaçamento conforme necessário
+      doc.y = currentY; // Move o cursor para a próxima linha
+    });
+
+    doc
+      .moveTo(itemX, doc.y + 5)
+      .lineTo(doc.page.width - itemX, doc.y + 5)
+      .stroke();
+    doc.moveDown(1);
+    doc
+      .fontSize(12)
+      .text(
+        `Valor Total: ${Number(osData.valor_total).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        })}`,
+        { align: "right" }
+      );
+    doc.moveDown(2);
+
+    // --- Garantia ---
+    doc.fontSize(14).text("Termo de Garantia", { underline: true });
+    doc.fontSize(10);
+    const garantiaDias = osData.garantia_dias || 0;
+    const dataExpiracao = new Date(dataSaida);
+    dataExpiracao.setDate(dataExpiracao.getDate() + garantiaDias);
+    doc.text(
+      `Este serviço possui garantia de ${garantiaDias} dias, válida a partir da data de entrega (${dataSaida.toLocaleDateString(
+        "pt-BR"
+      )}).`
+    );
+    doc.text(
+      `A garantia expira em: ${dataExpiracao.toLocaleDateString("pt-BR")}.`
+    );
+    doc.moveDown(0.5);
+    doc.text(
+      'A garantia cobre defeitos de fabricação nas peças substituídas e/ou mão de obra referente ao serviço descrito em "Solução Aplicada". Não cobre mau uso, danos por software, acidentes ou defeitos não relacionados ao reparo original. Consulte os Termos de Serviço completos para detalhes.'
+    );
+    doc.moveDown(2);
+
+    // --- Assinatura ---
+    doc.text("___________________________________________", {
+      align: "center",
+    });
+    doc.text("Assinatura do Cliente", { align: "center" });
+    doc.text(
+      "Declaro ter recebido o equipamento descrito acima nas condições especificadas.",
+      { align: "center", width: 450 }
+    );
+
+    doc.end();
+    stream.on("finish", () => {
+      shell.openPath(filePath);
+    });
+    return { success: true, path: filePath };
+  } catch (error) {
+    return { success: false, error: `Erro ao gerar PDF: ${error.message}` };
+  }
+});
+
+// --- FUNÇÕES DA JANELA ---
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-    },
+    webPreferences: { preload: path.join(__dirname, "preload.js") },
   });
-
   if (isDev) {
     mainWindow.loadURL("http://localhost:5173");
     mainWindow.webContents.openDevTools();
@@ -287,15 +747,9 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
-
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  if (process.platform !== "darwin") app.quit();
 });
-
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
