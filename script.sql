@@ -1,15 +1,14 @@
 -- =================================================================
 -- GSTI - Gestor de Serviços de TI
--- MIGRATION VERSION 1: Create Initial Schema
--- Data: 10 de Agosto de 2025
--- Este script cria todas as tabelas iniciais para a v1.1 do app.
+-- Script de Criação do Schema v1.2 (Reflete Módulos de OS e Despesas)
+-- Data: 20 de Outubro de 2025
 -- =================================================================
 
 -- Cria o banco de dados se ele não existir.
-CREATE DATABASE IF NOT EXISTS gsti_db;
+CREATE DATABASE IF NOT EXISTS gsti_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE gsti_db;
 
--- Tabela de Usuários para controle de acesso
+-- Tabela de Usuários (Mantida do script original, para futuro uso)
 CREATE TABLE IF NOT EXISTS usuarios (
     id INT PRIMARY KEY AUTO_INCREMENT,
     nome VARCHAR(255) NOT NULL,
@@ -17,7 +16,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     senha VARCHAR(255) NOT NULL -- Armazenará um hash da senha
 );
 
--- Tabela de Clientes com os novos campos
+-- Tabela de Clientes (Mantida do script original)
 CREATE TABLE IF NOT EXISTS clientes (
     id INT PRIMARY KEY AUTO_INCREMENT,
     nome VARCHAR(255) NOT NULL,
@@ -28,7 +27,7 @@ CREATE TABLE IF NOT EXISTS clientes (
     endereco TEXT
 );
 
--- Tabela de Equipamentos do cliente (inventário)
+-- Tabela de Equipamentos (Mantida do script original, pode ser usada futuramente para histórico)
 CREATE TABLE IF NOT EXISTS equipamentos (
     id INT PRIMARY KEY AUTO_INCREMENT,
     cliente_id INT NOT NULL,
@@ -39,7 +38,7 @@ CREATE TABLE IF NOT EXISTS equipamentos (
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );
 
--- Tabela de Produtos e Serviços oferecidos
+-- Tabela de Produtos e Serviços (Mantida do script original)
 CREATE TABLE IF NOT EXISTS produtos_servicos (
     id INT PRIMARY KEY AUTO_INCREMENT,
     descricao TEXT NOT NULL,
@@ -47,39 +46,54 @@ CREATE TABLE IF NOT EXISTS produtos_servicos (
     tipo VARCHAR(50) NOT NULL -- 'Produto' ou 'Serviço'
 );
 
--- Tabela Principal das Ordens de Serviço
-CREATE TABLE ordens_servico (
+-- Tabela Principal das Ordens de Serviço (ATUALIZADA)
+CREATE TABLE IF NOT EXISTS ordens_servico (
     id INT AUTO_INCREMENT PRIMARY KEY,
     id_cliente INT NOT NULL,
-    equipamento_descricao VARCHAR(255) NOT NULL,
+    -- Campos estruturados do equipamento
+    tipo_equipamento VARCHAR(100) DEFAULT 'Outro',
+    marca VARCHAR(100),
+    modelo VARCHAR(100),
     numero_serie VARCHAR(100),
+    -- Detalhes da OS
     defeito_relatado TEXT,
     observacoes_entrada TEXT,
-    status ENUM('Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado') NOT NULL DEFAULT 'Em Aberto',
+    laudo_tecnico TEXT,       -- Adicionado
+    solucao_aplicada TEXT,    -- Adicionado
+    status ENUM('Orçamento', 'Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado') NOT NULL DEFAULT 'Orçamento', -- Status Atualizado
     data_entrada DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     data_saida DATETIME,
     valor_total DECIMAL(10, 2) DEFAULT 0.00,
-    FOREIGN KEY (id_cliente) REFERENCES clientes(id)
+    garantia_dias INT DEFAULT 90, -- Adicionado
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE RESTRICT -- Impede deletar cliente com OS
 );
 
--- Tabela para Ligar Produtos/Serviços a uma OS
-CREATE TABLE os_itens (
+-- Tabela para Ligar Produtos/Serviços a uma OS (Mantida do script original)
+CREATE TABLE IF NOT EXISTS os_itens (
     id INT AUTO_INCREMENT PRIMARY KEY,
     id_os INT NOT NULL,
     id_produto_servico INT NOT NULL,
     quantidade INT NOT NULL DEFAULT 1,
     valor_unitario DECIMAL(10, 2) NOT NULL,
-    FOREIGN KEY (id_os) REFERENCES ordens_servico(id) ON DELETE CASCADE,
-    FOREIGN KEY (id_produto_servico) REFERENCES produtos_servicos(id)
+    FOREIGN KEY (id_os) REFERENCES ordens_servico(id) ON DELETE CASCADE, -- Itens somem se a OS for deletada
+    FOREIGN KEY (id_produto_servico) REFERENCES produtos_servicos(id) ON DELETE RESTRICT -- Impede deletar produto/serviço usado em OS
 );
 
--- Tabela para o Módulo Financeiro
-CREATE TABLE IF NOT EXISTS lancamentos_financeiros (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    descricao TEXT NOT NULL,
-    valor DECIMAL(10, 2) NOT NULL,
-    tipo VARCHAR(50) NOT NULL, -- 'Receita' ou 'Despesa'
+-- Tabela para o Módulo Financeiro (Despesas - NOVA ESTRUTURA)
+CREATE TABLE IF NOT EXISTS despesas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    descricao VARCHAR(255) NOT NULL,
     data DATE NOT NULL,
-    os_id INT, -- Opcional, para vincular a uma OS
-    FOREIGN KEY (os_id) REFERENCES ordens_de_servico(id)
+    categoria VARCHAR(100), -- Ex: Peças, Ferramentas, Combustível, Outros
+
+    -- Campos para cálculo de combustível
+    km_rodados DECIMAL(10, 2) NULL,
+    preco_litro DECIMAL(10, 2) NULL,
+    consumo_medio DECIMAL(5, 2) NULL,
+
+    -- Valor final da despesa
+    valor DECIMAL(10, 2) NOT NULL
 );
+
+-- Adiciona um índice na coluna de status para buscas mais rápidas (Opcional, mas recomendado)
+CREATE INDEX idx_os_status ON ordens_servico(status);

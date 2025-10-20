@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Button,
@@ -28,87 +28,109 @@ const toLocalISOString = (date) => {
   return localISOTime;
 };
 
+// --- CORREÇÃO: Inicializa campos de texto com '' ---
 const BLANK_OS = {
-  id_cliente: null,
-  // Novos campos de equipamento
-  tipo_equipamento: "Notebook",
-  marca: "",
-  modelo: "",
-  numero_serie: "",
-  defeito_relatado: "",
-  observacoes_entrada: "",
-  // Novos campos de laudo
-  laudo_tecnico: "",
-  solucao_aplicada: "",
-  status: "Orçamento",
+  id_cliente: null, // Autocomplete lida bem com null
+  tipo_equipamento: "Notebook", // Select precisa de valor válido
+  marca: "", // TextField espera ''
+  modelo: "", // TextField espera ''
+  numero_serie: "", // TextField espera ''
+  defeito_relatado: "", // TextField espera ''
+  observacoes_entrada: "", // TextField espera ''
+  laudo_tecnico: "", // TextField espera ''
+  solucao_aplicada: "", // TextField espera ''
+  status: "Orçamento", // Select precisa de valor válido
   data_entrada: toLocalISOString(new Date()),
   garantia_dias: 90,
 };
 
-// Função auxiliar para garantir que null vira ''
 const nullToString = (value) =>
-  value === null || value === undefined ? "" : value;
+  value === null || value === undefined ? "" : String(value);
 
 function OSForm({ initialData, onSave, onClose }) {
   const [osData, setOsData] = useState(BLANK_OS);
   const [activeData, setActiveData] = useState({ customers: [], products: [] });
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedCustomerValue, setSelectedCustomerValue] = useState(null); // Mantém o objeto do cliente
 
   const isEditing = initialData && initialData.os && initialData.os.id;
 
+  // Busca dados ativos (clientes, produtos)
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchActiveData = async () => {
       const result = await window.api.getActiveData();
-      if (result.success) {
-        setActiveData(result);
-        if (isEditing) {
-          // --- CORREÇÃO: Garante que todos os campos sejam strings vazias se forem null ---
-          const osFromDb = initialData.os;
-          const osToEdit = {
-            ...osFromDb,
-            // Garante que campos de texto não sejam null
-            tipo_equipamento:
-              nullToString(osFromDb.tipo_equipamento) || "Notebook", // Garante valor válido
-            marca: nullToString(osFromDb.marca),
-            modelo: nullToString(osFromDb.modelo),
-            numero_serie: nullToString(osFromDb.numero_serie),
-            defeito_relatado: nullToString(osFromDb.defeito_relatado),
-            observacoes_entrada: nullToString(osFromDb.observacoes_entrada),
-            laudo_tecnico: nullToString(osFromDb.laudo_tecnico),
-            solucao_aplicada: nullToString(osFromDb.solucao_aplicada),
-            status: nullToString(osFromDb.status) || "Orçamento", // Garante valor válido
-            data_entrada: toLocalISOString(osFromDb.data_entrada),
-            garantia_dias: osFromDb.garantia_dias || 90,
-          };
-          setOsData(osToEdit);
-          const itemsToEdit = initialData.items.map((item) => ({
-            ...item,
-            quantidade: item.quantidade || 1,
-            temp_id: Date.now() + Math.random(),
-          }));
-          setSelectedItems(itemsToEdit);
-        } else {
-          // Garante reset completo
-          setOsData(BLANK_OS);
-          setSelectedItems([]);
-        }
-      }
+      if (result.success) setActiveData(result);
     };
-    fetchData();
-  }, [initialData, isEditing]);
+    fetchActiveData();
+  }, []);
 
-  const handleInputChange = (e) => {
+  // Popula/Reseta o formulário
+  useEffect(() => {
+    // Só executa se os dados ativos JÁ estiverem carregados
+    if (activeData.customers.length > 0 || !isEditing) {
+      if (isEditing) {
+        const osFromDb = initialData.os;
+        const osToEdit = Object.keys(BLANK_OS).reduce(
+          (acc, key) => {
+            if (key === "data_entrada")
+              acc[key] = toLocalISOString(osFromDb[key]);
+            else if (key === "garantia_dias") acc[key] = osFromDb[key] || 90;
+            else if (key === "tipo_equipamento")
+              acc[key] = nullToString(osFromDb[key]) || "Notebook";
+            else if (key === "status")
+              acc[key] = nullToString(osFromDb[key]) || "Orçamento";
+            else acc[key] = nullToString(osFromDb[key]);
+            return acc;
+          },
+          { id: osFromDb.id, id_cliente: osFromDb.id_cliente || null }
+        );
+
+        setOsData(osToEdit);
+
+        // --- CORREÇÃO ROBUSTA para Autocomplete Cliente ---
+        // Tenta encontrar o cliente APENAS se a lista já carregou E temos um id_cliente
+        if (activeData.customers.length > 0 && osToEdit.id_cliente !== null) {
+          const customer = activeData.customers.find(
+            (c) => c.id === osToEdit.id_cliente
+          );
+          setSelectedCustomerValue(customer || null); // Define o OBJETO encontrado
+        } else {
+          // Se a lista não carregou ainda ou não há cliente, define como null
+          setSelectedCustomerValue(null);
+        }
+        // --- FIM CORREÇÃO ---
+
+        const itemsToEdit = initialData.items.map((item) => ({
+          ...item,
+          quantidade: item.quantidade || 1,
+          temp_id: Date.now() + Math.random(),
+        }));
+        setSelectedItems(itemsToEdit);
+      } else {
+        setOsData(BLANK_OS);
+        setSelectedItems([]);
+        setSelectedCustomerValue(null); // Reseta Autocomplete
+      }
+    }
+    // Agora depende de activeData.customers para garantir que a lista exista antes de procurar
+  }, [initialData, isEditing, activeData.customers]);
+
+  const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
-    setOsData((prev) => ({ ...prev, [name]: value }));
-  };
+    setOsData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  }, []);
 
-  const handleCustomerChange = (event, newValue) => {
+  const handleCustomerChange = useCallback((event, newValue) => {
+    setSelectedCustomerValue(newValue);
     setOsData((prev) => ({
       ...prev,
       id_cliente: newValue ? newValue.id : null,
     }));
-  };
+  }, []);
 
   const handleAddItem = () => {
     if (selectedProduct) {
@@ -150,19 +172,24 @@ function OSForm({ initialData, onSave, onClose }) {
     }, 0);
   };
 
+  // --- CORREÇÃO: Validação ajustada ---
   const handleSubmit = () => {
-    if (!osData.id_cliente || !osData.equipamento_descricao) {
-      // Adicionado check de equipamento
-      alert("Cliente e Descrição do Equipamento são obrigatórios.");
+    if (!osData.id_cliente) {
+      alert("O campo Cliente é obrigatório.");
+      return;
+    }
+    // Verifica se pelo menos um dos campos de equipamento está preenchido
+    if (!osData.tipo_equipamento && !osData.marca && !osData.modelo) {
+      alert("Preencha pelo menos o Tipo, Marca ou Modelo do equipamento.");
       return;
     }
     const total = calculateTotal();
     onSave(osData, selectedItems, total);
   };
+  // --- FIM CORREÇÃO ---
 
   const total = calculateTotal();
-  const selectedCustomer =
-    activeData.customers.find((c) => c.id === osData.id_cliente) || null;
+  // selectedCustomer não é mais necessário aqui, usamos selectedCustomerValue
 
   return (
     <>
@@ -170,17 +197,21 @@ function OSForm({ initialData, onSave, onClose }) {
         {isEditing ? `Editar OS Nº ${osData.id}` : "Nova OS"}
       </Typography>
 
-      {/* Autocomplete e Campos de Equipamento (sem alterações) */}
+      {/* Autocomplete usa o estado 'selectedCustomerValue' */}
       <Autocomplete
-        value={selectedCustomer}
+        value={selectedCustomerValue}
         options={activeData.customers}
-        getOptionLabel={(option) => option.nome || ""}
+        getOptionLabel={(option) => (option ? option.nome : "")}
+        isOptionEqualToValue={(option, value) => option?.id === value?.id}
         onChange={handleCustomerChange}
         renderInput={(params) => (
           <TextField {...params} label="Cliente" margin="normal" required />
         )}
-        readOnly={isEditing} // Usar readOnly em vez de disabled para evitar bloqueio
+        // ReadOnly se estiver editando, permite seleção ao criar
+        readOnly={isEditing}
       />
+
+      {/* Campos de Equipamento */}
       <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
         <FormControl fullWidth margin="normal">
           <InputLabel>Tipo de Equipamento</InputLabel>
@@ -213,6 +244,7 @@ function OSForm({ initialData, onSave, onClose }) {
           margin="normal"
         />
       </Box>
+      {/* Status e Data */}
       <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
         <FormControl fullWidth>
           <InputLabel>Status</InputLabel>
@@ -241,19 +273,6 @@ function OSForm({ initialData, onSave, onClose }) {
           InputLabelProps={{ shrink: true }}
         />
       </Box>
-
-      {["Finalizado", "Entregue"].includes(osData.status) && (
-        <TextField
-          name="garantia_dias"
-          label="Garantia (dias)"
-          type="number"
-          value={osData.garantia_dias}
-          onChange={handleInputChange}
-          fullWidth
-          margin="normal"
-          InputProps={{ inputProps: { min: 0 } }}
-        />
-      )}
 
       <TextField
         name="numero_serie"
@@ -284,33 +303,48 @@ function OSForm({ initialData, onSave, onClose }) {
         rows={2}
       />
 
-      {["Em Andamento", "Finalizado", "Entregue"].includes(osData.status) && (
-        <>
-          <Typography variant="h6" sx={{ mt: 2 }}>
-            Laudo e Solução
-          </Typography>
-          <TextField
-            name="laudo_tecnico"
-            label="Laudo Técnico (Diagnóstico)"
-            value={osData.laudo_tecnico}
-            onChange={handleInputChange}
-            fullWidth
-            margin="normal"
-            multiline
-            rows={3}
-          />
-          <TextField
-            name="solucao_aplicada"
-            label="Solução Aplicada (Serviços realizados)"
-            value={osData.solucao_aplicada}
-            onChange={handleInputChange}
-            fullWidth
-            margin="normal"
-            multiline
-            rows={3}
-          />
-        </>
-      )}
+      {/* --- ALTERAÇÃO PRINCIPAL: Campos agora são desabilitados em vez de removidos --- */}
+      <Typography variant="h6" sx={{ mt: 2 }}>
+        Laudo e Solução
+      </Typography>
+      <TextField
+        name="laudo_tecnico"
+        label="Laudo Técnico (Diagnóstico)"
+        value={osData.laudo_tecnico}
+        onChange={handleInputChange}
+        fullWidth
+        margin="normal"
+        multiline
+        rows={3}
+        disabled={
+          !["Em Andamento", "Finalizado", "Entregue"].includes(osData.status)
+        }
+      />
+      <TextField
+        name="solucao_aplicada"
+        label="Solução Aplicada (Serviços realizados)"
+        value={osData.solucao_aplicada}
+        onChange={handleInputChange}
+        fullWidth
+        margin="normal"
+        multiline
+        rows={3}
+        disabled={
+          !["Em Andamento", "Finalizado", "Entregue"].includes(osData.status)
+        }
+      />
+      <TextField
+        name="garantia_dias"
+        label="Garantia (dias)"
+        type="number"
+        value={osData.garantia_dias}
+        onChange={handleInputChange}
+        fullWidth
+        margin="normal"
+        InputProps={{ inputProps: { min: 0 } }}
+        disabled={!["Finalizado", "Entregue"].includes(osData.status)}
+      />
+      {/* --- FIM DA ALTERAÇÃO --- */}
 
       <Typography variant="h6" sx={{ mt: 2 }}>
         Itens
@@ -320,8 +354,11 @@ function OSForm({ initialData, onSave, onClose }) {
           sx={{ flexGrow: 1 }}
           options={activeData.products}
           getOptionLabel={(option) =>
-            `${option.descricao} - R$ ${Number(option.valor).toFixed(2)}` || ""
+            option
+              ? `${option.descricao} - R$ ${Number(option.valor).toFixed(2)}`
+              : ""
           }
+          isOptionEqualToValue={(option, value) => option?.id === value?.id}
           value={selectedProduct}
           onChange={(e, newValue) => setSelectedProduct(newValue)}
           renderInput={(params) => (
@@ -338,7 +375,6 @@ function OSForm({ initialData, onSave, onClose }) {
       </Box>
       <Paper>
         <Table size="small">
-          {/* JSX da Tabela sem espaços extras */}
           <TableHead>
             <TableRow>
               <TableCell>Descrição</TableCell>
@@ -383,7 +419,6 @@ function OSForm({ initialData, onSave, onClose }) {
                 </TableCell>
               </TableRow>
             ))}
-            {/* Linha Total sem espaços extras */}
             <TableRow>
               <TableCell colSpan={2} align="right">
                 <strong>Total</strong>
@@ -400,6 +435,7 @@ function OSForm({ initialData, onSave, onClose }) {
           </TableBody>
         </Table>
       </Paper>
+
       <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
         <Button onClick={onClose} sx={{ mr: 1 }}>
           Cancelar

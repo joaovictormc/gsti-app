@@ -21,6 +21,31 @@ const dbPool = mysql
   })
   .promise(); // Usar a versão com Promises para código mais limpo
 
+// --- FUNÇÕES DE FORMATAÇÃO (Definidas globalmente no módulo) ---
+const formatDocument = (doc) => {
+  if (doc === null || doc === undefined) return "";
+  const cleaned = String(doc).replace(/\D/g, "");
+  if (cleaned.length === 11)
+    return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  if (cleaned.length === 14)
+    return cleaned.replace(
+      /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
+      "$1.$2.$3/$4-$5"
+    );
+  return String(doc);
+};
+
+const formatPhone = (phone) => {
+  if (phone === null || phone === undefined) return "";
+  const cleaned = String(phone).replace(/\D/g, "");
+  if (cleaned.length === 11)
+    return cleaned.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  if (cleaned.length === 10)
+    return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+  return String(phone);
+};
+// --- FIM DAS FUNÇÕES DE FORMATAÇÃO ---
+
 // Listener para buscar os clientes
 ipcMain.handle("get-customers", async () => {
   try {
@@ -392,18 +417,7 @@ ipcMain.handle("delete-os", async (event, osId) => {
 // --- FUNÇÃO PDF ATUALIZADA ---
 ipcMain.handle("generate-entry-receipt", async (event, osId) => {
   // 1. Buscar todos os dados necessários (SQL ATUALIZADO)
-  const sql = `
-    SELECT 
-      os.*, 
-      c.nome AS nome_cliente, 
-      c.telefone AS telefone_cliente, 
-      c.cpf_cnpj,
-      c.email AS email_cliente,      -- <-- CAMPO ADICIONADO
-      c.endereco AS endereco_cliente  -- <-- CAMPO ADICIONADO
-    FROM ordens_servico os
-    JOIN clientes c ON os.id_cliente = c.id
-    WHERE os.id = ?
-  `;
+  const sql = `SELECT os.*, c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj, c.email AS email_cliente, c.endereco AS endereco_cliente FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id WHERE os.id = ?`;
   let osData;
   try {
     const [rows] = await dbPool.query(sql, [osId]);
@@ -454,8 +468,12 @@ TERMOS PARA ORÇAMENTO E SERVIÇO (Baseado na Lei 8.078/90 - CDC)
       // --- Dados do Cliente (ATUALIZADO) ---
       doc.fontSize(14).text("Dados do Cliente", { underline: true });
       doc.fontSize(10).text(`Nome: ${osData.nome_cliente}`);
-      doc.text(`CPF/CNPJ: ${osData.cpf_cnpj || "Não informado"}`);
-      doc.text(`Telefone: ${osData.telefone_cliente || "Não informado"}`);
+      doc.text(
+        `CPF/CNPJ: ${formatDocument(osData.cpf_cnpj) || "Não informado"}`
+      );
+      doc.text(
+        `Telefone: ${formatPhone(osData.telefone_cliente) || "Não informado"}`
+      );
       doc.text(`Email: ${osData.email_cliente || "Não informado"}`);
       doc.text(`Endereço: ${osData.endereco_cliente || "Não informado"}`);
       doc.moveDown(1);
@@ -575,111 +593,195 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
 
   // 3. Gerar o PDF
   try {
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true });
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
+
+    // --- Constantes de Layout ---
+    const pageTopMargin = 50;
+    const pageBottomMargin = 50;
+    const contentWidth =
+      doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const leftMargin = doc.page.margins.left;
+
+    // --- Função para adicionar nova página se necessário ---
+    const checkAddPage = (currentY, neededHeight) => {
+      if (currentY + neededHeight > doc.page.height - pageBottomMargin) {
+        doc.addPage();
+        return pageTopMargin; // Retorna a nova posição Y inicial
+      }
+      return currentY; // Mantém a posição Y atual
+    };
 
     // --- Cabeçalho ---
     doc
       .fontSize(18)
       .text("Recibo de Entrega e Termo de Garantia", { align: "center" });
-    doc.fontSize(12).text(`OS Nº: ${osData.id}`, { align: "left" });
+    let currentY = doc.y; // Pega a posição Y após o título
+    doc.fontSize(12).text(`OS Nº: ${osData.id}`, leftMargin, currentY); // Posição X explícita
     const dataSaida = new Date(osData.data_saida);
     doc
       .fontSize(10)
-      .text(`Data de Entrega: ${dataSaida.toLocaleDateString("pt-BR")}`, {
-        align: "right",
-      });
-    doc.moveDown(1);
+      .text(
+        `Data de Entrega: ${dataSaida.toLocaleDateString("pt-BR")}`,
+        leftMargin,
+        currentY,
+        { align: "right" }
+      ); // Alinhado à direita da página
+    doc.moveDown(2);
+    currentY = doc.y;
 
     // --- Dados do Cliente ---
-    doc.fontSize(14).text("Cliente", { underline: true });
-    doc.fontSize(10).text(`Nome: ${osData.nome_cliente}`);
-    doc.text(`CPF/CNPJ: ${osData.cpf_cnpj || "Não informado"}`);
-    doc.text(`Telefone: ${osData.telefone_cliente || "Não informado"}`);
-    doc.text(`Email: ${osData.email_cliente || "Não informado"}`);
-    doc.text(`Endereço: ${osData.endereco_cliente || "Não informado"}`);
-    doc.moveDown(1);
+    currentY = checkAddPage(currentY, 60); // Estima altura necessária
+    doc.fontSize(14).text("Cliente", leftMargin, currentY, { underline: true });
+    currentY += 20;
+    doc.fontSize(10);
+    doc.text(`Nome: ${osData.nome_cliente}`, leftMargin, currentY);
+    currentY += 15;
+    doc.text(
+      `CPF/CNPJ: ${formatDocument(osData.cpf_cnpj) || "Não informado"}`,
+      leftMargin,
+      currentY
+    );
+    currentY += 15;
+    doc.text(
+      `Telefone: ${formatPhone(osData.telefone_cliente) || "Não informado"}`,
+      leftMargin,
+      currentY
+    );
+    currentY += 15;
+    doc.text(
+      `Email: ${osData.email_cliente || "Não informado"}`,
+      leftMargin,
+      currentY
+    );
+    currentY += 15;
+    doc.text(
+      `Endereço: ${osData.endereco_cliente || "Não informado"}`,
+      leftMargin,
+      currentY
+    );
+    currentY += 25; // Mais espaço após
+    doc.y = currentY; // Atualiza cursor do PDFKit
 
     // --- Dados do Equipamento ---
-    doc.fontSize(14).text("Equipamento", { underline: true });
+    currentY = checkAddPage(currentY, 50);
+    doc
+      .fontSize(14)
+      .text("Equipamento", leftMargin, currentY, { underline: true });
+    currentY += 20;
     doc
       .fontSize(10)
       .text(
         `Tipo: ${osData.tipo_equipamento || ""} ${osData.marca || ""} ${
           osData.modelo || ""
-        }`
+        }`,
+        leftMargin,
+        currentY
       );
-    doc.text(`Nº de Série: ${osData.numero_serie || "Não informado"}`);
-    doc.moveDown(1);
+    currentY += 15;
+    doc.text(
+      `Nº de Série: ${osData.numero_serie || "Não informado"}`,
+      leftMargin,
+      currentY
+    );
+    currentY += 25;
+    doc.y = currentY;
 
     // --- Detalhes do Serviço ---
-    doc.fontSize(14).text("Serviço Realizado", { underline: true });
+    currentY = checkAddPage(currentY, 80); // Estima altura
     doc
-      .fontSize(10)
-      .text("Defeito Relatado:", { continued: true })
-      .text(osData.defeito_relatado || "Não informado.");
-    doc.moveDown(0.5);
-    doc
-      .text("Laudo Técnico:", { continued: true })
-      .text(osData.laudo_tecnico || "Não informado.");
-    doc.moveDown(0.5);
-    doc
-      .text("Solução Aplicada:", { continued: true })
-      .text(osData.solucao_aplicada || "Não informada.");
-    doc.moveDown(1);
-
-    // --- Itens/Custos ---
-    doc.fontSize(14).text("Itens e Custos", { underline: true });
-    const tableTop = doc.y;
-    const itemX = 50;
-    const qtyX = 350;
-    const priceX = 420;
-    const totalX = 500;
-
+      .fontSize(14)
+      .text("Serviço Realizado", leftMargin, currentY, { underline: true });
+    currentY += 20;
     doc.fontSize(10);
-    doc.text("Descrição", itemX, tableTop);
-    doc.text("Qtd.", qtyX, tableTop, { width: 50, align: "right" });
-    doc.text("Vlr. Unit.", priceX, tableTop, { width: 70, align: "right" });
-    doc.text("Subtotal", totalX, tableTop, { width: 70, align: "right" });
     doc
-      .moveTo(itemX, doc.y + 5)
-      .lineTo(doc.page.width - itemX, doc.y + 5)
-      .stroke();
-    doc.moveDown(1);
+      .text("Defeito Relatado:", leftMargin, currentY, { continued: true })
+      .text(osData.defeito_relatado || "Não informado.");
+    currentY = doc.y + 5; // Pega Y após texto
+    doc
+      .text("Laudo Técnico:", leftMargin, currentY, { continued: true })
+      .text(osData.laudo_tecnico || "Não informado.");
+    currentY = doc.y + 5;
+    doc
+      .text("Solução Aplicada:", leftMargin, currentY, { continued: true })
+      .text(osData.solucao_aplicada || "Não informada.");
+    currentY = doc.y + 15;
+    doc.y = currentY;
 
-    let currentY = doc.y;
+    // --- Itens e Custos (Layout Controlado) ---
+    currentY = checkAddPage(currentY, 40); // Espaço para título e cabeçalho da tabela
+    doc
+      .fontSize(14)
+      .text("Itens e Custos", leftMargin, currentY, { underline: true });
+    currentY += 20;
+    const tableTopY = currentY;
+    const descX = leftMargin;
+    const qtyX = 370;
+    const unitX = 420;
+    const subtotalX = 480;
+    const endX = doc.page.width - leftMargin;
+    const rowHeight = 15;
+
+    doc.fontSize(9).font("Helvetica-Bold");
+    doc.text("Descrição", descX, tableTopY);
+    doc.text("Qtd.", qtyX, tableTopY, { width: 40, align: "right" });
+    doc.text("Vlr. Unit.", unitX, tableTopY, { width: 60, align: "right" });
+    doc.text("Subtotal", subtotalX, tableTopY, { width: 70, align: "right" });
+    doc.font("Helvetica");
+    currentY += 15; // Pula linha do cabeçalho
+    doc.moveTo(descX, currentY).lineTo(endX, currentY).stroke(); // Linha abaixo
+    currentY += 5;
+    doc.y = currentY;
+
     itemsData.forEach((item) => {
       const subtotal = item.quantidade * item.valor_unitario;
-      doc.text(item.descricao, itemX, currentY, { width: 300 });
-      doc.text(item.quantidade, qtyX, currentY, { width: 50, align: "right" });
+      const descHeight = doc.heightOfString(item.descricao, {
+        width: qtyX - descX - 10,
+      });
+      const actualRowHeight = Math.max(rowHeight, descHeight) + 4; // Altura + margem
+
+      currentY = checkAddPage(currentY, actualRowHeight); // Verifica se cabe na página ANTES
+
+      doc.fontSize(9);
+      doc.text(item.descricao, descX, currentY, {
+        width: qtyX - descX - 10,
+        align: "left",
+      });
+      // Salva a posição Y antes de desenhar os itens alinhados à direita
+      const rightItemsY = currentY;
+      doc.text(item.quantidade, qtyX, rightItemsY, {
+        width: 40,
+        align: "right",
+      });
       doc.text(
         Number(item.valor_unitario).toLocaleString("pt-BR", {
           style: "currency",
           currency: "BRL",
         }),
-        priceX,
-        currentY,
-        { width: 70, align: "right" }
+        unitX,
+        rightItemsY,
+        { width: 60, align: "right" }
       );
       doc.text(
         subtotal.toLocaleString("pt-BR", {
           style: "currency",
           currency: "BRL",
         }),
-        totalX,
-        currentY,
+        subtotalX,
+        rightItemsY,
         { width: 70, align: "right" }
       );
-      currentY += 20; // Ajuste o espaçamento conforme necessário
-      doc.y = currentY; // Move o cursor para a próxima linha
+
+      currentY += actualRowHeight; // Atualiza Y para próxima linha
+      doc.y = currentY;
     });
 
-    doc
-      .moveTo(itemX, doc.y + 5)
-      .lineTo(doc.page.width - itemX, doc.y + 5)
-      .stroke();
-    doc.moveDown(1);
+    currentY = checkAddPage(currentY, 30); // Espaço para linha e total
+    doc.moveTo(descX, currentY).lineTo(endX, currentY).stroke(); // Linha abaixo dos itens
+    currentY += 10;
+
+    // --- Valor Total (Posição Controlada) ---
     doc
       .fontSize(12)
       .text(
@@ -687,46 +789,81 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
           style: "currency",
           currency: "BRL",
         })}`,
+        leftMargin,
+        currentY,
         { align: "right" }
       );
-    doc.moveDown(2);
+    currentY += 30; // Mais espaço após o total
+    doc.y = currentY;
 
-    // --- Garantia ---
-    doc.fontSize(14).text("Termo de Garantia", { underline: true });
-    doc.fontSize(10);
+    // --- Garantia (Layout Controlado) ---
+    // Calcula a altura estimada do texto da garantia
+    const garantiaText = `Este serviço possui garantia de ${
+      osData.garantia_dias || 0
+    } dias... Consulte os Termos de Serviço completos para detalhes.`;
+    const garantiaHeight = doc.heightOfString(garantiaText, {
+      width: contentWidth,
+      align: "justify",
+    });
+    currentY = checkAddPage(currentY, garantiaHeight + 30); // Verifica espaço para título e texto
+
+    doc
+      .fontSize(14)
+      .text("Termo de Garantia", leftMargin, currentY, { underline: true });
+    currentY += 20;
+    doc.fontSize(9);
     const garantiaDias = osData.garantia_dias || 0;
     const dataExpiracao = new Date(dataSaida);
     dataExpiracao.setDate(dataExpiracao.getDate() + garantiaDias);
+
     doc.text(
       `Este serviço possui garantia de ${garantiaDias} dias, válida a partir da data de entrega (${dataSaida.toLocaleDateString(
         "pt-BR"
-      )}).`
+      )}). A garantia expira em: ${dataExpiracao.toLocaleDateString("pt-BR")}.`,
+      leftMargin,
+      currentY,
+      { width: contentWidth, align: "justify" }
     );
+    currentY = doc.y + 5; // Pega Y após o texto
     doc.text(
-      `A garantia expira em: ${dataExpiracao.toLocaleDateString("pt-BR")}.`
+      'A garantia cobre defeitos de fabricação nas peças substituídas e/ou mão de obra referente ao serviço descrito em "Solução Aplicada". Não cobre mau uso, danos por software, acidentes ou defeitos não relacionados ao reparo original. Consulte os Termos de Serviço completos para detalhes.',
+      leftMargin,
+      currentY,
+      { width: contentWidth, align: "justify" }
     );
-    doc.moveDown(0.5);
-    doc.text(
-      'A garantia cobre defeitos de fabricação nas peças substituídas e/ou mão de obra referente ao serviço descrito em "Solução Aplicada". Não cobre mau uso, danos por software, acidentes ou defeitos não relacionados ao reparo original. Consulte os Termos de Serviço completos para detalhes.'
-    );
-    doc.moveDown(2);
+    currentY = doc.y + 30; // Mais espaço após garantia
+    doc.y = currentY;
 
-    // --- Assinatura ---
-    doc.text("___________________________________________", {
+    // --- Assinatura (Posição Controlada) ---
+    currentY = checkAddPage(currentY, 60); // Espaço para assinatura
+    doc.fontSize(10);
+    doc.text(
+      "___________________________________________",
+      leftMargin,
+      currentY,
+      { align: "center" }
+    );
+    currentY += 15;
+    doc.text("Assinatura do Cliente", leftMargin, currentY, {
       align: "center",
     });
-    doc.text("Assinatura do Cliente", { align: "center" });
+    currentY += 15;
     doc.text(
       "Declaro ter recebido o equipamento descrito acima nas condições especificadas.",
+      leftMargin,
+      currentY,
       { align: "center", width: 450 }
     );
 
+    // --- Finaliza o PDF ---
+    // Não precisa mais mexer no buffer, o pdfkit lida com isso
     doc.end();
     stream.on("finish", () => {
       shell.openPath(filePath);
     });
     return { success: true, path: filePath };
   } catch (error) {
+    console.error("Erro detalhado ao gerar PDF:", error);
     return { success: false, error: `Erro ao gerar PDF: ${error.message}` };
   }
 });
