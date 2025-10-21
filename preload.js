@@ -31,4 +31,20 @@ contextBridge.exposeInMainWorld('api', {
   // Nova função de PDF
   generateEntryReceipt: (osId) => ipcRenderer.invoke('generate-entry-receipt', osId),
   generateExitReceipt: (osId) => ipcRenderer.invoke('generate-exit-receipt', osId),
+
+
+  // Funções para Despesas
+  getExpenses: () => ipcRenderer.invoke('get-expenses'),
+  addExpense: (expenseData) => ipcRenderer.invoke('add-expense', expenseData),
+  updateExpense: (expenseData) => ipcRenderer.invoke('update-expense', expenseData),
+  deleteExpense: (expenseId) => ipcRenderer.invoke('delete-expense', expenseId),
+
+  // Funções para Receitas Avulsas
+  getMiscRevenues: () => ipcRenderer.invoke('get-misc-revenues'),
+  addMiscRevenue: (revenueData) => ipcRenderer.invoke('add-misc-revenue', revenueData),
+  updateMiscRevenue: (revenueData) => ipcRenderer.invoke('update-misc-revenue', revenueData),
+  deleteMiscRevenue: (revenueId) => ipcRenderer.invoke('delete-misc-revenue', revenueId),
+
+  // Funções Financeiras (getFinancialSummary já existe)
+  getFinancialSummary: (period) => ipcRenderer.invoke('get-financial-summary', period),
 });

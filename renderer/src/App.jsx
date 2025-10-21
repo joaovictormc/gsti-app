@@ -4,6 +4,9 @@ import { ThemeProvider, createTheme, CssBaseline, Box } from "@mui/material";
 import CustomerGrid from './components/CustomerGrid';
 import ProductServiceGrid from "./components/ProductServiceGrid"; 
 import OSGrid from "./components/OSGrid";
+import ExpensesGrid from "./components/ExpensesGrid";
+import FinancielaDashboard from "./components/FinancialDashboard";
+import MiscRevenueGrid from "./components/MiscRevenueGrid";
 
 const theme = createTheme({
   // ... seu tema
@@ -16,7 +19,10 @@ function App() {
       <Box sx={{ padding: 3 }}>
         {/* <CustomerGrid />*/}
         {/* <ProductServiceGrid /> */}
-        <OSGrid />
+        {/* <OSGrid /> */}
+        {/* <ExpensesGrid /> */}
+        {/* <FinancielaDashboard /> */}
+        <MiscRevenueGrid />
       </Box>
     </ThemeProvider>
   );

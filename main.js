@@ -782,17 +782,15 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
     currentY += 10;
 
     // --- Valor Total (Posição Controlada) ---
-    doc
-      .fontSize(12)
-      .text(
-        `Valor Total: ${Number(osData.valor_total).toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        })}`,
-        leftMargin,
-        currentY,
-        { align: "right" }
-      );
+    doc.fontSize(12).text(
+      `Valor Total: ${Number(osData.valor_total).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      })}`,
+      leftMargin,
+      currentY,
+      { align: "right" }
+    );
     currentY += 30; // Mais espaço após o total
     doc.y = currentY;
 
@@ -865,6 +863,256 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
   } catch (error) {
     console.error("Erro detalhado ao gerar PDF:", error);
     return { success: false, error: `Erro ao gerar PDF: ${error.message}` };
+  }
+});
+
+// --- MÓDULO FINANCEIRO - DESPESAS ---
+
+// Listener para buscar TODAS as despesas
+ipcMain.handle("get-expenses", async () => {
+  const sql = "SELECT * FROM despesas ORDER BY data DESC, id DESC"; // Ordena da mais recente para mais antiga
+  try {
+    const [rows] = await dbPool.query(sql);
+    return rows;
+  } catch (error) {
+    console.error("Erro ao buscar despesas:", error);
+    return [];
+  }
+});
+
+// Listener para ADICIONAR uma nova despesa
+ipcMain.handle("add-expense", async (event, expenseData) => {
+  let {
+    descricao,
+    data,
+    categoria,
+    km_rodados,
+    preco_litro,
+    consumo_medio,
+    valor,
+  } = expenseData;
+
+  // Garante que campos numéricos opcionais sejam null se vazios, e não string vazia
+  km_rodados = km_rodados ? parseFloat(km_rodados) : null;
+  preco_litro = preco_litro ? parseFloat(preco_litro) : null;
+  consumo_medio = consumo_medio ? parseFloat(consumo_medio) : null;
+  valor = valor ? parseFloat(valor) : 0; // Valor principal não pode ser null
+
+  // Calcula o valor se for combustível e os dados estiverem presentes
+  if (
+    categoria === "Combustível" &&
+    km_rodados &&
+    preco_litro &&
+    consumo_medio &&
+    consumo_medio > 0
+  ) {
+    valor = (km_rodados / consumo_medio) * preco_litro;
+  }
+
+  const sql = `
+    INSERT INTO despesas 
+    (descricao, data, categoria, km_rodados, preco_litro, consumo_medio, valor) 
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `;
+  try {
+    const [result] = await dbPool.query(sql, [
+      descricao,
+      data,
+      categoria,
+      km_rodados,
+      preco_litro,
+      consumo_medio,
+      valor,
+    ]);
+    return { success: true, id: result.insertId };
+  } catch (error) {
+    console.error("Erro ao adicionar despesa:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para ATUALIZAR uma despesa existente
+ipcMain.handle("update-expense", async (event, expenseData) => {
+  let {
+    id,
+    descricao,
+    data,
+    categoria,
+    km_rodados,
+    preco_litro,
+    consumo_medio,
+    valor,
+  } = expenseData;
+
+  // Garante que campos numéricos opcionais sejam null se vazios
+  km_rodados = km_rodados ? parseFloat(km_rodados) : null;
+  preco_litro = preco_litro ? parseFloat(preco_litro) : null;
+  consumo_medio = consumo_medio ? parseFloat(consumo_medio) : null;
+  valor = valor ? parseFloat(valor) : 0;
+
+  // Recalcula o valor se for combustível
+  if (
+    categoria === "Combustível" &&
+    km_rodados &&
+    preco_litro &&
+    consumo_medio &&
+    consumo_medio > 0
+  ) {
+    valor = (km_rodados / consumo_medio) * preco_litro;
+  }
+
+  const sql = `
+    UPDATE despesas SET 
+    descricao = ?, data = ?, categoria = ?, 
+    km_rodados = ?, preco_litro = ?, consumo_medio = ?, valor = ? 
+    WHERE id = ?
+  `;
+  try {
+    await dbPool.query(sql, [
+      descricao,
+      data,
+      categoria,
+      km_rodados,
+      preco_litro,
+      consumo_medio,
+      valor,
+      id,
+    ]);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao atualizar despesa:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para DELETAR uma despesa
+ipcMain.handle("delete-expense", async (event, expenseId) => {
+  const sql = "DELETE FROM despesas WHERE id = ?";
+  try {
+    await dbPool.query(sql, [expenseId]);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao deletar despesa:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para buscar o Resumo Financeiro (ATUALIZADO para incluir Receitas Avulsas)
+ipcMain.handle(
+  "get-financial-summary",
+  async (event, { startDate, endDate }) => {
+    const formattedStartDate = new Date(startDate).toISOString().split("T")[0];
+    const formattedEndDate = new Date(endDate).toISOString().split("T")[0];
+
+    try {
+      // 1. Calcula Receita das OS no período
+      const osRevenueSql = `
+      SELECT SUM(valor_total) AS totalOSRevenue 
+      FROM ordens_servico 
+      WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL AND DATE(data_saida) BETWEEN ? AND ?`;
+      const [osRevenueResult] = await dbPool.query(osRevenueSql, [
+        formattedStartDate,
+        formattedEndDate,
+      ]);
+      const totalOSRevenue = osRevenueResult[0].totalOSRevenue || 0;
+
+      // 2. Calcula Receita Avulsa no período
+      const miscRevenueSql = `
+      SELECT SUM(valor) AS totalMiscRevenue 
+      FROM receitas_avulsas 
+      WHERE data BETWEEN ? AND ?`;
+      const [miscRevenueResult] = await dbPool.query(miscRevenueSql, [
+        formattedStartDate,
+        formattedEndDate,
+      ]);
+      const totalMiscRevenue = miscRevenueResult[0].totalMiscRevenue || 0;
+
+      // 3. Receita Total
+      const totalRevenue = totalOSRevenue + totalMiscRevenue;
+
+      // 4. Calcula Despesa Total no período
+      const expenseSql = `SELECT SUM(valor) AS totalExpenses FROM despesas WHERE data BETWEEN ? AND ?`;
+      const [expenseResult] = await dbPool.query(expenseSql, [
+        formattedStartDate,
+        formattedEndDate,
+      ]);
+      const totalExpenses = expenseResult[0].totalExpenses || 0;
+
+      // 5. Calcula Lucro Líquido
+      const netProfit = totalRevenue - totalExpenses;
+
+      return {
+        success: true,
+        summary: {
+          totalRevenue,
+          totalExpenses,
+          netProfit,
+          /* Opcional: podemos retornar os subtotais também */ totalOSRevenue,
+          totalMiscRevenue,
+        },
+      };
+    } catch (error) {
+      console.error("Erro ao calcular resumo financeiro:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+// --- MÓDULO FINANCEIRO - RECEITAS AVULSAS ---
+
+// Listener para buscar TODAS as receitas avulsas
+ipcMain.handle("get-misc-revenues", async () => {
+  const sql = "SELECT * FROM receitas_avulsas ORDER BY data DESC, id DESC";
+  try {
+    const [rows] = await dbPool.query(sql);
+    return rows;
+  } catch (error) {
+    console.error("Erro ao buscar receitas avulsas:", error);
+    return [];
+  }
+});
+
+// Listener para ADICIONAR uma nova receita avulsa
+ipcMain.handle("add-misc-revenue", async (event, revenueData) => {
+  const { descricao, valor, data } = revenueData;
+  const sql =
+    "INSERT INTO receitas_avulsas (descricao, valor, data) VALUES (?, ?, ?)";
+  try {
+    const [result] = await dbPool.query(sql, [
+      descricao,
+      parseFloat(valor) || 0,
+      data,
+    ]);
+    return { success: true, id: result.insertId };
+  } catch (error) {
+    console.error("Erro ao adicionar receita avulsa:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para ATUALIZAR uma receita avulsa existente
+ipcMain.handle("update-misc-revenue", async (event, revenueData) => {
+  const { id, descricao, valor, data } = revenueData;
+  const sql =
+    "UPDATE receitas_avulsas SET descricao = ?, valor = ?, data = ? WHERE id = ?";
+  try {
+    await dbPool.query(sql, [descricao, parseFloat(valor) || 0, data, id]);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao atualizar receita avulsa:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para DELETAR uma receita avulsa
+ipcMain.handle("delete-misc-revenue", async (event, revenueId) => {
+  const sql = "DELETE FROM receitas_avulsas WHERE id = ?";
+  try {
+    await dbPool.query(sql, [revenueId]);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao deletar receita avulsa:", error);
+    return { success: false, error: error.message };
   }
 });
 
