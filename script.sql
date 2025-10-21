@@ -97,3 +97,10 @@ CREATE TABLE IF NOT EXISTS despesas (
 
 -- Adiciona um índice na coluna de status para buscas mais rápidas (Opcional, mas recomendado)
 CREATE INDEX idx_os_status ON ordens_servico(status);
+
+CREATE TABLE receitas_avulsas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    descricao VARCHAR(255) NOT NULL,
+    valor DECIMAL(10, 2) NOT NULL,
+    data DATE NOT NULL
+);

@@ -24,13 +24,14 @@ const toInputDateString = (date) => {
 const BLANK_REVENUE = {
   descricao: "",
   valor: "",
-  data: toInputDateString(new Date()), // Data atual como padrão
+  data: toInputDateString(new Date()),
 };
 
 function MiscRevenueGrid() {
   const [revenues, setRevenues] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState(null);
+  // --- CORREÇÃO APLICADA AQUI ---
   const [modalKey, setModalKey] = useState(0); // Para resetar o formulário
 
   const fetchRevenues = async () => {
@@ -52,7 +53,7 @@ function MiscRevenueGrid() {
     const revenueToEdit = {
       ...revenue,
       data: toInputDateString(revenue.data),
-      valor: String(revenue.valor), // Garante que valor seja string para o input
+      valor: String(revenue.valor),
     };
     setEditingRevenue(revenueToEdit);
     setModalKey(prev => prev + 1);
@@ -87,7 +88,7 @@ function MiscRevenueGrid() {
     }
 
     const dataToSend = { ...editingRevenue };
-    
+
     const apiCall = dataToSend.id ? window.api.updateMiscRevenue : window.api.addMiscRevenue;
     const result = await apiCall(dataToSend);
 
@@ -108,10 +109,11 @@ function MiscRevenueGrid() {
       width: 120,
       renderCell: (params) => {
         if (!params.value) return "";
-        // Adiciona 1 dia para compensar fuso horário do input date
         const date = new Date(params.value);
-        date.setDate(date.getDate() + 1);
-        return date.toLocaleDateString("pt-BR");
+         // Corrige a exibição da data local
+        const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+        const localDate = new Date(date.getTime() + userTimezoneOffset); // Ajusta para UTC 0 e depois pega data local
+        return localDate.toLocaleDateString("pt-BR", {timeZone: 'UTC'}); // Exibe data correta
       },
     },
     {
