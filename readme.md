@@ -1,6 +1,6 @@
-# GSTI - Gestor de Serviços de TI (v1.2)
+# GSTI - Gestor de Serviços de TI (v1.2 - Gráficos em Andamento)
 
-Este projeto é um aplicativo de desktop multiplataforma (Windows, macOS, Linux) para gestão de serviços de manutenção de computadores, desenvolvido com Electron e React.
+Este projeto é um aplicativo de desktop multiplatforma (Windows, macOS, Linux) para gestão de serviços de manutenção de computadores, desenvolvido com Electron e React.
 
 ---
 
@@ -47,7 +47,9 @@ Este projeto é um aplicativo de desktop multiplataforma (Windows, macOS, Linux)
     * `@mui/x-data-grid`
     * `@mui/icons-material`
 * **[react-imask](https://www.npmjs.com/package/react-imask):** Biblioteca para aplicar máscaras de formatação em campos de texto (CPF, CNPJ, Telefone).
-
+* **[react-chartjs-2](https://react-chartjs-2.js.org/):** Componentes React para a biblioteca Chart.js.
+* **[Chart.js](https://www.chartjs.org/):** Biblioteca para criação de gráficos interativos.
+* **[exceljs](https://www.npmjs.com/package/exceljs):** Biblioteca para criação de arquivos Excel (.xlsx).
 ---
 
 ## 📂 Estrutura do Projeto (Simplificada)
@@ -60,60 +62,45 @@ Este projeto é um aplicativo de desktop multiplataforma (Windows, macOS, Linux)
 ## ✅ Módulos Concluídos (v1.2)
 
 ### 1. **Gestão de Clientes (CRUD Completo)**
-* [X] Listagem de clientes (`DataGrid`).
-* [X] Adição, Edição e Exclusão de clientes (Pessoa Física e Jurídica).
-* [X] Formulário com campos de dados completos (CPF/CNPJ, Nome/Razão Social, Telefone, Email, Endereço).
-* [X] Máscaras de formatação (CPF, CNPJ, Telefone).
-* [X] Validação de CNPJ via API externa (BrasilAPI) com preenchimento automático (Opcional, se implementado).
+* [X] Listagem, Adição, Edição, Exclusão.
+* [X] Formulário completo com máscaras e validação CNPJ (opcional).
 
 ### 2. **Gestão de Produtos e Serviços (CRUD Completo)**
-* [X] Listagem de produtos e serviços (`DataGrid`).
-* [X] Adição, Edição e Exclusão de itens (Descrição, Valor, Tipo - Produto/Serviço).
-* [X] Formulário em modal para gerenciamento.
+* [X] Listagem, Adição, Edição, Exclusão.
 
 ### 3. **Gestão de Ordens de Serviço (OS)**
-* [X] Listagem de Ordens de Serviço (`DataGrid`) com dados do cliente e equipamento.
-* [X] **Adição de Nova OS:**
-    * Seleção de cliente existente.
-    * Cadastro de detalhes do equipamento (Tipo, Marca, Modelo, Nº Série).
-    * Registro de Defeito Relatado e Observações.
-    * Definição de Status inicial ('Orçamento' como padrão).
-    * Seleção de Data de Entrada.
-    * Adição/Remoção de múltiplos Produtos/Serviços (com Quantidade).
-    * Cálculo automático do Valor Total.
-* [X] **Edição de OS Existente:**
-    * Alteração de todos os campos (exceto cliente).
-    * Adição/Remoção/Alteração de Quantidade de itens.
-    * Campos para Laudo Técnico e Solução Aplicada (visíveis em status avançados).
-    * Campo para Dias de Garantia (visível em status finais).
-    * Recálculo do Valor Total.
-* [X] **Exclusão de OS.**
-* [X] **Busca de OS:** Filtragem da lista por nome do cliente.
-* [X] **Regra de Garantia:** Impede a edição de OS 'Entregue' após o vencimento da garantia. Define `data_saida` automaticamente ao marcar como 'Entregue'.
-* [X] **Geração de PDF (Comprovante de Entrada):**
-    * Documento em 2 vias (Empresa/Cliente).
-    * Inclui dados completos do cliente (com formatação CPF/CNPJ/Telefone).
-    * Inclui detalhes do equipamento e defeito.
-    * Inclui Termos de Serviço focados em Orçamento (baseado no CDC).
-    * Opção de salvar e abrir o PDF gerado.
-* [X] **Geração de PDF (Recibo de Saída / Garantia):**
-    * Aparece para OS 'Finalizado' ou 'Entregue'.
-    * Inclui dados completos do cliente (formatados).
-    * Inclui detalhes do serviço (Laudo, Solução).
-    * Lista detalhada dos Itens utilizados (Descrição, Qtd, Vlr. Unit., Subtotal) com layout ajustado e quebra de página.
-    * Exibe Valor Total.
-    * Calcula e exibe o período e data de expiração da Garantia.
-    * Inclui texto resumido da garantia e espaço para assinatura.
-    * Opção de salvar e abrir o PDF gerado.
+* [X] Listagem, Adição, Edição, Exclusão.
+* [X] Busca por nome do cliente.
+* [X] Detalhes do equipamento estruturados.
+* [X] Adição/Edição de múltiplos itens com quantidade.
+* [X] Cálculo de valor total.
+* [X] Campos de Laudo e Solução.
+* [X] Regra de Garantia (bloqueio pós-vencimento).
+* [X] Geração de PDF: Comprovante de Entrada (com Termos de Orçamento).
+* [X] Geração de PDF: Recibo de Saída / Garantia (com cálculo de expiração).
+
+### 4. **Módulo Financeiro (Básico)**
+* [X] **Gestão de Despesas (CRUD Completo):**
+    * Listagem, Adição, Edição, Exclusão.
+    * Cálculo automático para combustível.
+    * Classificação Fixa/Variável.
+* [X] **Gestão de Receitas Avulsas (CRUD Completo):**
+    * Listagem, Adição, Edição, Exclusão.
+* [X] **Resumo Financeiro:**
+    * Seleção de período (datas + botões pré-definidos).
+    * Exibição em cards: Receita Total (OS + Avulsas), Despesa Fixa, Despesa Variável, Despesa Total, Lucro Líquido.
 
 ---
 
 ## 🔜 Próximos Passos (Planejamento)
 
-* **Módulo Financeiro (Fase 3):**
-    * Implementar CRUD para a tabela `despesas`.
-    * Criar tela de Despesas com formulário (incluindo cálculo de combustível).
-    * Criar Dashboard Financeiro (Receitas x Despesas).
-* **Relatórios (Fase 4):**
-    * Relatórios de OS por período, cliente, status.
-    * Relatórios financeiros.
+* **Refinamento Módulo Financeiro:**
+    * Adicionar Gráficos comparativos (Receita x Despesa Mensal/Anual).
+    * Implementar Exportação para Excel.
+    * (Opcional) Fluxo de Caixa Detalhado.
+* **Fase 4 (Relatórios):**
+    * Relatórios de OS por cliente, status, etc.
+* **(Avançado/Futuro):**
+    * Provisões/Projeções Financeiras.
+    * Cálculo de tempo para investimentos.
+    * Lucratividade por OS.

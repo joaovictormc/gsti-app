@@ -104,3 +104,6 @@ CREATE TABLE receitas_avulsas (
     valor DECIMAL(10, 2) NOT NULL,
     data DATE NOT NULL
 );
+
+ALTER TABLE despesas
+ADD COLUMN tipo_despesa ENUM('Fixa', 'Variável') NOT NULL DEFAULT 'Variável' AFTER categoria;

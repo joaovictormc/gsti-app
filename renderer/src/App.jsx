@@ -5,7 +5,7 @@ import CustomerGrid from './components/CustomerGrid';
 import ProductServiceGrid from "./components/ProductServiceGrid"; 
 import OSGrid from "./components/OSGrid";
 import ExpensesGrid from "./components/ExpensesGrid";
-import FinancielaDashboard from "./components/FinancialDashboard";
+import FinancialDashboard from "./components/FinancialDashboard";
 import MiscRevenueGrid from "./components/MiscRevenueGrid";
 
 const theme = createTheme({
@@ -17,12 +17,12 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ padding: 3 }}>
-        {/* <CustomerGrid />*/}
+        {/* <CustomerGrid /> */}
         {/* <ProductServiceGrid /> */}
         {/* <OSGrid /> */}
         {/* <ExpensesGrid /> */}
-        {/* <FinancielaDashboard /> */}
-        <MiscRevenueGrid />
+        <FinancialDashboard />
+        {/* <MiscRevenueGrid /> */}
       </Box>
     </ThemeProvider>
   );

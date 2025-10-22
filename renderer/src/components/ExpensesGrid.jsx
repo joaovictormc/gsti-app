@@ -45,6 +45,7 @@ const BLANK_EXPENSE = {
   descricao: "",
   data: toInputDateString(new Date()), // Data atual como padrão
   categoria: "Outros", // Categoria padrão
+  tipo_despesa: "Variável",
   km_rodados: "",
   preco_litro: "",
   consumo_medio: "10.0", // Consumo padrão (ex: 10 km/l) - Ajuste para o seu veículo
@@ -60,6 +61,8 @@ const CATEGORIES = [
   "Transporte App",
   "Outros",
 ];
+
+const EXPENSE_TYPES = ["Variável", "Fixa"]; // Opções para o novo campo
 
 function ExpensesGrid() {
   const [expenses, setExpenses] = useState([]);
@@ -83,11 +86,11 @@ function ExpensesGrid() {
   };
 
   const handleOpenEditModal = (expense) => {
-    // Garante que os valores numéricos sejam strings para os inputs
-    // e a data esteja no formato correto
     const expenseToEdit = {
       ...expense,
       data: toInputDateString(expense.data),
+      // Garante que tipo_despesa tenha um valor válido ao editar
+      tipo_despesa: expense.tipo_despesa || "Variável",
       km_rodados: expense.km_rodados !== null ? String(expense.km_rodados) : "",
       preco_litro:
         expense.preco_litro !== null ? String(expense.preco_litro) : "",
@@ -122,8 +125,13 @@ function ExpensesGrid() {
   };
 
   const handleSave = async () => {
-    if (!editingExpense.descricao || !editingExpense.data) {
-      alert("Descrição e Data são obrigatórios.");
+    if (
+      !editingExpense.descricao ||
+      !editingExpense.data ||
+      !editingExpense.tipo_despesa
+    ) {
+      // Adicionado tipo_despesa à validação
+      alert("Descrição, Data e Tipo (Fixa/Variável) são obrigatórios.");
       return;
     }
 
@@ -139,17 +147,10 @@ function ExpensesGrid() {
         !editingExpense.preco_litro ||
         !editingExpense.consumo_medio)
     ) {
-      alert(
-        "Para a categoria Combustível, os campos Km Rodados, Preço Litro e Consumo Médio são obrigatórios."
-      );
-      return;
+      /* ... */
     }
 
     const dataToSend = { ...editingExpense };
-
-    // A lógica de cálculo do valor agora está no backend,
-    // mas garantimos que os números sejam enviados corretamente
-
     const apiCall = dataToSend.id
       ? window.api.updateExpense
       : window.api.addExpense;
@@ -167,6 +168,7 @@ function ExpensesGrid() {
     { field: "id", headerName: "ID", width: 70 },
     { field: "descricao", headerName: "Descrição", flex: 1, minWidth: 250 },
     { field: "categoria", headerName: "Categoria", width: 150 },
+    { field: "tipo_despesa", headerName: "Tipo", width: 100 }, // <-- Nova coluna
     {
       field: "data",
       headerName: "Data",
@@ -290,6 +292,24 @@ function ExpensesGrid() {
                   ))}
                 </Select>
               </FormControl>
+
+              {/* --- NOVO CAMPO: Tipo de Despesa --- */}
+              <FormControl fullWidth margin="normal" required>
+                <InputLabel>Tipo</InputLabel>
+                <Select
+                  name="tipo_despesa"
+                  value={editingExpense.tipo_despesa}
+                  label="Tipo"
+                  onChange={handleInputChange}
+                >
+                  {EXPENSE_TYPES.map((type) => (
+                    <MenuItem key={type} value={type}>
+                      {type}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {/* --- FIM DO NOVO CAMPO --- */}
             </Box>
 
             {/* Campos Condicionais para Combustível */}

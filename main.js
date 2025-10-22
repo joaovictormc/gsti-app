@@ -6,6 +6,7 @@ const fs = require("fs");
 const PDFDocument = require("pdfkit");
 
 const isDev = process.env.NODE_ENV !== "production";
+const ExcelJS = require("exceljs");
 
 // Configuração da Pool de Conexão com o MySQL
 // Lembre-se de usar os dados que você configurou (usuário e senha do BD)
@@ -284,7 +285,6 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
 });
 
 ipcMain.handle("update-os", async (event, { osData, total }) => {
-  // Atualizado para os novos campos (incluindo laudo/solucao)
   const {
     id,
     id_cliente,
@@ -300,7 +300,6 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
     data_entrada,
     garantia_dias,
   } = osData;
-
   const connection = await dbPool.getConnection();
   try {
     const [rows] = await connection.query(
@@ -309,11 +308,13 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
     );
     const osAtual = rows[0];
 
+    // --- VERIFICAÇÃO GARANTIA (sem alterações) ---
     if (osAtual.status === "Entregue" && osAtual.data_saida) {
+      // ... (código de verificação da garantia) ...
       const dataSaida = new Date(osAtual.data_saida);
       const dataExpiracaoGarantia = new Date(
-        dataSaida.setDate(dataSaida.getDate() + osAtual.garantia_dias)
-      );
+        dataSaida.setDate(dataSaida.getDate() + (osAtual.garantia_dias || 0))
+      ); // Usa 0 se garantia for null
       const hoje = new Date();
       if (hoje > dataExpiracaoGarantia) {
         throw new Error(
@@ -322,9 +323,10 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       }
     }
 
-    let sqlDataSaida = "";
-    if (status === "Entregue" && osAtual.status !== "Entregue") {
-      sqlDataSaida = ", data_saida = NOW()";
+    // --- CORREÇÃO: Define data_saida se status for Finalizado/Entregue e data_saida for NULL ---
+    let setDataSaidaSql = "";
+    if (["Finalizado", "Entregue"].includes(status) && !osAtual.data_saida) {
+      setDataSaidaSql = ", data_saida = NOW()"; // Define data_saida AGORA
     }
 
     const sql = `
@@ -333,7 +335,7 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       numero_serie = ?, defeito_relatado = ?, observacoes_entrada = ?, 
       laudo_tecnico = ?, solucao_aplicada = ?, status = ?, 
       data_entrada = ?, valor_total = ?, garantia_dias = ?
-      ${sqlDataSaida}
+      ${setDataSaidaSql}
       WHERE id = ?`;
 
     await connection.query(sql, [
@@ -357,6 +359,7 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
     return { success: true };
   } catch (error) {
     connection.release();
+    console.error("Erro ao atualizar OS:", error); // Log do erro
     return { success: false, error: error.message };
   }
 });
@@ -870,7 +873,8 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
 
 // Listener para buscar TODAS as despesas
 ipcMain.handle("get-expenses", async () => {
-  const sql = "SELECT * FROM despesas ORDER BY data DESC, id DESC"; // Ordena da mais recente para mais antiga
+  // Busca também o novo campo tipo_despesa
+  const sql = "SELECT * FROM despesas ORDER BY data DESC, id DESC";
   try {
     const [rows] = await dbPool.query(sql);
     return rows;
@@ -882,23 +886,24 @@ ipcMain.handle("get-expenses", async () => {
 
 // Listener para ADICIONAR uma nova despesa
 ipcMain.handle("add-expense", async (event, expenseData) => {
+  // --- ALTERAÇÃO: Adiciona tipo_despesa ---
   let {
     descricao,
     data,
     categoria,
+    tipo_despesa,
     km_rodados,
     preco_litro,
     consumo_medio,
     valor,
   } = expenseData;
 
-  // Garante que campos numéricos opcionais sejam null se vazios, e não string vazia
   km_rodados = km_rodados ? parseFloat(km_rodados) : null;
   preco_litro = preco_litro ? parseFloat(preco_litro) : null;
   consumo_medio = consumo_medio ? parseFloat(consumo_medio) : null;
-  valor = valor ? parseFloat(valor) : 0; // Valor principal não pode ser null
+  valor = valor ? parseFloat(valor) : 0;
+  tipo_despesa = tipo_despesa || "Variável"; // Garante um valor padrão se não vier
 
-  // Calcula o valor se for combustível e os dados estiverem presentes
   if (
     categoria === "Combustível" &&
     km_rodados &&
@@ -909,16 +914,19 @@ ipcMain.handle("add-expense", async (event, expenseData) => {
     valor = (km_rodados / consumo_medio) * preco_litro;
   }
 
+  // --- ALTERAÇÃO: Adiciona tipo_despesa ao SQL ---
   const sql = `
     INSERT INTO despesas 
-    (descricao, data, categoria, km_rodados, preco_litro, consumo_medio, valor) 
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    (descricao, data, categoria, tipo_despesa, km_rodados, preco_litro, consumo_medio, valor) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
   `;
   try {
+    // --- ALTERAÇÃO: Passa tipo_despesa ---
     const [result] = await dbPool.query(sql, [
       descricao,
       data,
       categoria,
+      tipo_despesa,
       km_rodados,
       preco_litro,
       consumo_medio,
@@ -933,24 +941,25 @@ ipcMain.handle("add-expense", async (event, expenseData) => {
 
 // Listener para ATUALIZAR uma despesa existente
 ipcMain.handle("update-expense", async (event, expenseData) => {
+  // --- ALTERAÇÃO: Adiciona tipo_despesa ---
   let {
     id,
     descricao,
     data,
     categoria,
+    tipo_despesa,
     km_rodados,
     preco_litro,
     consumo_medio,
     valor,
   } = expenseData;
 
-  // Garante que campos numéricos opcionais sejam null se vazios
   km_rodados = km_rodados ? parseFloat(km_rodados) : null;
   preco_litro = preco_litro ? parseFloat(preco_litro) : null;
   consumo_medio = consumo_medio ? parseFloat(consumo_medio) : null;
   valor = valor ? parseFloat(valor) : 0;
+  tipo_despesa = tipo_despesa || "Variável";
 
-  // Recalcula o valor se for combustível
   if (
     categoria === "Combustível" &&
     km_rodados &&
@@ -961,17 +970,20 @@ ipcMain.handle("update-expense", async (event, expenseData) => {
     valor = (km_rodados / consumo_medio) * preco_litro;
   }
 
+  // --- ALTERAÇÃO: Adiciona tipo_despesa ao SQL ---
   const sql = `
     UPDATE despesas SET 
-    descricao = ?, data = ?, categoria = ?, 
+    descricao = ?, data = ?, categoria = ?, tipo_despesa = ?,
     km_rodados = ?, preco_litro = ?, consumo_medio = ?, valor = ? 
     WHERE id = ?
   `;
   try {
+    // --- ALTERAÇÃO: Passa tipo_despesa ---
     await dbPool.query(sql, [
       descricao,
       data,
       categoria,
+      tipo_despesa,
       km_rodados,
       preco_litro,
       consumo_medio,
@@ -997,62 +1009,381 @@ ipcMain.handle("delete-expense", async (event, expenseId) => {
   }
 });
 
-// Listener para buscar o Resumo Financeiro (ATUALIZADO para incluir Receitas Avulsas)
 ipcMain.handle(
   "get-financial-summary",
   async (event, { startDate, endDate }) => {
-    const formattedStartDate = new Date(startDate).toISOString().split("T")[0];
-    const formattedEndDate = new Date(endDate).toISOString().split("T")[0];
+    const formattedStartDate = `${startDate} 00:00:00`;
+    const formattedEndDate = `${endDate} 23:59:59`;
+
+    console.log(
+      `[get-financial-summary] Buscando período: ${formattedStartDate} a ${formattedEndDate}`
+    );
 
     try {
-      // 1. Calcula Receita das OS no período
-      const osRevenueSql = `
-      SELECT SUM(valor_total) AS totalOSRevenue 
-      FROM ordens_servico 
-      WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL AND DATE(data_saida) BETWEEN ? AND ?`;
+      // 1. Receita das OS
+      const osRevenueSql = `SELECT SUM(valor_total) AS totalOSRevenue FROM ordens_servico WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL AND data_saida >= ? AND data_saida <= ?`;
       const [osRevenueResult] = await dbPool.query(osRevenueSql, [
         formattedStartDate,
         formattedEndDate,
       ]);
-      const totalOSRevenue = osRevenueResult[0].totalOSRevenue || 0;
+      // --- CORREÇÃO: Garante que é número ---
+      const totalOSRevenue = Number(osRevenueResult[0].totalOSRevenue) || 0;
+      console.log(
+        `[get-financial-summary] Resultado Receita OS (Numérico):`,
+        totalOSRevenue
+      );
 
-      // 2. Calcula Receita Avulsa no período
-      const miscRevenueSql = `
-      SELECT SUM(valor) AS totalMiscRevenue 
-      FROM receitas_avulsas 
-      WHERE data BETWEEN ? AND ?`;
+      // 2. Receita Avulsa
+      const miscRevenueSql = `SELECT SUM(valor) AS totalMiscRevenue FROM receitas_avulsas WHERE data BETWEEN ? AND ?`;
       const [miscRevenueResult] = await dbPool.query(miscRevenueSql, [
-        formattedStartDate,
-        formattedEndDate,
+        startDate,
+        endDate,
       ]);
-      const totalMiscRevenue = miscRevenueResult[0].totalMiscRevenue || 0;
+      // --- CORREÇÃO: Garante que é número ---
+      const totalMiscRevenue =
+        Number(miscRevenueResult[0].totalMiscRevenue) || 0;
+      console.log(
+        `[get-financial-summary] Resultado Receita Avulsa (Numérico):`,
+        totalMiscRevenue
+      );
 
-      // 3. Receita Total
+      // 3. Receita Total (Soma Numérica Garantida)
       const totalRevenue = totalOSRevenue + totalMiscRevenue;
+      console.log(
+        `[get-financial-summary] Receita Total Calculada:`,
+        totalRevenue
+      );
 
-      // 4. Calcula Despesa Total no período
-      const expenseSql = `SELECT SUM(valor) AS totalExpenses FROM despesas WHERE data BETWEEN ? AND ?`;
-      const [expenseResult] = await dbPool.query(expenseSql, [
-        formattedStartDate,
-        formattedEndDate,
+      // 4. Despesas Fixas e Variáveis
+      const fixedExpenseSql = `SELECT SUM(valor) AS totalFixedExpenses FROM despesas WHERE tipo_despesa = 'Fixa' AND data BETWEEN ? AND ?`;
+      const [fixedExpenseResult] = await dbPool.query(fixedExpenseSql, [
+        startDate,
+        endDate,
       ]);
-      const totalExpenses = expenseResult[0].totalExpenses || 0;
+      const totalFixedExpenses =
+        Number(fixedExpenseResult[0].totalFixedExpenses) || 0; // Garante número
 
-      // 5. Calcula Lucro Líquido
+      const variableExpenseSql = `SELECT SUM(valor) AS totalVariableExpenses FROM despesas WHERE tipo_despesa = 'Variável' AND data BETWEEN ? AND ?`;
+      const [variableExpenseResult] = await dbPool.query(variableExpenseSql, [
+        startDate,
+        endDate,
+      ]);
+      const totalVariableExpenses =
+        Number(variableExpenseResult[0].totalVariableExpenses) || 0; // Garante número
+
+      const totalExpenses = totalFixedExpenses + totalVariableExpenses;
+      console.log(
+        `[get-financial-summary] Despesas Fixas: ${totalFixedExpenses}, Variáveis: ${totalVariableExpenses}, Total: ${totalExpenses}`
+      );
+
+      // 5. Lucro Líquido
       const netProfit = totalRevenue - totalExpenses;
+      console.log(
+        `[get-financial-summary] Lucro Líquido Calculado:`,
+        netProfit
+      );
 
+      // --- CORREÇÃO: Retorna apenas os totais necessários e corretos ---
       return {
         success: true,
         summary: {
-          totalRevenue,
+          totalRevenue, // Agora é um número correto
           totalExpenses,
           netProfit,
-          /* Opcional: podemos retornar os subtotais também */ totalOSRevenue,
-          totalMiscRevenue,
+          totalFixedExpenses,
+          totalVariableExpenses,
+          // Removemos os subtotais daqui para evitar confusão no frontend
         },
       };
     } catch (error) {
-      console.error("Erro ao calcular resumo financeiro:", error);
+      console.error("[get-financial-summary] Erro ao calcular resumo:", error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+// Listener para buscar dados mensais agregados para gráficos
+ipcMain.handle("get-monthly-summary", async (event, { year }) => {
+  // Valida o ano (simples)
+  const numericYear = parseInt(year, 10);
+  if (isNaN(numericYear) || numericYear < 1900 || numericYear > 2100) {
+    return { success: false, error: "Ano inválido." };
+  }
+
+  try {
+    // Inicializa um array para os 12 meses com valores zerados
+    const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1, // 1 (Janeiro) a 12 (Dezembro)
+      totalRevenue: 0,
+      totalExpenses: 0,
+      totalFixedExpenses: 0,
+      totalVariableExpenses: 0,
+    }));
+
+    // 1. Busca Receitas de OS agregadas por mês
+    const osRevenueSql = `
+      SELECT MONTH(data_saida) AS month, SUM(valor_total) AS monthlyRevenue 
+      FROM ordens_servico 
+      WHERE status IN ('Finalizado', 'Entregue') 
+        AND data_saida IS NOT NULL 
+        AND YEAR(data_saida) = ? 
+      GROUP BY MONTH(data_saida)
+    `;
+    const [osRevenues] = await dbPool.query(osRevenueSql, [numericYear]);
+    osRevenues.forEach((row) => {
+      // Ajusta o índice (month - 1) pois o array é 0-indexado
+      if (row.month >= 1 && row.month <= 12) {
+        monthlyData[row.month - 1].totalRevenue +=
+          Number(row.monthlyRevenue) || 0;
+      }
+    });
+
+    // 2. Busca Receitas Avulsas agregadas por mês
+    const miscRevenueSql = `
+      SELECT MONTH(data) AS month, SUM(valor) AS monthlyRevenue 
+      FROM receitas_avulsas 
+      WHERE YEAR(data) = ? 
+      GROUP BY MONTH(data)
+    `;
+    const [miscRevenues] = await dbPool.query(miscRevenueSql, [numericYear]);
+    miscRevenues.forEach((row) => {
+      if (row.month >= 1 && row.month <= 12) {
+        monthlyData[row.month - 1].totalRevenue +=
+          Number(row.monthlyRevenue) || 0;
+      }
+    });
+
+    // 3. Busca Despesas agregadas por mês e tipo
+    const expensesSql = `
+      SELECT MONTH(data) AS month, tipo_despesa, SUM(valor) AS monthlyExpense 
+      FROM despesas 
+      WHERE YEAR(data) = ? 
+      GROUP BY MONTH(data), tipo_despesa
+    `;
+    const [expenses] = await dbPool.query(expensesSql, [numericYear]);
+    expenses.forEach((row) => {
+      if (row.month >= 1 && row.month <= 12) {
+        const monthIndex = row.month - 1;
+        const value = Number(row.monthlyExpense) || 0;
+        monthlyData[monthIndex].totalExpenses += value; // Adiciona ao total geral de despesas
+        if (row.tipo_despesa === "Fixa") {
+          monthlyData[monthIndex].totalFixedExpenses += value;
+        } else {
+          monthlyData[monthIndex].totalVariableExpenses += value;
+        }
+      }
+    });
+
+    return { success: true, monthlyData };
+  } catch (error) {
+    console.error("Erro ao buscar resumo mensal:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle(
+  "export-financial-report",
+  async (event, { startDate, endDate }) => {
+    const formattedStartDate = `${startDate} 00:00:00`;
+    const formattedEndDate = `${endDate} 23:59:59`;
+    const dateOnlyStart = startDate;
+    const dateOnlyEnd = endDate;
+
+    console.log(
+      `[export-report] Iniciando exportação para período: ${startDate} a ${endDate}`
+    );
+
+    try {
+      // 1. Buscar Dados Detalhados
+      const osRevenueSql = `
+        SELECT os.id, os.data_saida, c.nome AS nome_cliente, os.valor_total
+        FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id
+        WHERE os.status IN ('Finalizado', 'Entregue') AND os.data_saida IS NOT NULL
+        AND os.data_saida >= ? AND os.data_saida <= ? ORDER BY os.data_saida ASC`;
+      const [osRevenues] = await dbPool.query(osRevenueSql, [
+        formattedStartDate,
+        formattedEndDate,
+      ]);
+
+      const miscRevenueSql = `SELECT id, data, descricao, valor FROM receitas_avulsas WHERE data BETWEEN ? AND ? ORDER BY data ASC`;
+      const [miscRevenues] = await dbPool.query(miscRevenueSql, [
+        dateOnlyStart,
+        dateOnlyEnd,
+      ]);
+
+      const expensesSql = `SELECT id, data, descricao, categoria, tipo_despesa, valor FROM despesas WHERE data BETWEEN ? AND ? ORDER BY data ASC`;
+      const [expenses] = await dbPool.query(expensesSql, [
+        dateOnlyStart,
+        dateOnlyEnd,
+      ]);
+
+      // 2. Calcular Resumo (similar ao get-financial-summary, mas sem precisar de nova busca)
+      const totalOSRevenue = osRevenues.reduce(
+        (sum, item) => sum + (Number(item.valor_total) || 0),
+        0
+      );
+      const totalMiscRevenue = miscRevenues.reduce(
+        (sum, item) => sum + (Number(item.valor) || 0),
+        0
+      );
+      const totalRevenue = totalOSRevenue + totalMiscRevenue;
+
+      let totalFixedExpenses = 0;
+      let totalVariableExpenses = 0;
+      expenses.forEach((exp) => {
+        const value = Number(exp.valor) || 0;
+        if (exp.tipo_despesa === "Fixa") {
+          totalFixedExpenses += value;
+        } else {
+          totalVariableExpenses += value;
+        }
+      });
+      const totalExpenses = totalFixedExpenses + totalVariableExpenses;
+      const netProfit = totalRevenue - totalExpenses;
+
+      console.log(
+        `[export-report] Dados buscados. Receitas OS: ${osRevenues.length}, Avulsas: ${miscRevenues.length}, Despesas: ${expenses.length}`
+      );
+
+      // 3. Perguntar onde Salvar
+      const { filePath } = await dialog.showSaveDialog({
+        title: "Salvar Relatório Financeiro",
+        defaultPath: `relatorio_financeiro_${dateOnlyStart}_a_${dateOnlyEnd}.xlsx`,
+        filters: [{ name: "Arquivos Excel", extensions: ["xlsx"] }],
+      });
+
+      if (!filePath) {
+        console.log("[export-report] Exportação cancelada pelo usuário.");
+        return { success: false, error: "Usuário cancelou." };
+      }
+
+      // 4. Criar o Arquivo Excel
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "GSTI App";
+      workbook.created = new Date();
+
+      // --- Planilha Resumo ---
+      const summarySheet = workbook.addWorksheet("Resumo");
+      summarySheet.addRow([
+        "Período:",
+        `${new Date(dateOnlyStart).toLocaleDateString("pt-BR")} a ${new Date(
+          dateOnlyEnd
+        ).toLocaleDateString("pt-BR")}`,
+      ]);
+      summarySheet.addRow([]); // Linha em branco
+      summarySheet.addRow(["Indicador", "Valor"]);
+      summarySheet.addRow(["Receita Total (OS)", totalOSRevenue]);
+      summarySheet.addRow(["Receita Total (Avulsas)", totalMiscRevenue]);
+      summarySheet.addRow(["RECEITA TOTAL GERAL", totalRevenue]).font = {
+        bold: true,
+      };
+      summarySheet.addRow(["Despesas Fixas", totalFixedExpenses]);
+      summarySheet.addRow(["Despesas Variáveis", totalVariableExpenses]);
+      summarySheet.addRow(["DESPESA TOTAL GERAL", totalExpenses]).font = {
+        bold: true,
+      };
+      summarySheet.addRow([]);
+      summarySheet.addRow(["LUCRO LÍQUIDO", netProfit]).font = {
+        bold: true,
+        color: { argb: netProfit >= 0 ? "FF008000" : "FFFF0000" },
+      }; // Verde ou Vermelho
+
+      // Formatação (Número e Moeda)
+      ["B4", "B5", "B6", "B7", "B8", "B9", "B11"].forEach((cellRef) => {
+        const cell = summarySheet.getCell(cellRef);
+        cell.numFmt = '"R$"#,##0.00;[Red]-"R$"#,##0.00';
+      });
+      summarySheet.getColumn("A").width = 25;
+      summarySheet.getColumn("B").width = 20;
+
+      // --- Planilha Receitas OS ---
+      const osSheet = workbook.addWorksheet("Receitas (OS)");
+      osSheet.columns = [
+        { header: "OS ID", key: "id", width: 10 },
+        {
+          header: "Data Saída",
+          key: "data_saida",
+          width: 15,
+          style: { numFmt: "dd/mm/yyyy hh:mm" },
+        },
+        { header: "Cliente", key: "nome_cliente", width: 40 },
+        {
+          header: "Valor Total",
+          key: "valor_total",
+          width: 15,
+          style: { numFmt: '"R$"#,##0.00' },
+        },
+      ];
+      // Adiciona dados formatando a data corretamente para o Excel
+      osRevenues.forEach((item) => {
+        osSheet.addRow({
+          ...item,
+          data_saida: item.data_saida ? new Date(item.data_saida) : null, // Converte para objeto Date
+        });
+      });
+
+      // --- Planilha Receitas Avulsas ---
+      const miscSheet = workbook.addWorksheet("Receitas (Avulsas)");
+      miscSheet.columns = [
+        { header: "ID", key: "id", width: 10 },
+        {
+          header: "Data",
+          key: "data",
+          width: 15,
+          style: { numFmt: "dd/mm/yyyy" },
+        },
+        { header: "Descrição", key: "descricao", width: 40 },
+        {
+          header: "Valor",
+          key: "valor",
+          width: 15,
+          style: { numFmt: '"R$"#,##0.00' },
+        },
+      ];
+      miscRevenues.forEach((item) => {
+        miscSheet.addRow({
+          ...item,
+          data: item.data ? new Date(item.data) : null, // Converte para objeto Date
+        });
+      });
+
+      // --- Planilha Despesas ---
+      const expenseSheet = workbook.addWorksheet("Despesas");
+      expenseSheet.columns = [
+        { header: "ID", key: "id", width: 10 },
+        {
+          header: "Data",
+          key: "data",
+          width: 15,
+          style: { numFmt: "dd/mm/yyyy" },
+        },
+        { header: "Descrição", key: "descricao", width: 40 },
+        { header: "Categoria", key: "categoria", width: 20 },
+        { header: "Tipo", key: "tipo_despesa", width: 15 },
+        {
+          header: "Valor",
+          key: "valor",
+          width: 15,
+          style: { numFmt: '"R$"#,##0.00' },
+        },
+      ];
+      expenses.forEach((item) => {
+        expenseSheet.addRow({
+          ...item,
+          data: item.data ? new Date(item.data) : null, // Converte para objeto Date
+        });
+      });
+
+      // 5. Salvar o Arquivo
+      await workbook.xlsx.writeFile(filePath);
+      console.log(`[export-report] Relatório salvo em: ${filePath}`);
+
+      // 6. Opcional: Abrir o arquivo após salvar
+      shell.openPath(filePath);
+
+      return { success: true, path: filePath };
+    } catch (error) {
+      console.error("[export-report] Erro ao gerar Excel:", error);
       return { success: false, error: error.message };
     }
   }

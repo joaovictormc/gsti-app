@@ -47,4 +47,6 @@ contextBridge.exposeInMainWorld('api', {
 
   // Funções Financeiras (getFinancialSummary já existe)
   getFinancialSummary: (period) => ipcRenderer.invoke('get-financial-summary', period),
+  getMonthlySummary: (year) => ipcRenderer.invoke('get-monthly-summary', year),
+  exportFinancialReport: (period) => ipcRenderer.invoke('export-financial-report', period),
 });
