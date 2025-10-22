@@ -1196,27 +1196,57 @@ ipcMain.handle(
     try {
       // 1. Buscar Dados Detalhados
       const osRevenueSql = `
-        SELECT os.id, os.data_saida, c.nome AS nome_cliente, os.valor_total
+        SELECT os.id, os.data_saida AS data, c.nome AS nome_cliente, os.valor_total AS valor
         FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id
         WHERE os.status IN ('Finalizado', 'Entregue') AND os.data_saida IS NOT NULL
-        AND os.data_saida >= ? AND os.data_saida <= ? ORDER BY os.data_saida ASC`;
+        AND os.data_saida >= ? AND os.data_saida <= ?`;
       const [osRevenues] = await dbPool.query(osRevenueSql, [
         formattedStartDate,
         formattedEndDate,
       ]);
 
-      const miscRevenueSql = `SELECT id, data, descricao, valor FROM receitas_avulsas WHERE data BETWEEN ? AND ? ORDER BY data ASC`;
+      const miscRevenueSql = `SELECT id, data, descricao, valor FROM receitas_avulsas WHERE data BETWEEN ? AND ?`;
       const [miscRevenues] = await dbPool.query(miscRevenueSql, [
         dateOnlyStart,
         dateOnlyEnd,
       ]);
 
-      const expensesSql = `SELECT id, data, descricao, categoria, tipo_despesa, valor FROM despesas WHERE data BETWEEN ? AND ? ORDER BY data ASC`;
+      const expensesSql = `SELECT id, data, descricao, categoria, tipo_despesa, valor FROM despesas WHERE data BETWEEN ? AND ?`;
       const [expenses] = await dbPool.query(expensesSql, [
         dateOnlyStart,
         dateOnlyEnd,
       ]);
 
+      // --- CRIAÇÃO DA LISTA UNIFICADA PARA FLUXO DE CAIXA ---
+      const cashFlowItems = [];
+      osRevenues.forEach((item) =>
+        cashFlowItems.push({
+          data: item.data, // DATETIME
+          tipo: "Receita OS",
+          descricao: `OS #${item.id} - ${item.nome_cliente}`,
+          valor: Number(item.valor) || 0,
+        })
+      );
+      miscRevenues.forEach((item) =>
+        cashFlowItems.push({
+          data: new Date(`${item.data.toISOString().split("T")[0]} 00:00:00`), // Converte DATE para DATETIME (início do dia)
+          tipo: "Receita Avulsa",
+          descricao: item.descricao,
+          valor: Number(item.valor) || 0,
+        })
+      );
+      expenses.forEach((item) =>
+        cashFlowItems.push({
+          data: new Date(`${item.data.toISOString().split("T")[0]} 00:00:00`), // Converte DATE para DATETIME
+          tipo: `Despesa ${item.tipo_despesa}`, // Ex: Despesa Fixa, Despesa Variável
+          descricao: item.descricao,
+          valor: -(Number(item.valor) || 0), // Valor negativo para despesas
+        })
+      );
+
+      // Ordena por data (mais antiga primeiro)
+      cashFlowItems.sort((a, b) => a.data - b.data);
+      // --- FIM DA CRIAÇÃO DA LISTA ---
       // 2. Calcular Resumo (similar ao get-financial-summary, mas sem precisar de nova busca)
       const totalOSRevenue = osRevenues.reduce(
         (sum, item) => sum + (Number(item.valor_total) || 0),
@@ -1270,7 +1300,7 @@ ipcMain.handle(
           dateOnlyEnd
         ).toLocaleDateString("pt-BR")}`,
       ]);
-      summarySheet.addRow([]); // Linha em branco
+      summarySheet.addRow([]);
       summarySheet.addRow(["Indicador", "Valor"]);
       summarySheet.addRow(["Receita Total (OS)", totalOSRevenue]);
       summarySheet.addRow(["Receita Total (Avulsas)", totalMiscRevenue]);
@@ -1286,16 +1316,40 @@ ipcMain.handle(
       summarySheet.addRow(["LUCRO LÍQUIDO", netProfit]).font = {
         bold: true,
         color: { argb: netProfit >= 0 ? "FF008000" : "FFFF0000" },
-      }; // Verde ou Vermelho
-
-      // Formatação (Número e Moeda)
+      };
       ["B4", "B5", "B6", "B7", "B8", "B9", "B11"].forEach((cellRef) => {
-        const cell = summarySheet.getCell(cellRef);
-        cell.numFmt = '"R$"#,##0.00;[Red]-"R$"#,##0.00';
+        summarySheet.getCell(cellRef).numFmt =
+          '"R$"#,##0.00;[Red]-"R$"#,##0.00';
       });
       summarySheet.getColumn("A").width = 25;
       summarySheet.getColumn("B").width = 20;
 
+      // --- NOVA PLANILHA: Fluxo de Caixa ---
+      const cashFlowSheet = workbook.addWorksheet("Fluxo de Caixa");
+      cashFlowSheet.columns = [
+        {
+          header: "Data",
+          key: "data",
+          width: 20,
+          style: { numFmt: "dd/mm/yyyy hh:mm" },
+        }, // Formato com hora
+        { header: "Tipo", key: "tipo", width: 20 },
+        { header: "Descrição", key: "descricao", width: 50 },
+        {
+          header: "Valor",
+          key: "valor",
+          width: 20,
+          style: { numFmt: '"R$"#,##0.00;[Red]-"R$"#,##0.00' },
+        }, // Formato moeda com negativo
+      ];
+      // Adiciona os itens ordenados
+      cashFlowItems.forEach((item) => {
+        cashFlowSheet.addRow({
+          ...item,
+          data: item.data, // Já é objeto Date
+        });
+      });
+      // --- FIM NOVA PLANILHA ---
       // --- Planilha Receitas OS ---
       const osSheet = workbook.addWorksheet("Receitas (OS)");
       osSheet.columns = [
@@ -1377,10 +1431,7 @@ ipcMain.handle(
       // 5. Salvar o Arquivo
       await workbook.xlsx.writeFile(filePath);
       console.log(`[export-report] Relatório salvo em: ${filePath}`);
-
-      // 6. Opcional: Abrir o arquivo após salvar
       shell.openPath(filePath);
-
       return { success: true, path: filePath };
     } catch (error) {
       console.error("[export-report] Erro ao gerar Excel:", error);
@@ -1443,6 +1494,75 @@ ipcMain.handle("delete-misc-revenue", async (event, revenueId) => {
     return { success: true };
   } catch (error) {
     console.error("Erro ao deletar receita avulsa:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// --- MÓDULO FINANCEIRO - DADOS PARA GRÁFICO ANUAL ---
+
+ipcMain.handle("get-annual-summary", async () => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const startYear = currentYear - 4; // Pega os últimos 5 anos (incluindo o atual)
+
+    // Inicializa um objeto para armazenar os dados anuais
+    const annualData = {};
+    for (let year = startYear; year <= currentYear; year++) {
+      annualData[year] = { year: year, totalRevenue: 0, totalExpenses: 0 };
+    }
+
+    // 1. Busca Receitas de OS agregadas por ANO
+    const osRevenueSql = `
+      SELECT YEAR(data_saida) AS year, SUM(valor_total) AS annualRevenue 
+      FROM ordens_servico 
+      WHERE status IN ('Finalizado', 'Entregue') 
+        AND data_saida IS NOT NULL 
+        AND YEAR(data_saida) >= ? 
+      GROUP BY YEAR(data_saida)
+    `;
+    const [osRevenues] = await dbPool.query(osRevenueSql, [startYear]);
+    osRevenues.forEach((row) => {
+      if (annualData[row.year]) {
+        annualData[row.year].totalRevenue += Number(row.annualRevenue) || 0;
+      }
+    });
+
+    // 2. Busca Receitas Avulsas agregadas por ANO
+    const miscRevenueSql = `
+      SELECT YEAR(data) AS year, SUM(valor) AS annualRevenue 
+      FROM receitas_avulsas 
+      WHERE YEAR(data) >= ? 
+      GROUP BY YEAR(data)
+    `;
+    const [miscRevenues] = await dbPool.query(miscRevenueSql, [startYear]);
+    miscRevenues.forEach((row) => {
+      if (annualData[row.year]) {
+        annualData[row.year].totalRevenue += Number(row.annualRevenue) || 0;
+      }
+    });
+
+    // 3. Busca Despesas agregadas por ANO
+    const expensesSql = `
+      SELECT YEAR(data) AS year, SUM(valor) AS annualExpense 
+      FROM despesas 
+      WHERE YEAR(data) >= ? 
+      GROUP BY YEAR(data)
+    `;
+    const [expenses] = await dbPool.query(expensesSql, [startYear]);
+    expenses.forEach((row) => {
+      if (annualData[row.year]) {
+        annualData[row.year].totalExpenses += Number(row.annualExpense) || 0;
+      }
+    });
+
+    // Converte o objeto de volta para um array ordenado por ano
+    const resultData = Object.values(annualData).sort(
+      (a, b) => a.year - b.year
+    );
+
+    return { success: true, annualData: resultData };
+  } catch (error) {
+    console.error("Erro ao buscar resumo anual:", error);
     return { success: false, error: error.message };
   }
 });

@@ -8,9 +8,9 @@ import {
   Grid,
   Stack,
   CircularProgress,
-  Alert, 
+  Alert,
 } from "@mui/material";
-import { Bar } from "react-chartjs-2";
+import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -142,21 +142,21 @@ function FinancialDashboard() {
   const currentYear = today.getFullYear();
   const currentMonthRange = getMonthDateRange(today);
 
+  // Estados para Resumo
   const [startDate, setStartDate] = useState(currentMonthRange.startDate);
   const [endDate, setEndDate] = useState(currentMonthRange.endDate);
   const [summary, setSummary] = useState(INITIAL_SUMMARY);
   const [loadingSummary, setLoadingSummary] = useState(false);
 
-  // --- ESTADOS PARA O GRÁFICO ---
-  const [selectedYear, setSelectedYear] = useState(String(currentYear)); // Ano atual como string
-  const [monthlyData, setMonthlyData] = useState([]); // Dados mensais do backend
+  // Estados para Gráfico Mensal
+  const [selectedYear, setSelectedYear] = useState(String(currentYear));
+  const [monthlyData, setMonthlyData] = useState([]);
   const [loadingChart, setLoadingChart] = useState(false);
-  // --- FIM ESTADOS GRÁFICO ---
 
-  // --- NOVO ESTADO PARA EXPORTAÇÃO ---
-  const [exporting, setExporting] = useState(false);
-  const [exportMessage, setExportMessage] = useState({ type: "", text: "" }); // Para feedback
-  // --- FIM NOVO ESTADO ---
+  // --- ESTADOS PARA GRÁFICO ANUAL ---
+  const [annualData, setAnnualData] = useState([]);
+  const [loadingAnnualChart, setLoadingAnnualChart] = useState(false);
+  // --- FIM ESTADOS GRÁFICO ANUAL ---
 
   // Efeito para buscar o resumo do período selecionado
   useEffect(() => {
@@ -233,6 +233,29 @@ function FinancialDashboard() {
   }, [selectedYear]); // Re-executa quando o ano mudar
   // --- FIM EFEITO GRÁFICO ---
 
+  // --- EFEITO PARA BUSCAR DADOS ANUAIS (Roda 1x) ---
+  useEffect(() => {
+    const fetchAnnualData = async () => {
+      setLoadingAnnualChart(true);
+      try {
+        const result = await window.api.getAnnualSummary();
+        if (result.success) {
+          setAnnualData(result.annualData);
+        } else {
+          console.error("Erro ao buscar dados anuais:", result.error);
+          setAnnualData([]);
+        }
+      } catch (apiError) {
+        console.error("Erro API (Annual):", apiError);
+        setAnnualData([]);
+      } finally {
+        setLoadingAnnualChart(false);
+      }
+    };
+    fetchAnnualData();
+  }, []); // Array vazio = roda apenas na montagem inicial
+  // --- FIM EFEITO GRÁFICO ANUAL ---
+
   // Funções para definir períodos pré-definidos
   const setPeriodThisMonth = () => {
     const range = getMonthDateRange(new Date());
@@ -300,54 +323,49 @@ function FinancialDashboard() {
   };
   // --- FIM NOVA FUNÇÃO ---
 
-  // --- CONFIGURAÇÃO DO GRÁFICO ---
-  const chartOptions = {
+  // --- CONFIGURAÇÃO DO GRÁFICO ANUAL (Line Chart) ---
+  const annualChartOptions = {
     responsive: true,
-    maintainAspectRatio: false, // Permite controlar altura
+    maintainAspectRatio: false,
     plugins: {
       legend: { position: "top" },
-      title: { display: true, text: `Resumo Mensal - ${selectedYear}` },
+      title: {
+        display: true,
+        text: `Resumo Anual (Últimos ${annualData.length} Anos)`,
+      },
       tooltip: {
         callbacks: {
-          // Formata o tooltip para mostrar moeda
-          label: function (context) {
-            let label = context.dataset.label || "";
-            if (label) {
-              label += ": ";
-            }
-            if (context.parsed.y !== null) {
-              label += formatCurrency(context.parsed.y);
-            }
-            return label;
-          },
+          label: (context) =>
+            `${context.dataset.label || ""}: ${formatCurrency(
+              context.parsed.y
+            )}`,
         },
       },
     },
-    scales: {
-      // Formata o eixo Y para mostrar moeda
-      y: { ticks: { callback: (value) => formatCurrency(value) } },
-    },
+    scales: { y: { ticks: { callback: (value) => formatCurrency(value) } } },
   };
 
-  const chartData = {
-    labels: MONTH_LABELS,
+  const annualChartData = {
+    // Labels são os anos
+    labels: annualData.map((d) => d.year),
     datasets: [
       {
-        label: "Receita Total",
-        data: monthlyData.map((d) => d.totalRevenue),
-        backgroundColor: "rgba(75, 192, 192, 0.6)", // Verde/Azul claro
-        borderColor: "rgb(75, 192, 192)",
-        borderWidth: 1,
+        label: "Receita Total Anual",
+        data: annualData.map((d) => d.totalRevenue),
+        borderColor: "rgb(75, 192, 192)", // Verde/Azul
+        backgroundColor: "rgba(75, 192, 192, 0.5)",
+        tension: 0.1, // Suaviza a linha
       },
       {
-        label: "Despesa Total",
-        data: monthlyData.map((d) => d.totalExpenses),
-        backgroundColor: "rgba(255, 99, 132, 0.6)", // Vermelho claro
-        borderColor: "rgb(255, 99, 132)",
-        borderWidth: 1,
+        label: "Despesa Total Anual",
+        data: annualData.map((d) => d.totalExpenses),
+        borderColor: "rgb(255, 99, 132)", // Vermelho
+        backgroundColor: "rgba(255, 99, 132, 0.5)",
+        tension: 0.1,
       },
     ],
   };
+  // --- FIM CONFIGURAÇÃO GRÁFICO ANUAL ---
 
   return (
     <>
@@ -560,6 +578,35 @@ function FinancialDashboard() {
           {!loadingChart && monthlyData.length === 0 && (
             <Typography sx={{ textAlign: "center", mt: 4 }}>
               Nenhum dado encontrado para o ano {selectedYear}.
+            </Typography>
+          )}
+        </Box>
+      </Paper>
+
+      {/* --- SEÇÃO DO GRÁFICO ANUAL --- */}
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Comparativo Anual
+        </Typography>
+        <Box sx={{ height: 350, position: "relative" }}>
+          {loadingAnnualChart && (
+            <Box
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <CircularProgress />
+            </Box>
+          )}
+          {!loadingAnnualChart && annualData.length > 0 && (
+            <Line options={annualChartOptions} data={annualChartData} /> // <-- Usa o componente Line
+          )}
+          {!loadingAnnualChart && annualData.length === 0 && (
+            <Typography sx={{ textAlign: "center", mt: 4 }}>
+              Nenhum dado anual encontrado.
             </Typography>
           )}
         </Box>
