@@ -1,5 +1,3 @@
-// renderer/src/App.jsx
-
 import { ThemeProvider, createTheme, CssBaseline, Box } from "@mui/material";
 import CustomerGrid from './components/CustomerGrid';
 import ProductServiceGrid from "./components/ProductServiceGrid"; 

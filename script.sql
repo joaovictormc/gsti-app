@@ -107,3 +107,7 @@ CREATE TABLE receitas_avulsas (
 
 ALTER TABLE despesas
 ADD COLUMN tipo_despesa ENUM('Fixa', 'Variável') NOT NULL DEFAULT 'Variável' AFTER categoria;
+
+
+ALTER TABLE usuarios
+ADD COLUMN role ENUM('Admin', 'Funcionario') NOT NULL DEFAULT 'Funcionario' AFTER senha;

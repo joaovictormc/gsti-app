@@ -50,6 +50,7 @@ Este projeto é um aplicativo de desktop multiplatforma (Windows, macOS, Linux) 
 * **[react-chartjs-2](https://react-chartjs-2.js.org/):** Componentes React para a biblioteca Chart.js.
 * **[Chart.js](https://www.chartjs.org/):** Biblioteca para criação de gráficos interativos.
 * **[exceljs](https://www.npmjs.com/package/exceljs):** Biblioteca para criação de arquivos Excel (.xlsx).
+* **[bcrypt](https://www.npmjs.com/package/bcrypt):** Biblioteca para hashing de senhas.
 ---
 
 ## 📂 Estrutura do Projeto (Simplificada)

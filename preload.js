@@ -1,6 +1,14 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld('api', {
+// Autenticação e Usuários
+  login: (credentials) => ipcRenderer.invoke('handle-login', credentials),
+  getUsers: () => ipcRenderer.invoke('get-users'),
+  addUser: (userData) => ipcRenderer.invoke('add-user', userData),
+  updateUser: (userData) => ipcRenderer.invoke('update-user', userData),
+  deleteUser: (userId) => ipcRenderer.invoke('delete-user', userId),
+
+
   // Clientes
   getCustomers: () => ipcRenderer.invoke('get-customers'),
   addCustomer: (customerData) => ipcRenderer.invoke('add-customer', customerData),

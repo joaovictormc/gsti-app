@@ -4,9 +4,11 @@ const mysql = require("mysql2");
 const axios = require("axios");
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
+const ExcelJS = require("exceljs");
+const bcrypt = require("bcrypt");
 
 const isDev = process.env.NODE_ENV !== "production";
-const ExcelJS = require("exceljs");
+const saltRounds = 10;
 
 // Configuração da Pool de Conexão com o MySQL
 // Lembre-se de usar os dados que você configurou (usuário e senha do BD)
@@ -46,6 +48,146 @@ const formatPhone = (phone) => {
   return String(phone);
 };
 // --- FIM DAS FUNÇÕES DE FORMATAÇÃO ---
+
+// --- AUTENTICAÇÃO E USUÁRIOS ---
+
+// Listener para Login
+ipcMain.handle("handle-login", async (event, { login, password }) => {
+  if (!login || !password) {
+    return { success: false, error: "Login e senha são obrigatórios." };
+  }
+  try {
+    const sql = "SELECT id, nome, senha, role FROM usuarios WHERE login = ?";
+    const [rows] = await dbPool.query(sql, [login]);
+
+    if (rows.length === 0) {
+      return { success: false, error: "Usuário não encontrado." };
+    }
+
+    const user = rows[0];
+    // Compara a senha fornecida com o hash armazenado
+    const match = await bcrypt.compare(password, user.senha);
+
+    if (match) {
+      // Login bem-sucedido! Retorna dados do usuário (SEM A SENHA)
+      console.log(
+        `[Login] Usuário ${user.nome} (${user.role}) logado com sucesso.`
+      );
+      return {
+        success: true,
+        user: {
+          id: user.id,
+          nome: user.nome,
+          role: user.role,
+        },
+      };
+    } else {
+      // Senha incorreta
+      return { success: false, error: "Senha incorreta." };
+    }
+  } catch (error) {
+    console.error("[Login] Erro durante o login:", error);
+    return { success: false, error: "Erro interno no servidor." };
+  }
+});
+
+// Listener para buscar todos os usuários (Admin Only)
+ipcMain.handle("get-users", async (event /*, adminUserId */) => {
+  // Opcional: receber ID do admin logado
+  // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
+  const sql = "SELECT id, nome, login, role FROM usuarios ORDER BY nome ASC";
+  try {
+    const [rows] = await dbPool.query(sql);
+    return { success: true, data: rows };
+  } catch (error) {
+    console.error("Erro ao buscar usuários:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para adicionar novo usuário (Admin Only)
+ipcMain.handle("add-user", async (event, userData /*, adminUserId */) => {
+  // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
+  const { nome, login, password, role } = userData;
+  if (!nome || !login || !password || !role) {
+    return { success: false, error: "Todos os campos são obrigatórios." };
+  }
+  if (!["Admin", "Funcionario"].includes(role)) {
+    return { success: false, error: "Papel inválido." };
+  }
+
+  try {
+    // Gera o hash da senha
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const sql =
+      "INSERT INTO usuarios (nome, login, senha, role) VALUES (?, ?, ?, ?)";
+    const [result] = await dbPool.query(sql, [
+      nome,
+      login,
+      hashedPassword,
+      role,
+    ]);
+    return { success: true, id: result.insertId };
+  } catch (error) {
+    // Trata erro de login duplicado
+    if (error.code === "ER_DUP_ENTRY") {
+      return { success: false, error: "Este login já está em uso." };
+    }
+    console.error("Erro ao adicionar usuário:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para atualizar usuário (Admin Only - por enquanto, só nome e role)
+ipcMain.handle("update-user", async (event, userData /*, adminUserId */) => {
+  // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
+  const { id, nome, login, role } = userData; // Ignoramos senha por enquanto
+  if (!id || !nome || !login || !role) {
+    return {
+      success: false,
+      error: "ID, Nome, Login e Papel são obrigatórios.",
+    };
+  }
+  if (!["Admin", "Funcionario"].includes(role)) {
+    return { success: false, error: "Papel inválido." };
+  }
+  // TODO: Adicionar lógica para alterar senha (com hashing) se necessário
+
+  try {
+    const sql =
+      "UPDATE usuarios SET nome = ?, login = ?, role = ? WHERE id = ?";
+    await dbPool.query(sql, [nome, login, role, id]);
+    return { success: true };
+  } catch (error) {
+    if (error.code === "ER_DUP_ENTRY") {
+      return {
+        success: false,
+        error: "Este login já está em uso por outro usuário.",
+      };
+    }
+    console.error("Erro ao atualizar usuário:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para deletar usuário (Admin Only)
+ipcMain.handle("delete-user", async (event, userId /*, adminUserId */) => {
+  // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
+  // TODO: Adicionar verificação para impedir que o Admin se auto-delete ou delete o último Admin
+  const id = parseInt(userId, 10);
+  if (isNaN(id) || id <= 0) {
+    return { success: false, error: "ID de usuário inválido." };
+  }
+
+  try {
+    const sql = "DELETE FROM usuarios WHERE id = ?";
+    await dbPool.query(sql, [id]);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao deletar usuário:", error);
+    return { success: false, error: error.message };
+  }
+});
 
 // Listener para buscar os clientes
 ipcMain.handle("get-customers", async () => {
@@ -1841,7 +1983,8 @@ ipcMain.handle("search-os-by-serial", async (event, serialNumber) => {
 });
 
 // Listener para buscar Relatório Detalhado de Receitas
-ipcMain.handle("get-detailed-revenue-report",
+ipcMain.handle(
+  "get-detailed-revenue-report",
   async (event, { startDate, endDate }) => {
     const formattedStartDate = `${startDate} 00:00:00`;
     const formattedEndDate = `${endDate} 23:59:59`;
