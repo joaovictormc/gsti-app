@@ -1,33 +1,27 @@
-Lista de Funcionalidades Futuras (To-Do)
-Módulo Financeiro (Fase 3 - Refinamentos e Avançado)
-[ ] Fluxo de Caixa Detalhado (Visualização): Adicionar tabela na tela FinancialDashboard listando todas as transações (Receitas OS, Receitas Avulsas, Despesas) do período selecionado, ordenadas por data.
+# Lista de Funcionalidades Futuras (To-Do)
 
-[ ] Gráfico de Despesas por Categoria (Pizza): Criar gráfico no FinancialDashboard mostrando a distribuição percentual das despesas por categoria.
+## Módulo Financeiro (Fase 3 - Refinamentos e Avançado)
 
-[ ] Gráfico de Receitas (OS vs. Avulsas): Criar gráfico no FinancialDashboard mostrando a proporção das fontes de receita.
+- [ ] **Fluxo de Caixa Detalhado (Visualização):** Adicionar tabela na tela `FinancialDashboard` listando todas as transações (Receitas OS, Receitas Avulsas, Despesas) do período selecionado, ordenadas por data.
+- [ ] **Gráfico de Despesas por Categoria (Pizza):** Criar gráfico no `FinancialDashboard` mostrando a distribuição percentual das despesas por categoria.
+- [ ] **Gráfico de Receitas (OS vs. Avulsas):** Criar gráfico no `FinancialDashboard` mostrando a proporção das fontes de receita.
+- [ ] **Relatório Detalhado de Despesas (Visualização/Excel):** Criar tela/planilha Excel listando todas as despesas no período, talvez agrupadas por Categoria ou Tipo (Fixa/Variável).
+- [ ] **Aprimorar Exportação Excel:** Adicionar mais planilhas ou detalhes (ex: Despesas por Categoria, Receitas por Fonte) ao arquivo `.xlsx`.
+- [ ] **Projeção Financeira Simplificada:** Calcular e exibir "Lucro Líquido Mensal Projetado" (Receita Média - Desp. Var. Média - Desp. Fixa Estimada - *requer campo para Desp. Fixa Estimada*).
+- [ ] **Metas Financeiras Múltiplas:** Permitir cadastrar várias metas (descrição, valor) e exibir tempo estimado para cada uma baseado no Lucro Médio.
 
-[ ] Aprimorar Exportação Excel: Adicionar mais planilhas ou detalhes conforme necessário (ex: Despesas por Categoria, Receitas por Fonte).
+## Ordens de Serviço (Fase 2 e Fase 4 - Melhorias e Relatórios)
 
-[ ] Projeção Financeira Simplificada: Calcular e exibir "Lucro Líquido Mensal Projetado" (Receita Média - Desp. Var. Média - Desp. Fixa Estimada - requer campo para Desp. Fixa Estimada).
+- [ ] **Relatório de OS Abertas por Tempo:** Listar OS com status 'Em Aberto', 'Aguardando Peça', 'Em Andamento', ordenadas pelas mais antigas.
+- [ ] **Busca Avançada de OS:** Implementar busca mais robusta na tela `OSGrid`, permitindo filtrar por ID da OS, Telefone do Cliente, ou detalhes do Equipamento (Marca/Modelo).
+- [ ] **Vincular OS a Equipamento Específico:** (Requer Módulo de Equipamentos) Associar uma OS a um item específico da tabela `equipamentos` do cliente.
+- [ ] **Adicionar Notas por Item na OS:** Permitir adicionar observações específicas para cada produto ou serviço *dentro* da OS (`os_itens`).
+- [ ] **Opções de Customização para PDFs:** (Avançado) Permitir adicionar logo da empresa, dados de contato, etc., aos PDFs.
+- [ ] **Histórico de Status da OS:** (Avançado) Registrar mudanças de status e datas para auditoria.
 
-[ ] Metas Financeiras Múltiplas: Permitir cadastrar várias metas (descrição, valor) e exibir tempo estimado para cada uma baseado no Lucro Médio.
+## Cadastros Gerais (Fase 1 - Melhorias)
 
-Ordens de Serviço (Fase 2 - Melhorias)
-[ ] Busca Avançada de OS: Implementar busca mais robusta na tela OSGrid, permitindo filtrar por ID da OS, Telefone do Cliente, ou detalhes do Equipamento (Marca/Modelo).
-
-[ ] Vincular OS a Equipamento Específico: (Requer Módulo de Equipamentos) Associar uma OS a um item específico da tabela equipamentos do cliente, em vez de apenas campos de texto.
-
-[ ] Adicionar Notas por Item na OS: Permitir adicionar observações específicas para cada produto ou serviço dentro da OS (exigiria nova coluna em os_itens).
-
-[ ] Opções de Customização para PDFs: (Avançado) Permitir adicionar logo da empresa, dados de contato, ou outras pequenas customizações nos PDFs gerados.
-
-[ ] Histórico de Status da OS: (Avançado) Registrar mudanças de status e datas para rastreamento.
-
-Cadastros Gerais (Fase 1 - Melhorias)
-[ ] Módulo de Equipamentos: Implementar interface para usar a tabela equipamentos (que já existe no script SQL), criando um inventário de equipamentos por cliente.
-
-[ ] Controle de Estoque (Produtos): Adicionar campos de quantidade_estoque na tabela produtos_servicos e lógica básica de baixa ao adicionar um "Produto" a uma OS.
-
-[ ] Vincular Custo a Produtos/Serviços: Adicionar um campo custo na tabela produtos_servicos para permitir cálculos futuros de margem de lucro.
-
-[ ] Busca/Validação de Endereço (CEP): Adicionar funcionalidade no cadastro de clientes para buscar endereço via CEP (usando API externa).
+- [ ] **Módulo de Equipamentos:** Implementar interface para usar a tabela `equipamentos` (inventário de equipamentos por cliente).
+- [ ] **Controle de Estoque (Produtos):** Adicionar campo `quantidade_estoque` em `produtos_servicos` e lógica de baixa ao usar um "Produto" na OS.
+- [ ] **Vincular Custo a Produtos/Serviços:** Adicionar campo `custo` em `produtos_servicos` para cálculo futuro de margem.
+- [ ] **Busca/Validação de Endereço (CEP):** Adicionar busca de endereço por CEP no cadastro de clientes.

@@ -1694,6 +1694,234 @@ ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
   }
 });
 
+// --- RELATÓRIOS ---
+
+// Listener para buscar OS por ID do Cliente
+ipcMain.handle("get-os-by-client", async (event, clientId) => {
+  // Valida se clientId é um número
+  const id = parseInt(clientId, 10);
+  if (isNaN(id) || id <= 0) {
+    return { success: false, error: "ID do Cliente inválido." };
+  }
+
+  // Busca OSs do cliente específico, incluindo detalhes do equipamento
+  const sql = `
+    SELECT 
+      os.id, 
+      CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento, 
+      os.status, 
+      os.data_entrada, 
+      os.data_saida, 
+      os.valor_total,
+      c.nome AS nome_cliente -- Inclui o nome para confirmação (opcional)
+    FROM ordens_servico AS os
+    JOIN clientes AS c ON os.id_cliente = c.id
+    WHERE os.id_cliente = ?
+    ORDER BY os.id DESC
+  `;
+
+  try {
+    const [rows] = await dbPool.query(sql, [id]);
+    return { success: true, data: rows };
+  } catch (error) {
+    console.error(`Erro ao buscar OS para cliente ${id}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para buscar OS por Status
+ipcMain.handle("get-os-by-status", async (event, status) => {
+  // Valida se o status é uma string não vazia (poderíamos validar contra a lista de ENUMs se quiséssemos ser mais rigorosos)
+  if (typeof status !== "string" || !status) {
+    return { success: false, error: "Status inválido." };
+  }
+
+  // Busca OSs com o status específico, incluindo nome do cliente e detalhes do equipamento
+  const sql = `
+    SELECT 
+      os.id, 
+      CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento, 
+      os.status, 
+      os.data_entrada, 
+      os.data_saida, 
+      os.valor_total,
+      c.nome AS nome_cliente 
+    FROM ordens_servico AS os
+    JOIN clientes AS c ON os.id_cliente = c.id
+    WHERE os.status = ? 
+    ORDER BY os.id DESC
+  `;
+
+  try {
+    const [rows] = await dbPool.query(sql, [status]);
+    return { success: true, data: rows };
+  } catch (error) {
+    console.error(`Erro ao buscar OS com status ${status}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para buscar os Serviços/Produtos mais utilizados
+ipcMain.handle(
+  "get-most-used-services",
+  async (event, { startDate, endDate }) => {
+    // Formata datas para query SQL
+    const formattedStartDate = `${startDate} 00:00:00`;
+    const formattedEndDate = `${endDate} 23:59:59`;
+
+    // SQL que junta os itens da OS com os produtos/serviços e as OSs (para filtrar pela data de saída)
+    // Ele soma a quantidade de cada item utilizado em OSs finalizadas/entregues no período.
+    const sql = `
+    SELECT 
+      ps.id, 
+      ps.descricao, 
+      ps.tipo, 
+      SUM(oi.quantidade) AS total_utilizado
+    FROM os_itens oi
+    JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id
+    JOIN ordens_servico os ON oi.id_os = os.id 
+    WHERE 
+      os.status IN ('Finalizado', 'Entregue') 
+      AND os.data_saida IS NOT NULL 
+      AND os.data_saida >= ? AND os.data_saida <= ?
+    GROUP BY 
+      ps.id, ps.descricao, ps.tipo 
+    ORDER BY 
+      total_utilizado DESC
+    LIMIT 50; -- Limita aos 50 mais usados (opcional)
+  `;
+
+    try {
+      const [rows] = await dbPool.query(sql, [
+        formattedStartDate,
+        formattedEndDate,
+      ]);
+      return { success: true, data: rows };
+    } catch (error) {
+      console.error(`Erro ao buscar serviços mais utilizados:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+// Listener para buscar OS por Número de Série do Equipamento
+ipcMain.handle("search-os-by-serial", async (event, serialNumber) => {
+  // Valida se o número de série é uma string não vazia
+  if (typeof serialNumber !== "string" || !serialNumber.trim()) {
+    // Retorna lista vazia se a busca for inválida ou vazia, em vez de erro
+    return { success: true, data: [] };
+  }
+
+  // Busca OSs cujo numero_serie corresponde (busca exata ou parcial com LIKE)
+  // Usaremos LIKE para permitir buscas parciais
+  const searchTerm = `%${serialNumber.trim()}%`;
+  const sql = `
+    SELECT
+      os.id,
+      CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento,
+      os.numero_serie, -- Inclui o número de série no resultado
+      os.status,
+      os.data_entrada,
+      os.data_saida,
+      os.valor_total,
+      c.nome AS nome_cliente
+    FROM ordens_servico AS os
+    JOIN clientes AS c ON os.id_cliente = c.id
+    WHERE os.numero_serie LIKE ?
+    ORDER BY os.id DESC
+  `;
+
+  try {
+    const [rows] = await dbPool.query(sql, [searchTerm]);
+    return { success: true, data: rows };
+  } catch (error) {
+    console.error(`Erro ao buscar OS pelo serial ${serialNumber}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Listener para buscar Relatório Detalhado de Receitas
+ipcMain.handle("get-detailed-revenue-report",
+  async (event, { startDate, endDate }) => {
+    const formattedStartDate = `${startDate} 00:00:00`;
+    const formattedEndDate = `${endDate} 23:59:59`;
+    const dateOnlyStart = startDate;
+    const dateOnlyEnd = endDate;
+
+    console.log(
+      `[get-detailed-revenue] Buscando período: ${startDate} a ${endDate}`
+    );
+
+    try {
+      // 1. Busca detalhes das Receitas de OS no período
+      const osRevenueSql = `
+      SELECT 
+        os.id, 
+        os.data_saida AS data, 
+        CONCAT('OS #', os.id, ' - ', c.nome) AS descricao, 
+        os.valor_total AS valor,
+        'OS Finalizada' AS tipo 
+      FROM ordens_servico os 
+      JOIN clientes c ON os.id_cliente = c.id
+      WHERE os.status IN ('Finalizado', 'Entregue') 
+        AND os.data_saida IS NOT NULL 
+        AND os.data_saida >= ? AND os.data_saida <= ?`;
+      const [osRevenues] = await dbPool.query(osRevenueSql, [
+        formattedStartDate,
+        formattedEndDate,
+      ]);
+
+      // 2. Busca detalhes das Receitas Avulsas no período
+      const miscRevenueSql = `
+      SELECT 
+        id, 
+        data, 
+        descricao, 
+        valor,
+        'Receita Avulsa' AS tipo
+      FROM receitas_avulsas 
+      WHERE data BETWEEN ? AND ?`;
+      const [miscRevenues] = await dbPool.query(miscRevenueSql, [
+        dateOnlyStart,
+        dateOnlyEnd,
+      ]);
+
+      // 3. Combina e Formata os resultados
+      const combinedRevenues = [];
+      osRevenues.forEach((item) =>
+        combinedRevenues.push({
+          id: `os-${item.id}`, // Cria um ID único prefixado
+          data: item.data, // Já é DATETIME
+          tipo: item.tipo,
+          descricao: item.descricao,
+          valor: Number(item.valor) || 0,
+        })
+      );
+      miscRevenues.forEach((item) =>
+        combinedRevenues.push({
+          id: `misc-${item.id}`, // Cria um ID único prefixado
+          data: new Date(`${item.data.toISOString().split("T")[0]} 00:00:00`), // Converte DATE para DATETIME
+          tipo: item.tipo,
+          descricao: item.descricao,
+          valor: Number(item.valor) || 0,
+        })
+      );
+
+      // 4. Ordena por data (mais antiga primeiro)
+      combinedRevenues.sort((a, b) => a.data - b.data);
+
+      console.log(
+        `[get-detailed-revenue] Total de receitas encontradas: ${combinedRevenues.length}`
+      );
+
+      return { success: true, data: combinedRevenues };
+    } catch (error) {
+      console.error(`Erro ao buscar relatório detalhado de receitas:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
 // --- FUNÇÕES DA JANELA ---
 function createWindow() {
   const mainWindow = new BrowserWindow({

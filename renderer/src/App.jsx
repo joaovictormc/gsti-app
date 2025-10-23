@@ -7,6 +7,11 @@ import OSGrid from "./components/OSGrid";
 import ExpensesGrid from "./components/ExpensesGrid";
 import FinancialDashboard from "./components/FinancialDashboard";
 import MiscRevenueGrid from "./components/MiscRevenueGrid";
+import OSReportClient from "./components/OSReportClient";
+import OSReportStatus from "./components/OSReportStatus";
+import MostUsedServicesReport from "./components/MostUsedServicesReport";
+import EquipmentHistoryReport from "./components/EquipmentHistoryReport";
+import DetailedRevenueReport from "./components/DetailedRevenueReport";
 
 const theme = createTheme({
   // ... seu tema
@@ -21,8 +26,13 @@ function App() {
         {/* <ProductServiceGrid /> */}
         {/* <OSGrid /> */}
         {/* <ExpensesGrid /> */}
-        <FinancialDashboard />
+        {/* <FinancialDashboard /> */}
         {/* <MiscRevenueGrid /> */}
+        {/* <OSReportClient /> */}
+        {/* <OSReportStatus /> */}
+        {/* <MostUsedServicesReport /> */}
+        {/* <EquipmentHistoryReport /> */}
+        <DetailedRevenueReport />
       </Box>
     </ThemeProvider>
   );
