@@ -1567,6 +1567,133 @@ ipcMain.handle("get-annual-summary", async () => {
   }
 });
 
+// --- MÓDULO FINANCEIRO - CÁLCULO DE MÉDIA ---
+
+ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
+  // Garante que o número de meses seja válido
+  const numMonths = Math.max(1, parseInt(months, 10));
+
+  // Calcula a data de início (primeiro dia de X meses atrás)
+  const endDate = new Date(); // Hoje
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - numMonths);
+  startDate.setDate(1); // Vai para o primeiro dia daquele mês
+
+  const formattedStartDate = startDate.toISOString().split("T")[0];
+  const formattedEndDate = endDate.toISOString().split("T")[0];
+
+  console.log(
+    `[get-average-profit] Calculando média para ${numMonths} meses (${formattedStartDate} a ${formattedEndDate})`
+  );
+
+  try {
+    // 1. Busca Receitas de OS agrupadas por ANO e MÊS
+    const osRevenueSql = `
+      SELECT 
+        YEAR(data_saida) AS year, MONTH(data_saida) AS month, 
+        SUM(valor_total) AS monthlyOsRevenue 
+      FROM ordens_servico 
+      WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL 
+        AND data_saida >= ? AND data_saida <= ? 
+      GROUP BY YEAR(data_saida), MONTH(data_saida)
+    `;
+    const [osRevenues] = await dbPool.query(osRevenueSql, [
+      `${formattedStartDate} 00:00:00`,
+      `${formattedEndDate} 23:59:59`,
+    ]);
+
+    // 2. Busca Receitas Avulsas agrupadas por ANO e MÊS
+    const miscRevenueSql = `
+      SELECT 
+        YEAR(data) AS year, MONTH(data) AS month, 
+        SUM(valor) AS monthlyMiscRevenue 
+      FROM receitas_avulsas 
+      WHERE data >= ? AND data <= ? 
+      GROUP BY YEAR(data), MONTH(data)
+    `;
+    const [miscRevenues] = await dbPool.query(miscRevenueSql, [
+      formattedStartDate,
+      formattedEndDate,
+    ]);
+
+    // 3. Busca Despesas agrupadas por ANO e MÊS
+    const expensesSql = `
+      SELECT 
+        YEAR(data) AS year, MONTH(data) AS month, 
+        SUM(valor) AS monthlyExpense 
+      FROM despesas 
+      WHERE data >= ? AND data <= ? 
+      GROUP BY YEAR(data), MONTH(data)
+    `;
+    const [expenses] = await dbPool.query(expensesSql, [
+      formattedStartDate,
+      formattedEndDate,
+    ]);
+
+    // 4. Agrega os resultados por mês (formato 'YYYY-MM')
+    const monthlyProfitsMap = {};
+
+    // Função auxiliar para obter a chave 'YYYY-MM'
+    const getMonthKey = (year, month) =>
+      `${year}-${String(month).padStart(2, "0")}`;
+
+    osRevenues.forEach((row) => {
+      const key = getMonthKey(row.year, row.month);
+      monthlyProfitsMap[key] = monthlyProfitsMap[key] || {
+        revenue: 0,
+        expense: 0,
+      };
+      monthlyProfitsMap[key].revenue += Number(row.monthlyOsRevenue) || 0;
+    });
+
+    miscRevenues.forEach((row) => {
+      const key = getMonthKey(row.year, row.month);
+      monthlyProfitsMap[key] = monthlyProfitsMap[key] || {
+        revenue: 0,
+        expense: 0,
+      };
+      monthlyProfitsMap[key].revenue += Number(row.monthlyMiscRevenue) || 0;
+    });
+
+    expenses.forEach((row) => {
+      const key = getMonthKey(row.year, row.month);
+      monthlyProfitsMap[key] = monthlyProfitsMap[key] || {
+        revenue: 0,
+        expense: 0,
+      };
+      monthlyProfitsMap[key].expense += Number(row.monthlyExpense) || 0;
+    });
+
+    // 5. Calcula o lucro de cada mês e a média
+    const monthlyProfits = [];
+    Object.values(monthlyProfitsMap).forEach((monthData) => {
+      monthlyProfits.push(monthData.revenue - monthData.expense);
+    });
+
+    if (monthlyProfits.length === 0) {
+      console.log("[get-average-profit] Nenhum dado encontrado no período.");
+      return { success: true, averageProfit: 0 }; // Retorna 0 se não houver dados
+    }
+
+    const totalProfitSum = monthlyProfits.reduce(
+      (sum, profit) => sum + profit,
+      0
+    );
+    const averageProfit = totalProfitSum / monthlyProfits.length; // Média dos meses COM dados
+
+    console.log(
+      `[get-average-profit] Lucros Mensais Calculados:`,
+      monthlyProfits
+    );
+    console.log(`[get-average-profit] Média de Lucro:`, averageProfit);
+
+    return { success: true, averageProfit };
+  } catch (error) {
+    console.error("Erro ao calcular média de lucro:", error);
+    return { success: false, error: error.message };
+  }
+});
+
 // --- FUNÇÕES DA JANELA ---
 function createWindow() {
   const mainWindow = new BrowserWindow({

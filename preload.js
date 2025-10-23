@@ -50,4 +50,5 @@ contextBridge.exposeInMainWorld('api', {
   getMonthlySummary: (year) => ipcRenderer.invoke('get-monthly-summary', year),
   exportFinancialReport: (period) => ipcRenderer.invoke('export-financial-report', period),
   getAnnualSummary: () => ipcRenderer.invoke('get-annual-summary'),
+  getAverageProfit: (options) => ipcRenderer.invoke('get-average-profit', options),
 });
