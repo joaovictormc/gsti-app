@@ -1,15 +1,36 @@
+import React, { useState, useMemo, useEffect } from 'react';
 import {
+  Box,
+  CssBaseline,
   ThemeProvider,
   createTheme,
-  CssBaseline,
-  Box,
   IconButton,
   Typography,
   Button,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Collapse,
 } from "@mui/material";
-import Brightness4Icon from "@mui/icons-material/Brightness4"; // Ícone Lua (Dark Mode)
-import Brightness7Icon from "@mui/icons-material/Brightness7"; // Ícone Sol (Light Mode)
-import { useState, useMemo, useEffect } from "react";
+import {
+  Brightness4 as Brightness4Icon,
+  Brightness7 as Brightness7Icon, // Tema
+  People as PeopleIcon,
+  Inventory2 as InventoryIcon,
+  Assignment as AssignmentIcon, // Ícones Menu
+  Assessment as AssessmentIcon,
+  AttachMoney as AttachMoneyIcon,
+  BarChart as BarChartIcon, // Ícones Menu
+  ExpandLess,
+  ExpandMore, // Ícones Submenu
+  Home as HomeIcon, // Ícone Home
+  Logout as LogoutIcon, // Ícone Logout
+  Settings as SettingsIcon, // Ícone Gerenciar Usuários (Exemplo)
+} from "@mui/icons-material";
 import { useAuth } from "./contexts/AuthContext";
 
 import LoginScreen from "./screens/LoginScreen";
@@ -17,7 +38,7 @@ import CustomerGrid from "./components/CustomerGrid";
 import ProductServiceGrid from "./components/ProductServiceGrid";
 import OSGrid from "./components/OSGrid";
 import ExpensesGrid from "./components/ExpensesGrid";
-import FinancialDashboard from "./components/FinancialDashboard";
+import FinancialDashboard from "./components/FinancialPages/FinancialDashboard";
 import MiscRevenueGrid from "./components/MiscRevenueGrid";
 import OSReportClient from "./components/OSReportClient";
 import OSReportStatus from "./components/OSReportStatus";
@@ -26,138 +47,23 @@ import EquipmentHistoryReport from "./components/EquipmentHistoryReport";
 import DetailedRevenueReport from "./components/DetailedRevenueReport";
 import UserManagement from "./components/UserManagement";
 
-
-
-// Componente Sidebar (com botão de tema e logout)
-function Sidebar({ onNavigate, userRole, currentThemeMode, toggleTheme }) {
-  // Recebe props do tema
-  const { logout } = useAuth();
-  const [openSubmenu, setOpenSubmenu] = useState(null);
-
-  const menuItems = [
-    { label: "Clientes", component: "CustomerGrid" },
-    { label: "Produtos/Serviços", component: "ProductServiceGrid" },
-    { label: "Ordens de Serviço", component: "OSGrid" },
-    { label: "Despesas", component: "ExpensesGrid" },
-    { label: "Receitas Avulsas", component: "MiscRevenueGrid" },
-    { label: "Resumo Financeiro", component: "FinancialDashboard" },
-    {
-      label: "Relatórios",
-      subItems: [
-        { label: "OS por Cliente", component: "OSReportClient" },
-        { label: "OS por Status", component: "OSReportStatus" },
-        { label: "Serviços Mais Usados", component: "MostUsedServicesReport" },
-        { label: "Histórico Equipamento", component: "EquipmentHistoryReport" },
-        { label: "Receitas Detalhadas", component: "DetailedRevenueReport" },
-      ],
-    },
-    ...(userRole === "Admin"
-      ? [{ label: "Gerenciar Usuários", component: "UserManagement" }]
-      : []),
-  ];
-
+// Componente HomeScreen Simples
+const HomeScreen = () => {
+  const { currentUser } = useAuth();
   return (
-    <Box
-      sx={{
-        width: 240,
-        height: "100vh",
-        borderRight: 1,
-        borderColor: "divider",
-        display: "flex",
-        flexDirection: "column",
-        p: 1,
-        overflowY: "auto",
-      }}
-    >
-      <Typography variant="h6" sx={{ textAlign: "center", mb: 2 }}>
-        GSTI App
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Bem-vindo ao GSTI, {currentUser?.nome || "Usuário"}!
       </Typography>
-      <Box sx={{ flexGrow: 1 }}>
-        {" "}
-        {/* Faz o menu ocupar o espaço disponível */}
-        {menuItems.map((item /* ... Seu código de mapeamento do menu ... */) =>
-          item.subItems ? (
-            <Box key={item.label}>
-              {" "}
-              <Button
-                fullWidth
-                onClick={() =>
-                  setOpenSubmenu(openSubmenu === item.label ? null : item.label)
-                }
-                sx={{ justifyContent: "flex-start", mb: 0.5 }}
-              >
-                {" "}
-                {item.label}{" "}
-              </Button>{" "}
-              {openSubmenu === item.label && (
-                <Box sx={{ pl: 2 }}>
-                  {" "}
-                  {item.subItems.map((subItem) => (
-                    <Button
-                      key={subItem.label}
-                      fullWidth
-                      onClick={() => onNavigate(subItem.component)}
-                      sx={{
-                        justifyContent: "flex-start",
-                        mb: 0.5,
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      {" "}
-                      {subItem.label}{" "}
-                    </Button>
-                  ))}{" "}
-                </Box>
-              )}{" "}
-            </Box>
-          ) : (
-            <Button
-              key={item.label}
-              fullWidth
-              onClick={() => onNavigate(item.component)}
-              sx={{ justifyContent: "flex-start", mb: 0.5 }}
-            >
-              {" "}
-              {item.label}{" "}
-            </Button>
-          )
-        )}
-      </Box>
-
-      {/* Controles na parte inferior da Sidebar */}
-      <Box
-        sx={{
-          mt: "auto",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          p: 1,
-        }}
-      >
-        <Button variant="outlined" color="error" onClick={logout} size="small">
-          {" "}
-          Logout{" "}
-        </Button>
-        {/* Botão para alternar tema */}
-        <IconButton
-          onClick={toggleTheme}
-          color="inherit"
-          title={
-            currentThemeMode === "dark"
-              ? "Mudar para tema claro"
-              : "Mudar para tema escuro"
-          }
-        >
-          {currentThemeMode === "dark" ? (
-            <Brightness7Icon />
-          ) : (
-            <Brightness4Icon />
-          )}
-        </IconButton>
-      </Box>
+      <Typography variant="body1">
+        Utilize o menu à esquerda para navegar pelas funcionalidades do sistema.
+      </Typography>
+      {/* Adicionar mais informações ou links rápidos aqui se desejar */}
     </Box>
   );
-}
+};
+
+const drawerWidth = 240; // Largura da Sidebar
 
 // Mapeia nomes de componentes
 const componentMap = {
@@ -181,85 +87,244 @@ const componentMap = {
   ),
 };
 
+// Componente Sidebar usando MUI Drawer
+function AppSidebar({ onNavigate, userRole, currentThemeMode, toggleTheme }) {
+  const { logout, currentUser } = useAuth();
+  const [reportsOpen, setReportsOpen] = useState(false); // Estado para submenu Relatórios
+
+  const handleReportsClick = () => {
+    setReportsOpen(!reportsOpen);
+  };
+
+  const menuItems = [
+    { label: "Início", component: "HomeScreen", icon: <HomeIcon /> },
+    { label: "Clientes", component: "CustomerGrid", icon: <PeopleIcon /> },
+    {
+      label: "Produtos/Serviços",
+      component: "ProductServiceGrid",
+      icon: <InventoryIcon />,
+    },
+    {
+      label: "Ordens de Serviço",
+      component: "OSGrid",
+      icon: <AssignmentIcon />,
+    },
+    {
+      label: "Despesas",
+      component: "ExpensesGrid",
+      icon: <AttachMoneyIcon sx={{ color: "red" }} />,
+    }, // Exemplo cor
+    {
+      label: "Receitas Avulsas",
+      component: "MiscRevenueGrid",
+      icon: <AttachMoneyIcon sx={{ color: "green" }} />,
+    }, // Exemplo cor
+    {
+      label: "Resumo Financeiro",
+      component: "FinancialDashboard",
+      icon: <BarChartIcon />,
+    },
+    // Item de Menu para Relatórios (com submenu)
+    {
+      label: "Relatórios",
+      icon: <AssessmentIcon />,
+      subItems: [
+        { label: "OS por Cliente", component: "OSReportClient" },
+        { label: "OS por Status", component: "OSReportStatus" },
+        { label: "Serviços Mais Usados", component: "MostUsedServicesReport" },
+        { label: "Histórico Equipamento", component: "EquipmentHistoryReport" },
+        { label: "Receitas Detalhadas", component: "DetailedRevenueReport" },
+      ],
+    },
+    // Item visível apenas para Admin
+    ...(userRole === "Admin"
+      ? [
+          {
+            label: "Gerenciar Usuários",
+            component: "UserManagement",
+            icon: <SettingsIcon />,
+          },
+        ]
+      : []),
+  ];
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: drawerWidth,
+        flexShrink: 0,
+        [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: "border-box" },
+      }}
+    >
+      <Box
+        sx={{
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+        }}
+      >
+        <Typography variant="h6" sx={{ textAlign: "center", my: 2 }}>
+          GSTI App
+        </Typography>
+        <Divider />
+        <List sx={{ flexGrow: 1 }}>
+          {menuItems.map((item) => {
+            // Se o item tiver subItems, renderiza o botão com Collapse
+            if (item.subItems) {
+              // Verifica se é o item de Relatórios (poderia ser mais genérico se houvesse mais submenus)
+              const isOpen = item.label === "Relatórios" ? reportsOpen : false;
+              const handleClick =
+                item.label === "Relatórios" ? handleReportsClick : () => {};
+
+              return (
+                // Usa React.Fragment para agrupar sem adicionar nó extra no DOM
+                <React.Fragment key={item.label}>
+                  <ListItemButton onClick={handleClick}>
+                    <ListItemIcon>{item.icon}</ListItemIcon>
+                    <ListItemText primary={item.label} />
+                    {isOpen ? <ExpandLess /> : <ExpandMore />}
+                  </ListItemButton>
+                  <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                    <List component="div" disablePadding>
+                      {item.subItems.map((subItem) => (
+                        <ListItemButton
+                          key={subItem.label}
+                          sx={{ pl: 4 }}
+                          onClick={() => onNavigate(subItem.component)}
+                        >
+                          <ListItemIcon>
+                            {subItem.icon || <Box sx={{ width: 24 }} />}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={subItem.label}
+                            primaryTypographyProps={{ fontSize: "0.9rem" }}
+                          />
+                        </ListItemButton>
+                      ))}
+                    </List>
+                  </Collapse>
+                </React.Fragment>
+              );
+            }
+            // Se não tiver subItems, renderiza um item de navegação simples
+            else {
+              return (
+                <ListItem key={item.label} disablePadding>
+                  <ListItemButton onClick={() => onNavigate(item.component)}>
+                    <ListItemIcon>
+                      {item.icon || <Box sx={{ width: 24 }} />}
+                    </ListItemIcon>
+                    <ListItemText primary={item.label} />
+                  </ListItemButton>
+                </ListItem>
+              );
+            }
+          })}
+        </List>
+        {/* --- FIM DA SEÇÃO CORRIGIDA --- */}
+        <Divider />
+        {/* Controles na parte inferior */}
+        <Box
+          sx={{
+            p: 1,
+            mt: "auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Box>
+            <Typography variant="caption">{currentUser?.nome}</Typography>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={logout}
+              size="small"
+              startIcon={<LogoutIcon />}
+              sx={{ display: "block", mt: 0.5 }}
+            >
+              {" "}
+              Logout{" "}
+            </Button>
+          </Box>
+          <IconButton
+            onClick={toggleTheme}
+            color="inherit"
+            title={currentThemeMode === "dark" ? "Tema claro" : "Tema escuro"}
+          >
+            {currentThemeMode === "dark" ? (
+              <Brightness7Icon />
+            ) : (
+              <Brightness4Icon />
+            )}
+          </IconButton>
+        </Box>
+      </Box>
+    </Drawer>
+  );
+}
+
 function App() {
   const { currentUser, login } = useAuth();
   const [activeComponent, setActiveComponent] = useState("HomeScreen"); // Inicia na HomeScreen
-
-  // --- LÓGICA DO TEMA ---
-  // Tenta ler o tema salvo no localStorage, ou usa 'light' como padrão
   const [themeMode, setThemeMode] = useState(
     () => localStorage.getItem("themeMode") || "light"
   );
 
-  // Salva a preferência no localStorage sempre que o tema mudar
   useEffect(() => {
     localStorage.setItem("themeMode", themeMode);
   }, [themeMode]);
 
-  // Função para alternar o tema
   const toggleThemeMode = () => {
     setThemeMode((prevMode) => (prevMode === "light" ? "dark" : "light"));
   };
 
-  // Cria o objeto de tema MUI com base no modo atual (usando useMemo para performance)
   const theme = useMemo(
-    () =>
-      createTheme({
-        palette: {
-          mode: themeMode,
-          // Você pode adicionar mais customizações aqui se desejar
-          // primary: { main: '#1976d2' },
-          // secondary: { main: '#dc004e' },
-        },
-      }),
-    [themeMode] // Recria o tema apenas se themeMode mudar
+    () => createTheme({ palette: { mode: themeMode } }),
+    [themeMode]
   );
-  // --- FIM LÓGICA DO TEMA ---
 
-  // Se não houver usuário logado, mostra a tela de login (fora do ThemeProvider principal, pode ter seu próprio tema se quiser)
+  // Tela de Login
   if (!currentUser) {
     return (
       <ThemeProvider theme={theme}>
         {" "}
-        {/* Aplica tema também na tela de login */}
-        <CssBaseline />
-        <LoginScreen onLoginSuccess={login} />
+        <CssBaseline /> <LoginScreen onLoginSuccess={login} />{" "}
       </ThemeProvider>
     );
   }
 
-  // Se houver usuário logado, mostra a interface principal
+  // Interface Principal
   const ComponentToRender =
     componentMap[activeComponent] ||
     (() => (
-      <Typography>Componente não encontrado: {activeComponent}</Typography>
+      <Typography>Componente '{activeComponent}' não encontrado.</Typography>
     ));
 
   return (
-    // Envolve toda a UI logada com o ThemeProvider
     <ThemeProvider theme={theme}>
-      <CssBaseline />{" "}
-      {/* Normaliza estilos E aplica cores de fundo/texto do tema */}
+      <CssBaseline />
       <Box sx={{ display: "flex" }}>
-        {/* Passa o modo atual e a função de toggle para a Sidebar */}
-        <Sidebar
+        <AppSidebar
           onNavigate={setActiveComponent}
           userRole={currentUser.role}
           currentThemeMode={themeMode}
           toggleTheme={toggleThemeMode}
         />
+        {/* Área de Conteúdo Principal */}
         <Box
           component="main"
           sx={{
             flexGrow: 1,
-            p: 3,
-            height: "100vh",
-            overflowY: "auto",
             bgcolor: "background.default",
+            p: 3,
+            height: "100vh", // Ocupa altura total
+            overflowY: "auto", // Adiciona scroll se necessário
           }}
         >
-          {" "}
-          {/* Usa cor de fundo do tema */}
+          {/* Adiciona um espaço no topo para não colar na barra (se houver) */}
+          {/* <Toolbar /> // Descomente se usar AppBar */}
           <ComponentToRender />
         </Box>
       </Box>
