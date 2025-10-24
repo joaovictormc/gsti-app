@@ -6,6 +6,8 @@ const fs = require("fs");
 const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
 const bcrypt = require("bcrypt");
+const nodemailer = require("nodemailer"); // <-- Importa nodemailer
+const crypto = require("crypto"); // <-- Módulo Node.js para gerar tokens
 
 const isDev = process.env.NODE_ENV !== "production";
 const saltRounds = 10;
@@ -23,6 +25,27 @@ const dbPool = mysql
     queueLimit: 0,
   })
   .promise(); // Usar a versão com Promises para código mais limpo
+
+// --- CONFIGURAÇÃO NODEMAILER (Exemplo com Gmail - USE VARIÁVEIS DE AMBIENTE EM PRODUÇÃO!) ---
+// CUIDADO: Substitua com suas credenciais ou use um serviço transacional.
+// Para Gmail, use uma "Senha de App" se tiver 2FA ativado.
+const mailTransporter = nodemailer.createTransport({
+  host: "smtp-relay.brevo.com", // Servidor SMTP do Brevo (verifique na sua conta)
+  port: 587, // Porta TLS (mais comum)
+  secure: false, // true para porta 465, false para outras portas como 587
+  auth: {
+    user: "99ea2b001@smtp-brevo.com", // SEU EMAIL DE LOGIN DO BREVO
+    pass: "f59DkpQ8OmYGzJjd", // SUA CHAVE SMTP GERADA NO BREVO
+  },
+});
+
+mailTransporter.verify(function (error, success) {
+  if (error) {
+    console.error("Erro ao conectar ao servidor SMTP Brevo:", error);
+  } else {
+    console.log("Servidor SMTP Brevo conectado com sucesso.");
+  }
+});
 
 // --- FUNÇÕES DE FORMATAÇÃO (Definidas globalmente no módulo) ---
 const formatDocument = (doc) => {
@@ -93,11 +116,15 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
 
 // Listener para buscar todos os usuários (Admin Only)
 ipcMain.handle("get-users", async (event /*, adminUserId */) => {
-  // Opcional: receber ID do admin logado
-  // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
-  const sql = "SELECT id, nome, login, role FROM usuarios ORDER BY nome ASC";
+  // TODO: Adicionar verificação de Admin
+  // --- CORREÇÃO: Adicionado 'email' ao SELECT ---
+  const sql =
+    "SELECT id, nome, email, login, role FROM usuarios ORDER BY nome ASC";
+  // --- FIM CORREÇÃO ---
   try {
     const [rows] = await dbPool.query(sql);
+    // Filtra o próprio admin logado para segurança (se currentUser for passado no futuro)
+    // const filteredRows = adminUserId ? rows.filter(user => user.id !== adminUserId) : rows;
     return { success: true, data: rows };
   } catch (error) {
     console.error("Erro ao buscar usuários:", error);
@@ -105,68 +132,86 @@ ipcMain.handle("get-users", async (event /*, adminUserId */) => {
   }
 });
 
-// Listener para adicionar novo usuário (Admin Only)
+// Adicionar usuário (ATUALIZADO com email)
 ipcMain.handle("add-user", async (event, userData /*, adminUserId */) => {
-  // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
-  const { nome, login, password, role } = userData;
-  if (!nome || !login || !password || !role) {
+  // TODO: Adicionar verificação de Admin
+  const { nome, email, login, password, role } = userData; // Adicionado email
+  if (!nome || !email || !login || !password || !role) {
+    // Adicionado email na validação
     return { success: false, error: "Todos os campos são obrigatórios." };
   }
+  // TODO: Adicionar validação de formato de email
   if (!["Admin", "Funcionario"].includes(role)) {
     return { success: false, error: "Papel inválido." };
   }
 
   try {
-    // Gera o hash da senha
     const hashedPassword = await bcrypt.hash(password, saltRounds);
+    // Adicionado email ao SQL
     const sql =
-      "INSERT INTO usuarios (nome, login, senha, role) VALUES (?, ?, ?, ?)";
+      "INSERT INTO usuarios (nome, email, login, senha, role) VALUES (?, ?, ?, ?, ?)";
     const [result] = await dbPool.query(sql, [
       nome,
+      email,
       login,
       hashedPassword,
       role,
     ]);
     return { success: true, id: result.insertId };
   } catch (error) {
-    // Trata erro de login duplicado
     if (error.code === "ER_DUP_ENTRY") {
-      return { success: false, error: "Este login já está em uso." };
+      if (error.message.includes("login"))
+        return { success: false, error: "Este login já está em uso." };
+      if (error.message.includes("email"))
+        return { success: false, error: "Este email já está em uso." };
     }
     console.error("Erro ao adicionar usuário:", error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: "Erro ao criar usuário. Verifique os dados.",
+    };
   }
 });
 
-// Listener para atualizar usuário (Admin Only - por enquanto, só nome e role)
+// Atualizar usuário (ATUALIZADO com email, sem alterar senha aqui)
 ipcMain.handle("update-user", async (event, userData /*, adminUserId */) => {
-  // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
-  const { id, nome, login, role } = userData; // Ignoramos senha por enquanto
-  if (!id || !nome || !login || !role) {
+  // TODO: Adicionar verificação de Admin
+  const { id, nome, email, login, role } = userData; // Adicionado email
+  if (!id || !nome || !email || !login || !role) {
+    // Adicionado email na validação
     return {
       success: false,
-      error: "ID, Nome, Login e Papel são obrigatórios.",
+      error: "ID, Nome, Email, Login e Papel são obrigatórios.",
     };
   }
   if (!["Admin", "Funcionario"].includes(role)) {
     return { success: false, error: "Papel inválido." };
   }
-  // TODO: Adicionar lógica para alterar senha (com hashing) se necessário
 
   try {
+    // Adicionado email ao SQL
     const sql =
-      "UPDATE usuarios SET nome = ?, login = ?, role = ? WHERE id = ?";
-    await dbPool.query(sql, [nome, login, role, id]);
+      "UPDATE usuarios SET nome = ?, email = ?, login = ?, role = ? WHERE id = ?";
+    await dbPool.query(sql, [nome, email, login, role, id]);
     return { success: true };
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
-      return {
-        success: false,
-        error: "Este login já está em uso por outro usuário.",
-      };
+      if (error.message.includes("login"))
+        return {
+          success: false,
+          error: "Este login já está em uso por outro usuário.",
+        };
+      if (error.message.includes("email"))
+        return {
+          success: false,
+          error: "Este email já está em uso por outro usuário.",
+        };
     }
     console.error("Erro ao atualizar usuário:", error);
-    return { success: false, error: error.message };
+    return {
+      success: false,
+      error: "Erro ao atualizar usuário. Verifique os dados.",
+    };
   }
 });
 
@@ -188,6 +233,122 @@ ipcMain.handle("delete-user", async (event, userId /*, adminUserId */) => {
     return { success: false, error: error.message };
   }
 });
+
+// --- RECUPERAÇÃO DE SENHA ---
+
+// Passo 1: Solicitar redefinição
+ipcMain.handle("handle-forgot-password", async (event, { email }) => {
+  if (!email) return { success: false, error: "Email é obrigatório." };
+
+  try {
+    // 1. Encontra usuário pelo email
+    const [rows] = await dbPool.query(
+      "SELECT id, nome, email FROM usuarios WHERE email = ?",
+      [email]
+    );
+    if (rows.length === 0) {
+      // Por segurança, não informe se o email existe ou não
+      console.warn(
+        `[ForgotPwd] Tentativa de recuperação para email não encontrado: ${email}`
+      );
+      return { success: true }; // Retorna sucesso mesmo assim
+    }
+    const user = rows[0];
+
+    // 2. Gera token seguro e data de expiração (ex: 1 hora)
+    // const token = crypto.randomBytes(32).toString("hex");
+    const code = crypto.randomInt(100000, 999999).toString();
+    const expiry = new Date();
+    expiry.setHours(expiry.getMinutes() + 6); // Token válido por 10 minutos
+
+    // 3. Hashea o token antes de salvar no banco
+    const hashedToken = await bcrypt.hash(code, saltRounds);
+
+    // 4. Salva o token HASHED e a expiração no banco
+    await dbPool.query(
+      "UPDATE usuarios SET reset_token = ?, reset_token_expiry = ? WHERE id = ?",
+      [hashedToken, expiry, user.id]
+    );
+
+    // 5. Envia o email com o token NÃO HASHED (ou link)
+    const mailOptions = {
+      from: '"GSTI App" <joaovictormc089@gmail.com>', // SEU EMAIL REMETENTE
+      to: user.email,
+      subject: "Redefinição de Senha - GSTI App",
+      text: `Olá ${user.nome},\n\nVocê solicitou a redefinição de senha para o GSTI App.\n\nSeu código de redefinição é: ${code}\n\nEste código expira em 10 minutos.\n\nSe você não solicitou isso, ignore este email.\n`,
+      // html: '<p>Seu código: <b>${token}</b></p>' // Versão HTML opcional
+    };
+
+    await mailTransporter.sendMail(mailOptions);
+    console.log(`[ForgotPwd] Email de redefinição enviado para ${user.email}`);
+    return { success: true }; // Informa sucesso (sem expor existência do email)
+  } catch (error) {
+    console.error("[ForgotPwd] Erro ao processar esqueci senha:", error);
+    // Não retorne o erro detalhado para o usuário por segurança
+    return {
+      success: false,
+      error: "Ocorreu um erro ao tentar enviar o email de recuperação.",
+    };
+  }
+});
+
+// Passo 2: Redefinir a senha com o token
+ipcMain.handle(
+  "handle-reset-password",
+  async (event, { token, password, confirmPassword }) => {
+    if (!token || !password || !confirmPassword) {
+      return { success: false, error: "Token e senhas são obrigatórios." };
+    }
+    if (password !== confirmPassword) {
+      return { success: false, error: "As senhas não coincidem." };
+    }
+    // TODO: Adicionar validação de complexidade de senha
+
+    try {
+      // 1. Precisamos encontrar o usuário pelo token HASHED
+      // Como bcrypt não permite busca reversa, temos que buscar TODOS os tokens não expirados
+      // e comparar o token fornecido com cada hash. ISSO NÃO É EFICIENTE PARA MUITOS USUÁRIOS.
+      // Alternativa: Usar um token simples (não hashed) no banco, mas menos seguro.
+      // Ou usar um link único com o token. Para simplificar, faremos a comparação aqui.
+
+      const now = new Date();
+      const [usersWithToken] = await dbPool.query(
+        "SELECT id, reset_token, reset_token_expiry FROM usuarios WHERE reset_token IS NOT NULL AND reset_token_expiry > ?",
+        [now]
+      );
+
+      let foundUser = null;
+      for (const user of usersWithToken) {
+        const match = await bcrypt.compare(token, user.reset_token);
+        if (match) {
+          foundUser = user;
+          break; // Encontrou o usuário correspondente
+        }
+      }
+
+      if (!foundUser) {
+        return { success: false, error: "Token inválido ou expirado." };
+      }
+
+      // 2. Hashea a nova senha
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // 3. Atualiza a senha e invalida o token
+      await dbPool.query(
+        "UPDATE usuarios SET senha = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?",
+        [hashedPassword, foundUser.id]
+      );
+
+      console.log(
+        `[ResetPwd] Senha redefinida com sucesso para usuário ID ${foundUser.id}`
+      );
+      return { success: true };
+    } catch (error) {
+      console.error("[ResetPwd] Erro ao redefinir senha:", error);
+      return { success: false, error: "Erro ao tentar redefinir a senha." };
+    }
+  }
+);
 
 // Listener para buscar os clientes
 ipcMain.handle("get-customers", async () => {

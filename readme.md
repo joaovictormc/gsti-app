@@ -51,6 +51,7 @@ Este projeto é um aplicativo de desktop multiplatforma (Windows, macOS, Linux) 
 * **[Chart.js](https://www.chartjs.org/):** Biblioteca para criação de gráficos interativos.
 * **[exceljs](https://www.npmjs.com/package/exceljs):** Biblioteca para criação de arquivos Excel (.xlsx).
 * **[bcrypt](https://www.npmjs.com/package/bcrypt):** Biblioteca para hashing de senhas.
+* **[nodemailer](https://nodemailer.com/):** Biblioteca para envio de e-mails.
 ---
 
 ## 📂 Estrutura do Projeto (Simplificada)

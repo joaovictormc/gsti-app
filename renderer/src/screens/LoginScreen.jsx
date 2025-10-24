@@ -7,7 +7,10 @@ import {
   Paper,
   Alert,
   CircularProgress,
+  Link as MuiLink,
 } from "@mui/material";
+import ForgotPasswordScreen from "./ForgotPasswordScreen";
+import ResetPasswordScreen from "./ResetPasswordScreen";
 
 // O prop 'onLoginSuccess' será uma função passada pelo App.jsx (ou quem gerencia o estado global)
 // para informar que o login foi bem-sucedido e passar os dados do usuário.
@@ -16,6 +19,12 @@ function LoginScreen({ onLoginSuccess }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState("login"); // 'login', 'forgot', 'reset'
+  const [emailForReset, setEmailForReset] = useState(""); // Guarda o email para passar para ResetPasswordScreen
+
+  // --- NOVO ESTADO para controlar a tela ---
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  // --- FIM NOVO ESTADO ---
 
   const handleLogin = async () => {
     setError(""); // Limpa erros antigos
@@ -50,6 +59,47 @@ function LoginScreen({ onLoginSuccess }) {
       handleLogin();
     }
   };
+
+  // --- Função para navegar para ForgotPassword ---
+  const navigateToForgotPassword = () => {
+    setError("");
+    setViewMode("forgot");
+  };
+
+  const handleSuccessAndGoToReset = (email) => {
+    setEmailForReset(email); // Guarda o email (opcional)
+    setViewMode("reset"); // Muda a view para a tela de reset
+  };
+
+  // --- Função para voltar do ForgotPassword ---
+  const navigateBackToLogin = () => {
+    setError("");
+    setViewMode("login");
+    setEmailForReset("");
+  };
+
+  // Renderiza condicionalmente
+  if (viewMode === "forgot") {
+    // Passa a nova função handleSuccessAndGoToReset
+    return (
+      <ForgotPasswordScreen
+        onBackToLogin={navigateBackToLogin}
+        onSuccessGoToReset={handleSuccessAndGoToReset}
+      />
+    );
+  }
+  if (viewMode === "reset") {
+    // Passa a função para voltar ao login e opcionalmente o email
+    return (
+      <ResetPasswordScreen
+        onBackToLogin={navigateBackToLogin}
+        onSuccess={navigateBackToLogin}
+        email={emailForReset}
+      />
+    );
+  }
+
+  // Senão, renderiza a tela de login normal
 
   return (
     <Box
@@ -134,6 +184,18 @@ function LoginScreen({ onLoginSuccess }) {
           )}
           Entrar
         </Button>
+
+        {/* --- LINK PARA ESQUECI SENHA --- */}
+        <MuiLink
+          component="button"
+          variant="body2"
+          onClick={navigateToForgotPassword}
+          sx={{ cursor: "pointer", mt: 1 }}
+          disabled={loading}
+        >
+          Esqueceu sua senha?
+        </MuiLink>
+        {/* --- FIM DO LINK --- */}
       </Paper>
     </Box>
   );

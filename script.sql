@@ -111,3 +111,18 @@ ADD COLUMN tipo_despesa ENUM('Fixa', 'Variável') NOT NULL DEFAULT 'Variável' A
 
 ALTER TABLE usuarios
 ADD COLUMN role ENUM('Admin', 'Funcionario') NOT NULL DEFAULT 'Funcionario' AFTER senha;
+
+-- 1. Adiciona a coluna de E-mail (obrigatória e única)
+ALTER TABLE usuarios
+ADD COLUMN email VARCHAR(255) UNIQUE NOT NULL AFTER nome;
+
+-- 2. Adiciona a coluna para o token/código de redefinição (pode ser nulo)
+ALTER TABLE usuarios
+ADD COLUMN reset_token VARCHAR(255) NULL DEFAULT NULL AFTER role;
+
+-- 3. Adiciona a coluna para a data de expiração do token (pode ser nulo)
+ALTER TABLE usuarios
+ADD COLUMN reset_token_expiry DATETIME NULL DEFAULT NULL AFTER reset_token;
+
+-- Opcional, mas recomendado: Adiciona um índice na coluna de e-mail para buscas rápidas
+CREATE INDEX idx_usuario_email ON usuarios(email);

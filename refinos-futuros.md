@@ -18,6 +18,7 @@
 - [ ] **Adicionar Notas por Item na OS:** Permitir adicionar observações específicas para cada produto ou serviço *dentro* da OS (`os_itens`).
 - [ ] **Opções de Customização para PDFs:** (Avançado) Permitir adicionar logo da empresa, dados de contato, etc., aos PDFs.
 - [ ] **Histórico de Status da OS:** (Avançado) Registrar mudanças de status e datas para auditoria.
+- [ ] **Adicionar campo nas OS:** Criar campo para definir qual pessoa atendeu a OS em especifico, para saber quem executou cada serviço e no final de cada mês gerar um relatório sobre isso
 
 ## Cadastros Gerais (Fase 1 - Melhorias)
 
@@ -25,3 +26,6 @@
 - [ ] **Controle de Estoque (Produtos):** Adicionar campo `quantidade_estoque` em `produtos_servicos` e lógica de baixa ao usar um "Produto" na OS.
 - [ ] **Vincular Custo a Produtos/Serviços:** Adicionar campo `custo` em `produtos_servicos` para cálculo futuro de margem.
 - [ ] **Busca/Validação de Endereço (CEP):** Adicionar busca de endereço por CEP no cadastro de clientes.
+
+## Usuários e Permissões (Fase 4 - Avançado)
+- [ ] Entrando no usuário com privilégios de funcionário, ainda estou com visão aos módulos de relatório e financeiro, que devem ser somente para o admin e caso eu precise de liberar algum módulo eu gostaria de seleciona-lo
