@@ -1,0 +1,22 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": 3306,
+    "database": "gsti_db",
+    "user": "",
+    "password": ""
+  },
+  "email": {
+    "host": "smtp-relay.brevo.com",
+    "port": 587,
+    "secure": false,
+    "user": "",
+    "pass": "",
+    "from": "" 
+  },
+  "branding": {
+    "companyName": "GSTI App",
+    "logoPath": null 
+  },
+  "setupComplete": false 
+}

@@ -12,40 +12,146 @@ const crypto = require("crypto"); // <-- Módulo Node.js para gerar tokens
 const isDev = process.env.NODE_ENV !== "production";
 const saltRounds = 10;
 
-// Configuração da Pool de Conexão com o MySQL
-// Lembre-se de usar os dados que você configurou (usuário e senha do BD)
-const dbPool = mysql
-  .createPool({
-    host: "192.168.100.4", // ou o IP do seu servidor caseiro
-    user: "gsit_app",
-    password: "gstiapp", // <<-- SUA SENHA AQUI
+// --- GERENCIAMENTO DE CONFIGURAÇÃO ---
+const userDataPath = app.getPath("userData"); // Pasta de dados do usuário
+const configPath = path.join(userDataPath, "config.json"); // Caminho completo do arquivo
+
+let appConfig = null; // Variável global para guardar a configuração carregada
+let dbPool = null; // Pool do DB será inicializado depois de carregar config
+let mailTransporter = null; // Transporter do email será inicializado depois
+
+// Estrutura padrão da configuração
+const defaultConfig = {
+  database: {
+    host: "localhost",
+    port: 3306,
     database: "gsti_db",
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-  })
-  .promise(); // Usar a versão com Promises para código mais limpo
-
-// --- CONFIGURAÇÃO NODEMAILER (Exemplo com Gmail - USE VARIÁVEIS DE AMBIENTE EM PRODUÇÃO!) ---
-// CUIDADO: Substitua com suas credenciais ou use um serviço transacional.
-// Para Gmail, use uma "Senha de App" se tiver 2FA ativado.
-const mailTransporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com", // Servidor SMTP do Brevo (verifique na sua conta)
-  port: 587, // Porta TLS (mais comum)
-  secure: false, // true para porta 465, false para outras portas como 587
-  auth: {
-    user: "99ea2b001@smtp-brevo.com", // SEU EMAIL DE LOGIN DO BREVO
-    pass: "f59DkpQ8OmYGzJjd", // SUA CHAVE SMTP GERADA NO BREVO
+    user: "",
+    password: "",
   },
-});
+  email: {
+    host: "smtp-relay.brevo.com",
+    port: 587,
+    secure: false,
+    user: "",
+    pass: "",
+    from: "",
+  },
+  branding: { companyName: "GSTI App", logoPath: null },
+  setupComplete: false,
+};
 
-mailTransporter.verify(function (error, success) {
-  if (error) {
-    console.error("Erro ao conectar ao servidor SMTP Brevo:", error);
-  } else {
-    console.log("Servidor SMTP Brevo conectado com sucesso.");
+// Função para carregar a configuração
+function loadConfig() {
+  try {
+    if (fs.existsSync(configPath)) {
+      console.log(`[Config] Lendo configuração de: ${configPath}`);
+      const rawData = fs.readFileSync(configPath);
+      appConfig = JSON.parse(rawData);
+      // Mescla com o padrão para garantir que todos os campos existam
+      appConfig = { ...defaultConfig, ...appConfig };
+      console.log("[Config] Configuração carregada:", appConfig);
+    } else {
+      console.log(
+        "[Config] Arquivo de configuração não encontrado. Usando padrão e marcando setup como incompleto."
+      );
+      appConfig = { ...defaultConfig, setupComplete: false };
+      // Salva o arquivo padrão na primeira vez
+      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+      console.log(`[Config] Arquivo padrão salvo em: ${configPath}`);
+    }
+  } catch (error) {
+    console.error("[Config] Erro ao carregar/salvar configuração:", error);
+    // Em caso de erro grave na leitura, força o setup
+    appConfig = { ...defaultConfig, setupComplete: false };
+    dialog.showErrorBox(
+      "Erro de Configuração",
+      `Não foi possível carregar ou criar o arquivo de configuração (${configPath}). Verifique as permissões da pasta. O aplicativo pode não funcionar corretamente.\n\nErro: ${error.message}`
+    );
   }
-});
+}
+
+// Função para inicializar o Pool do DB (só chamada após carregar config)
+function initializeDbPool() {
+  if (appConfig && appConfig.setupComplete && appConfig.database.user) {
+    // Só inicializa se setup completo e user definido
+    console.log("[DB] Inicializando pool de conexão...");
+    try {
+      dbPool = mysql
+        .createPool({
+          host: appConfig.database.host,
+          port: appConfig.database.port,
+          user: appConfig.database.user,
+          password: appConfig.database.password,
+          database: appConfig.database.database,
+          waitForConnections: true,
+          connectionLimit: 10,
+          queueLimit: 0,
+        })
+        .promise();
+      console.log("[DB] Pool de conexão inicializado com sucesso.");
+      // Teste de conexão opcional aqui
+    } catch (error) {
+      console.error("[DB] Erro ao inicializar pool de conexão:", error);
+      dbPool = null; // Garante que o pool não seja usado se falhar
+      dialog.showErrorBox(
+        "Erro de Banco de Dados",
+        `Não foi possível conectar ao banco de dados com as configurações fornecidas. Verifique as configurações.\n\nErro: ${error.message}`
+      );
+    }
+  } else {
+    console.log(
+      "[DB] Pool de conexão não inicializado (setup incompleto ou usuário não definido)."
+    );
+    dbPool = null;
+  }
+}
+
+// Função para inicializar o Nodemailer (só chamada após carregar config)
+function initializeMailTransporter() {
+  if (
+    appConfig &&
+    appConfig.email.user &&
+    appConfig.email.pass &&
+    appConfig.email.host
+  ) {
+    // Só inicializa se configurado
+    console.log("[Email] Inicializando transporter...");
+    try {
+      mailTransporter = nodemailer.createTransport({
+        host: appConfig.email.host,
+        port: appConfig.email.port,
+        secure: appConfig.email.secure,
+        auth: {
+          user: appConfig.email.user,
+          pass: appConfig.email.pass,
+        },
+      });
+      // Verifica conexão
+      mailTransporter.verify((error, success) => {
+        if (error)
+          console.error("[Email] Erro ao conectar ao servidor SMTP:", error);
+        else console.log("[Email] Servidor SMTP conectado com sucesso.");
+      });
+    } catch (error) {
+      console.error("[Email] Erro ao criar transporter:", error);
+      mailTransporter = null;
+    }
+  } else {
+    console.log(
+      "[Email] Transporter não inicializado (configurações ausentes)."
+    );
+    mailTransporter = null;
+  }
+}
+
+// --- CARREGA A CONFIGURAÇÃO AO INICIAR ---
+loadConfig();
+// --- INICIALIZA OS SERVIÇOS QUE DEPENDEM DA CONFIG ---
+// O dbPool e mailTransporter só serão realmente criados se setupComplete for true
+initializeDbPool();
+initializeMailTransporter();
+// --- FIM GERENCIAMENTO DE CONFIGURAÇÃO ---
 
 // --- FUNÇÕES DE FORMATAÇÃO (Definidas globalmente no módulo) ---
 const formatDocument = (doc) => {
@@ -70,12 +176,238 @@ const formatPhone = (phone) => {
     return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
   return String(phone);
 };
-// --- FIM DAS FUNÇÕES DE FORMATAÇÃO ---
+
+// --- HANDLERS IPC ---
+
+// Handler para testar a conexão com o banco de dados
+ipcMain.handle("test-db-connection", async (event, dbConfig) => {
+  console.log("[Setup] Testando conexão com o BD:", dbConfig);
+  let tempPool = null;
+  try {
+    // Cria um pool temporário APENAS para teste
+    tempPool = mysql
+      .createPool({
+        host: dbConfig.host,
+        port: dbConfig.port,
+        user: dbConfig.user,
+        password: dbConfig.password,
+        database: dbConfig.database,
+        connectionLimit: 1, // Só precisa de uma conexão para teste
+      })
+      .promise();
+
+    // Tenta pegar uma conexão
+    const connection = await tempPool.getConnection();
+    console.log("[Setup] Conexão com BD testada com sucesso.");
+    connection.release(); // Libera a conexão
+    await tempPool.end(); // Fecha o pool temporário
+    return { success: true };
+  } catch (error) {
+    console.error("[Setup] Erro ao testar conexão com BD:", error);
+    if (tempPool) await tempPool.end(); // Garante fechar o pool se ele foi criado
+    // Retorna uma mensagem de erro mais amigável
+    let errorMessage = "Erro desconhecido.";
+    if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED")
+      errorMessage = "Não foi possível conectar ao Host/Porta especificados.";
+    else if (error.code === "ER_ACCESS_DENIED_ERROR")
+      errorMessage = "Usuário ou Senha do banco inválidos.";
+    else if (error.code === "ER_BAD_DB_ERROR")
+      errorMessage = "Banco de dados não encontrado.";
+    else errorMessage = error.message;
+    return { success: false, error: errorMessage };
+  }
+});
+
+// Handler para salvar a configuração inicial e criar o primeiro admin
+ipcMain.handle(
+  "save-initial-config",
+  async (event, { dbConfig, adminUser }) => {
+    console.log("[Setup] Salvando configuração inicial e criando admin...");
+
+    // --- Validações ---
+    if (
+      !dbConfig.host ||
+      !dbConfig.port ||
+      !dbConfig.database ||
+      !dbConfig.user /* Não valida senha vazia aqui */
+    ) {
+      return {
+        success: false,
+        error: "Todos os campos de configuração do banco são obrigatórios.",
+      };
+    }
+    if (
+      !adminUser.nome ||
+      !adminUser.email ||
+      !adminUser.login ||
+      !adminUser.password ||
+      !adminUser.confirmPassword
+    ) {
+      return {
+        success: false,
+        error: "Todos os campos do administrador são obrigatórios.",
+      };
+    }
+    if (adminUser.password !== adminUser.confirmPassword) {
+      return {
+        success: false,
+        error: "As senhas do administrador não coincidem.",
+      };
+    }
+    // TODO: Adicionar validação de complexidade de senha e formato de email
+
+    let tempPool = null; // Pool temporário para criar o usuário
+    try {
+      // 1. Salva a configuração do DB no config.json
+      console.log("[Setup] Salvando config.json...");
+      appConfig.database = {
+        // Atualiza SÓ a seção database
+        host: dbConfig.host,
+        port: parseInt(dbConfig.port, 10) || 3306,
+        database: dbConfig.database,
+        user: dbConfig.user,
+        password: dbConfig.password, // Salva a senha aqui
+      };
+      appConfig.setupComplete = true; // Marca setup como completo
+      // Mantém as outras configs (email, branding) com os defaults
+      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+      console.log("[Setup] config.json salvo com setupComplete=true.");
+
+      // 2. Tenta conectar ao banco recém-configurado para criar o admin
+      console.log("[Setup] Criando pool temporário para inserir admin...");
+      tempPool = mysql
+        .createPool({ ...appConfig.database, connectionLimit: 1 })
+        .promise();
+      const connection = await tempPool.getConnection(); // Testa conexão ao mesmo tempo
+      console.log("[Setup] Conectado ao banco para criar admin.");
+
+      // 3. Hashea a senha do admin
+      const hashedPassword = await bcrypt.hash(adminUser.password, saltRounds);
+
+      // 4. Insere o admin na tabela usuarios
+      const sql =
+        "INSERT INTO usuarios (nome, email, login, senha, role) VALUES (?, ?, ?, ?, 'Admin')";
+      await connection.query(sql, [
+        adminUser.nome,
+        adminUser.email,
+        adminUser.login,
+        hashedPassword,
+      ]);
+      console.log("[Setup] Usuário admin criado com sucesso.");
+
+      connection.release();
+      await tempPool.end();
+
+      // 5. Re-inicializa o dbPool global principal agora que a config está salva
+      console.log("[Setup] Re-inicializando dbPool global...");
+      initializeDbPool(); // Tenta inicializar o pool principal
+      initializeMailTransporter(); // Tenta inicializar o mailer (pode não ter config ainda)
+
+      return { success: true };
+    } catch (error) {
+      console.error(
+        "[Setup] Erro ao salvar configuração inicial ou criar admin:",
+        error
+      );
+      if (tempPool) await tempPool.end();
+
+      // Se falhou, reverte setupComplete para false no arquivo
+      try {
+        appConfig.setupComplete = false;
+        fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+        console.log(
+          "[Setup] Revertido setupComplete para false devido a erro."
+        );
+      } catch (writeError) {
+        console.error(
+          "[Setup] Erro crítico ao tentar reverter config.json:",
+          writeError
+        );
+      }
+      // Limpa o dbPool global se a inicialização falhou
+      dbPool = null;
+
+      // Retorna erro específico
+      let errorMessage = "Erro desconhecido.";
+      if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED")
+        errorMessage = "Não foi possível conectar ao Host/Porta do banco.";
+      else if (error.code === "ER_ACCESS_DENIED_ERROR")
+        errorMessage = "Usuário ou Senha do banco inválidos.";
+      else if (error.code === "ER_BAD_DB_ERROR")
+        errorMessage = "Banco de dados não encontrado.";
+      else if (error.code === "ER_DUP_ENTRY") {
+        if (error.message.includes("login"))
+          errorMessage = "O Login do admin já existe no banco.";
+        else if (error.message.includes("email"))
+          errorMessage = "O Email do admin já existe no banco.";
+        else errorMessage = "Erro de duplicidade ao criar admin.";
+      } else errorMessage = error.message;
+
+      return {
+        success: false,
+        error: `Falha na configuração: ${errorMessage}`,
+      };
+    }
+  }
+);
+
+// Handler para verificar se o setup inicial é necessário
+ipcMain.handle("is-initial-setup-needed", async () => {
+  return !appConfig.setupComplete;
+});
+
+// Handler para buscar as configurações atuais (para a tela de Settings)
+ipcMain.handle("get-app-settings", async () => {
+  // Retorna uma cópia, excluindo senhas por segurança se necessário
+  const settingsToSend = JSON.parse(JSON.stringify(appConfig));
+  if (settingsToSend.database) delete settingsToSend.database.password; // Não envia senha do DB
+  if (settingsToSend.email) delete settingsToSend.email.pass; // Não envia senha do Email
+  return { success: true, settings: settingsToSend };
+});
+
+// Handler para salvar as configurações (da tela de Settings)
+ipcMain.handle("save-app-settings", async (event, newSettings) => {
+  // TODO: Adicionar verificação de Admin
+  console.log(
+    "[Config] Recebido pedido para salvar configurações:",
+    newSettings
+  );
+  try {
+    // Mescla as novas configurações com as existentes (preserva DB config, setupComplete)
+    const currentDbConfig = appConfig.database;
+    const currentSetupStatus = appConfig.setupComplete;
+
+    appConfig = {
+      ...appConfig, // Mantém a base
+      email: { ...appConfig.email, ...newSettings.email }, // Atualiza email
+      branding: { ...appConfig.branding, ...newSettings.branding }, // Atualiza branding
+      database: currentDbConfig, // Mantém config do DB
+      setupComplete: currentSetupStatus, // Mantém status do setup
+    };
+
+    // Salva no arquivo
+    fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+    console.log("[Config] Configurações salvas com sucesso.");
+
+    // Re-inicializa o mail transporter com as novas configurações
+    initializeMailTransporter();
+
+    return { success: true };
+  } catch (error) {
+    console.error("[Config] Erro ao salvar configurações:", error);
+    return {
+      success: false,
+      error: "Erro ao salvar o arquivo de configuração.",
+    };
+  }
+});
 
 // --- AUTENTICAÇÃO E USUÁRIOS ---
 
 // Listener para Login
 ipcMain.handle("handle-login", async (event, { login, password }) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   if (!login || !password) {
     return { success: false, error: "Login e senha são obrigatórios." };
   }
@@ -116,6 +448,8 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
 
 // Listener para buscar todos os usuários (Admin Only)
 ipcMain.handle("get-users", async (event /*, adminUserId */) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // TODO: Adicionar verificação de Admin
   // --- CORREÇÃO: Adicionado 'email' ao SELECT ---
   const sql =
@@ -134,6 +468,8 @@ ipcMain.handle("get-users", async (event /*, adminUserId */) => {
 
 // Adicionar usuário (ATUALIZADO com email)
 ipcMain.handle("add-user", async (event, userData /*, adminUserId */) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // TODO: Adicionar verificação de Admin
   const { nome, email, login, password, role } = userData; // Adicionado email
   if (!nome || !email || !login || !password || !role) {
@@ -175,6 +511,8 @@ ipcMain.handle("add-user", async (event, userData /*, adminUserId */) => {
 
 // Atualizar usuário (ATUALIZADO com email, sem alterar senha aqui)
 ipcMain.handle("update-user", async (event, userData /*, adminUserId */) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // TODO: Adicionar verificação de Admin
   const { id, nome, email, login, role } = userData; // Adicionado email
   if (!id || !nome || !email || !login || !role) {
@@ -217,6 +555,8 @@ ipcMain.handle("update-user", async (event, userData /*, adminUserId */) => {
 
 // Listener para deletar usuário (Admin Only)
 ipcMain.handle("delete-user", async (event, userId /*, adminUserId */) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
   // TODO: Adicionar verificação para impedir que o Admin se auto-delete ou delete o último Admin
   const id = parseInt(userId, 10);
@@ -238,7 +578,10 @@ ipcMain.handle("delete-user", async (event, userId /*, adminUserId */) => {
 
 // Passo 1: Solicitar redefinição
 ipcMain.handle("handle-forgot-password", async (event, { email }) => {
-  if (!email) return { success: false, error: "Email é obrigatório." };
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
+  if (!mailTransporter)
+    return { success: false, error: "Serviço de email não configurado." }; // Verifica email
 
   try {
     // 1. Encontra usuário pelo email
@@ -272,7 +615,7 @@ ipcMain.handle("handle-forgot-password", async (event, { email }) => {
 
     // 5. Envia o email com o token NÃO HASHED (ou link)
     const mailOptions = {
-      from: '"GSTI App" <joaovictormc089@gmail.com>', // SEU EMAIL REMETENTE
+      from: `"GSTI App" <${appConfig.email.from}>`, // SEU EMAIL REMETENTE
       to: user.email,
       subject: "Redefinição de Senha - GSTI App",
       text: `Olá ${user.nome},\n\nVocê solicitou a redefinição de senha para o GSTI App.\n\nSeu código de redefinição é: ${code}\n\nEste código expira em 10 minutos.\n\nSe você não solicitou isso, ignore este email.\n`,
@@ -296,6 +639,8 @@ ipcMain.handle("handle-forgot-password", async (event, { email }) => {
 ipcMain.handle(
   "handle-reset-password",
   async (event, { token, password, confirmPassword }) => {
+    if (!dbPool)
+      return { success: false, error: "Banco de dados não configurado." };
     if (!token || !password || !confirmPassword) {
       return { success: false, error: "Token e senhas são obrigatórios." };
     }
@@ -352,6 +697,8 @@ ipcMain.handle(
 
 // Listener para buscar os clientes
 ipcMain.handle("get-customers", async () => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   try {
     const [rows] = await dbPool.query("SELECT * FROM clientes");
     return rows;
@@ -363,6 +710,8 @@ ipcMain.handle("get-customers", async () => {
 
 // Listener para adicionar um novo cliente
 ipcMain.handle("add-customer", async (event, customerData) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // Agora pegamos os novos campos do objeto recebido
   const { nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } =
     customerData;
@@ -404,6 +753,8 @@ ipcMain.handle("validate-cnpj", async (event, cnpj) => {
 });
 
 ipcMain.handle("update-customer", async (event, customerData) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const { id, nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } =
     customerData;
   const sql =
@@ -428,6 +779,8 @@ ipcMain.handle("update-customer", async (event, customerData) => {
 
 // Listener para DELETAR um cliente
 ipcMain.handle("delete-customer", async (event, customerId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const sql = "DELETE FROM clientes WHERE id = ?";
 
   try {
@@ -441,6 +794,8 @@ ipcMain.handle("delete-customer", async (event, customerId) => {
 
 // Listener para buscar todos os produtos e serviços
 ipcMain.handle("get-products", async () => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   try {
     const [rows] = await dbPool.query("SELECT * FROM produtos_servicos");
     return rows;
@@ -452,6 +807,8 @@ ipcMain.handle("get-products", async () => {
 
 // Listener para adicionar um novo produto/serviço
 ipcMain.handle("add-product", async (event, productData) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const { descricao, valor, tipo } = productData;
   const sql =
     "INSERT INTO produtos_servicos (descricao, valor, tipo) VALUES (?, ?, ?)";
@@ -466,6 +823,8 @@ ipcMain.handle("add-product", async (event, productData) => {
 
 // Listener para ATUALIZAR um produto/serviço existente
 ipcMain.handle("update-product", async (event, productData) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const { id, descricao, valor, tipo } = productData;
   const sql =
     "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ? WHERE id = ?";
@@ -481,6 +840,8 @@ ipcMain.handle("update-product", async (event, productData) => {
 
 // Listener para DELETAR um produto/serviço
 ipcMain.handle("delete-product", async (event, productId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const sql = "DELETE FROM produtos_servicos WHERE id = ?";
 
   try {
@@ -493,6 +854,8 @@ ipcMain.handle("delete-product", async (event, productId) => {
 });
 
 ipcMain.handle("get-os-list", async () => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const sql = `
     SELECT 
       os.id, 
@@ -512,6 +875,8 @@ ipcMain.handle("get-os-list", async () => {
 });
 
 ipcMain.handle("get-active-data", async () => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   try {
     const [customers] = await dbPool.query(
       "SELECT id, nome FROM clientes ORDER BY nome ASC"
@@ -527,6 +892,8 @@ ipcMain.handle("get-active-data", async () => {
 
 // --- CORREÇÃO DO BUG (get-os-details) ---
 ipcMain.handle("get-os-details", async (event, osId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   try {
     const [osRows] = await dbPool.query(
       "SELECT * FROM ordens_servico WHERE id = ?",
@@ -551,6 +918,8 @@ ipcMain.handle("get-os-details", async (event, osId) => {
 });
 
 ipcMain.handle("add-os", async (event, { osData, total }) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // Atualizado para os novos campos
   const {
     id_cliente,
@@ -588,6 +957,8 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
 });
 
 ipcMain.handle("update-os", async (event, { osData, total }) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const {
     id,
     id_cliente,
@@ -668,6 +1039,8 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
 });
 
 ipcMain.handle("add-os-items", async (event, { osId, items }) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   if (items.length === 0) return { success: true };
   const sql =
     "INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario) VALUES ?";
@@ -686,6 +1059,8 @@ ipcMain.handle("add-os-items", async (event, { osId, items }) => {
 });
 
 ipcMain.handle("update-os-items", async (event, { osId, items }) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const connection = await dbPool.getConnection();
   try {
     await connection.beginTransaction();
@@ -712,6 +1087,8 @@ ipcMain.handle("update-os-items", async (event, { osId, items }) => {
 });
 
 ipcMain.handle("delete-os", async (event, osId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   try {
     await dbPool.query("DELETE FROM ordens_servico WHERE id = ?", [osId]);
     return { success: true };
@@ -722,6 +1099,8 @@ ipcMain.handle("delete-os", async (event, osId) => {
 
 // --- FUNÇÃO PDF ATUALIZADA ---
 ipcMain.handle("generate-entry-receipt", async (event, osId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // 1. Buscar todos os dados necessários (SQL ATUALIZADO)
   const sql = `SELECT os.*, c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj, c.email AS email_cliente, c.endereco AS endereco_cliente FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id WHERE os.id = ?`;
   let osData;
@@ -854,6 +1233,8 @@ TERMOS PARA ORÇAMENTO E SERVIÇO (Baseado na Lei 8.078/90 - CDC)
 
 // --- NOVA FUNÇÃO: GERAR PDF DE SAÍDA/GARANTIA ---
 ipcMain.handle("generate-exit-receipt", async (event, osId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // 1. Buscar dados da OS, Cliente e Itens
   let osData, itemsData;
   try {
@@ -1176,6 +1557,8 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
 
 // Listener para buscar TODAS as despesas
 ipcMain.handle("get-expenses", async () => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // Busca também o novo campo tipo_despesa
   const sql = "SELECT * FROM despesas ORDER BY data DESC, id DESC";
   try {
@@ -1189,6 +1572,8 @@ ipcMain.handle("get-expenses", async () => {
 
 // Listener para ADICIONAR uma nova despesa
 ipcMain.handle("add-expense", async (event, expenseData) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // --- ALTERAÇÃO: Adiciona tipo_despesa ---
   let {
     descricao,
@@ -1244,6 +1629,8 @@ ipcMain.handle("add-expense", async (event, expenseData) => {
 
 // Listener para ATUALIZAR uma despesa existente
 ipcMain.handle("update-expense", async (event, expenseData) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // --- ALTERAÇÃO: Adiciona tipo_despesa ---
   let {
     id,
@@ -1302,6 +1689,8 @@ ipcMain.handle("update-expense", async (event, expenseData) => {
 
 // Listener para DELETAR uma despesa
 ipcMain.handle("delete-expense", async (event, expenseId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const sql = "DELETE FROM despesas WHERE id = ?";
   try {
     await dbPool.query(sql, [expenseId]);
@@ -1315,6 +1704,8 @@ ipcMain.handle("delete-expense", async (event, expenseId) => {
 ipcMain.handle(
   "get-financial-summary",
   async (event, { startDate, endDate }) => {
+    if (!dbPool)
+      return { success: false, error: "Banco de dados não configurado." };
     const formattedStartDate = `${startDate} 00:00:00`;
     const formattedEndDate = `${endDate} 23:59:59`;
 
@@ -1407,6 +1798,8 @@ ipcMain.handle(
 
 // Listener para buscar dados mensais agregados para gráficos
 ipcMain.handle("get-monthly-summary", async (event, { year }) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // Valida o ano (simples)
   const numericYear = parseInt(year, 10);
   if (isNaN(numericYear) || numericYear < 1900 || numericYear > 2100) {
@@ -1487,6 +1880,8 @@ ipcMain.handle("get-monthly-summary", async (event, { year }) => {
 ipcMain.handle(
   "export-financial-report",
   async (event, { startDate, endDate }) => {
+    if (!dbPool)
+      return { success: false, error: "Banco de dados não configurado." };
     const formattedStartDate = `${startDate} 00:00:00`;
     const formattedEndDate = `${endDate} 23:59:59`;
     const dateOnlyStart = startDate;
@@ -1747,6 +2142,8 @@ ipcMain.handle(
 
 // Listener para buscar TODAS as receitas avulsas
 ipcMain.handle("get-misc-revenues", async () => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const sql = "SELECT * FROM receitas_avulsas ORDER BY data DESC, id DESC";
   try {
     const [rows] = await dbPool.query(sql);
@@ -1759,6 +2156,8 @@ ipcMain.handle("get-misc-revenues", async () => {
 
 // Listener para ADICIONAR uma nova receita avulsa
 ipcMain.handle("add-misc-revenue", async (event, revenueData) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const { descricao, valor, data } = revenueData;
   const sql =
     "INSERT INTO receitas_avulsas (descricao, valor, data) VALUES (?, ?, ?)";
@@ -1777,6 +2176,8 @@ ipcMain.handle("add-misc-revenue", async (event, revenueData) => {
 
 // Listener para ATUALIZAR uma receita avulsa existente
 ipcMain.handle("update-misc-revenue", async (event, revenueData) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const { id, descricao, valor, data } = revenueData;
   const sql =
     "UPDATE receitas_avulsas SET descricao = ?, valor = ?, data = ? WHERE id = ?";
@@ -1791,6 +2192,8 @@ ipcMain.handle("update-misc-revenue", async (event, revenueData) => {
 
 // Listener para DELETAR uma receita avulsa
 ipcMain.handle("delete-misc-revenue", async (event, revenueId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   const sql = "DELETE FROM receitas_avulsas WHERE id = ?";
   try {
     await dbPool.query(sql, [revenueId]);
@@ -1804,6 +2207,8 @@ ipcMain.handle("delete-misc-revenue", async (event, revenueId) => {
 // --- MÓDULO FINANCEIRO - DADOS PARA GRÁFICO ANUAL ---
 
 ipcMain.handle("get-annual-summary", async () => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   try {
     const currentYear = new Date().getFullYear();
     const startYear = currentYear - 4; // Pega os últimos 5 anos (incluindo o atual)
@@ -1873,6 +2278,8 @@ ipcMain.handle("get-annual-summary", async () => {
 // --- MÓDULO FINANCEIRO - CÁLCULO DE MÉDIA ---
 
 ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // Garante que o número de meses seja válido
   const numMonths = Math.max(1, parseInt(months, 10));
 
@@ -2001,6 +2408,8 @@ ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
 
 // Listener para buscar OS por ID do Cliente
 ipcMain.handle("get-os-by-client", async (event, clientId) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // Valida se clientId é um número
   const id = parseInt(clientId, 10);
   if (isNaN(id) || id <= 0) {
@@ -2034,6 +2443,8 @@ ipcMain.handle("get-os-by-client", async (event, clientId) => {
 
 // Listener para buscar OS por Status
 ipcMain.handle("get-os-by-status", async (event, status) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // Valida se o status é uma string não vazia (poderíamos validar contra a lista de ENUMs se quiséssemos ser mais rigorosos)
   if (typeof status !== "string" || !status) {
     return { success: false, error: "Status inválido." };
@@ -2068,6 +2479,8 @@ ipcMain.handle("get-os-by-status", async (event, status) => {
 ipcMain.handle(
   "get-most-used-services",
   async (event, { startDate, endDate }) => {
+    if (!dbPool)
+      return { success: false, error: "Banco de dados não configurado." };
     // Formata datas para query SQL
     const formattedStartDate = `${startDate} 00:00:00`;
     const formattedEndDate = `${endDate} 23:59:59`;
@@ -2109,6 +2522,8 @@ ipcMain.handle(
 
 // Listener para buscar OS por Número de Série do Equipamento
 ipcMain.handle("search-os-by-serial", async (event, serialNumber) => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
   // Valida se o número de série é uma string não vazia
   if (typeof serialNumber !== "string" || !serialNumber.trim()) {
     // Retorna lista vazia se a busca for inválida ou vazia, em vez de erro
@@ -2144,9 +2559,9 @@ ipcMain.handle("search-os-by-serial", async (event, serialNumber) => {
 });
 
 // Listener para buscar Relatório Detalhado de Receitas
-ipcMain.handle(
-  "get-detailed-revenue-report",
-  async (event, { startDate, endDate }) => {
+ipcMain.handle("get-detailed-revenue-report", async (event, { startDate, endDate }) => {
+    if (!dbPool)
+      return { success: false, error: "Banco de dados não configurado." };
     const formattedStartDate = `${startDate} 00:00:00`;
     const formattedEndDate = `${endDate} 23:59:59`;
     const dateOnlyStart = startDate;
@@ -2225,6 +2640,104 @@ ipcMain.handle(
     }
   }
 );
+
+// --- Handler para testar configurações de email ---
+ipcMain.handle("test-email-settings", async (event, emailConfig) => {
+  console.log("[Email Test] Recebido pedido para testar:", emailConfig);
+  if (
+    !emailConfig ||
+    !emailConfig.host ||
+    !emailConfig.port ||
+    !emailConfig.user ||
+    !emailConfig.pass ||
+    !emailConfig.from
+  ) {
+    return { success: false, error: "Configurações de email incompletas." };
+  }
+
+  let testTransporter = null;
+  try {
+    // Cria um transporter TEMPORÁRIO com as configurações fornecidas
+    testTransporter = nodemailer.createTransport({
+      host: emailConfig.host,
+      port: parseInt(emailConfig.port, 10) || 587,
+      secure: emailConfig.secure || false,
+      auth: {
+        user: emailConfig.user,
+        pass: emailConfig.pass,
+      },
+      // Adiciona timeouts para evitar que a UI congele se a conexão falhar
+      connectionTimeout: 10000, // 10 segundos
+      greetingTimeout: 5000, // 5 segundos
+      socketTimeout: 10000, // 10 segundos
+    });
+
+    console.log("[Email Test] Tentando verificar conexão...");
+    // Tenta verificar a conexão
+    await testTransporter.verify();
+    console.log(
+      "[Email Test] Verificação SMTP bem-sucedida. Tentando enviar email..."
+    );
+
+    // Se a verificação funcionou, tenta enviar um email de teste para o remetente
+    const mailOptions = {
+      from: `"GSTI App - Teste" <${emailConfig.from}>`,
+      to: emailConfig.from, // Envia para o próprio remetente
+      subject: "Teste de Configuração de Email - GSTI App",
+      text: `Olá,\n\nSe você recebeu este email, as configurações SMTP no GSTI App estão funcionando corretamente!\n\nServidor: ${emailConfig.host}\nUsuário: ${emailConfig.user}\n`,
+    };
+
+    await testTransporter.sendMail(mailOptions);
+    console.log("[Email Test] Email de teste enviado com sucesso.");
+    return { success: true };
+  } catch (error) {
+    console.error("[Email Test] Erro:", error);
+    // Retorna mensagens de erro mais específicas
+    let errorMessage = "Erro desconhecido.";
+    if (error.code === "ECONNECTION" || error.errno === -3008 /*ENOTFOUND*/)
+      errorMessage =
+        "Não foi possível conectar ao servidor SMTP (Host/Porta inválidos?).";
+    else if (error.code === "EAUTH")
+      errorMessage =
+        "Falha na autenticação (Usuário/Senha SMTP incorretos?). Verifique também se o remetente está autorizado.";
+    else if (error.command === "CONN")
+      errorMessage = "Timeout ao conectar. Verifique Host, Porta e Firewall.";
+    else if (error.command === "EHLO" || error.command === "AUTH")
+      errorMessage = "Erro de autenticação ou negociação com o servidor SMTP.";
+    else errorMessage = error.message;
+
+    return { success: false, error: errorMessage };
+  }
+});
+
+// --- Handler para selecionar arquivo de logo ---
+ipcMain.handle('select-logo-file', async (event) => {
+  // TODO: Adicionar verificação de Admin
+  console.log("[Logo Select] Abrindo diálogo para selecionar logo...");
+  try {
+    const result = await dialog.showOpenDialog({
+      title: 'Selecionar Logo da Empresa',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Imagens', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'] },
+      ]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      console.log("[Logo Select] Usuário cancelou a seleção.");
+      return { success: true, filePath: null, error: 'Seleção cancelada.' }; // Não é um erro real, só cancelamento
+    }
+
+    const selectedPath = result.filePaths[0];
+    console.log("[Logo Select] Arquivo selecionado:", selectedPath);
+    // Poderíamos adicionar validação extra aqui (tamanho, tipo MIME), mas por enquanto só retornamos o caminho
+    return { success: true, filePath: selectedPath };
+
+  } catch (error) {
+    console.error("[Logo Select] Erro ao abrir diálogo:", error);
+    return { success: false, error: 'Erro ao tentar abrir o seletor de arquivos.' };
+  }
+});
 
 // --- FUNÇÕES DA JANELA ---
 function createWindow() {

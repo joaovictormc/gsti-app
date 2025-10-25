@@ -1,6 +1,15 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld('api', {
+  // Configurações da Aplicação
+  isInitialSetupNeeded: () => ipcRenderer.invoke('is-initial-setup-needed'), 
+  getAppSettings: () => ipcRenderer.invoke('get-app-settings'),         
+  saveAppSettings: (settings) => ipcRenderer.invoke('save-app-settings', settings), 
+  testDbConnection: (dbConfig) => ipcRenderer.invoke('test-db-connection', dbConfig), 
+  saveInitialConfig: (config) => ipcRenderer.invoke('save-initial-config', config), 
+  testEmailSettings: (emailConfig) => ipcRenderer.invoke('test-email-settings', emailConfig),
+  selectLogoFile: () => ipcRenderer.invoke('select-logo-file'),
+
 // Autenticação e Usuários
   login: (credentials) => ipcRenderer.invoke('handle-login', credentials),
   forgotPassword: (data) => ipcRenderer.invoke('handle-forgot-password', data),

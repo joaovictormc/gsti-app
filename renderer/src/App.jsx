@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Box,
   CssBaseline,
@@ -15,6 +15,7 @@ import {
   ListItemText,
   Divider,
   Collapse,
+  CircularProgress,
 } from "@mui/material";
 import {
   Brightness4 as Brightness4Icon,
@@ -46,6 +47,8 @@ import MostUsedServicesReport from "./components/MostUsedServicesReport";
 import EquipmentHistoryReport from "./components/EquipmentHistoryReport";
 import DetailedRevenueReport from "./components/DetailedRevenueReport";
 import UserManagement from "./components/UserManagement";
+import InitialSetupScreen from "./screens/InitialSetupScreen";
+import SettingsScreen from "./components/SettingsScreen";
 
 // Componente HomeScreen Simples
 const HomeScreen = () => {
@@ -79,6 +82,7 @@ const componentMap = {
   EquipmentHistoryReport,
   DetailedRevenueReport,
   UserManagement,
+  SettingsScreen,
   // Adicione uma tela inicial se desejar
   HomeScreen: () => (
     <Typography variant="h5" sx={{ textAlign: "center", mt: 4 }}>
@@ -142,6 +146,11 @@ function AppSidebar({ onNavigate, userRole, currentThemeMode, toggleTheme }) {
           {
             label: "Gerenciar Usuários",
             component: "UserManagement",
+            icon: <SettingsIcon />,
+          },
+          {
+            label: "Configurações",
+            component: "SettingsScreen",
             icon: <SettingsIcon />,
           },
         ]
@@ -271,6 +280,28 @@ function App() {
   const [themeMode, setThemeMode] = useState(
     () => localStorage.getItem("themeMode") || "light"
   );
+  const [needsSetup, setNeedsSetup] = useState(null); // null = verificando, true = precisa, false = não precisa
+  const [checkingSetup, setCheckingSetup] = useState(true); // Para mostrar loading inicial
+
+  // --- EFEITO PARA VERIFICAR SETUP INICIAL (Roda 1x) ---
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const setupNeeded = await window.api.isInitialSetupNeeded();
+        console.log("Setup needed check result:", setupNeeded);
+        setNeedsSetup(setupNeeded);
+      } catch (error) {
+        console.error("Erro ao verificar necessidade de setup:", error);
+        // Em caso de erro, assume que precisa de setup para segurança
+        setNeedsSetup(true);
+        alert("Erro ao verificar a configuração inicial. Verifique o console.");
+      } finally {
+        setCheckingSetup(false); // Terminou a verificação
+      }
+    };
+    checkSetup();
+  }, []);
+  // --- FIM EFEITO SETUP ---
 
   useEffect(() => {
     localStorage.setItem("themeMode", themeMode);
@@ -285,49 +316,99 @@ function App() {
     [themeMode]
   );
 
-  // Tela de Login
-  if (!currentUser) {
+  // --- FUNÇÃO PARA MARCAR SETUP COMO COMPLETO ---
+  // Será passada para InitialSetupScreen
+  const handleSetupComplete = () => {
+    console.log(
+      "Setup complete, marking as done and forcing reload/redirect..."
+    );
+    setNeedsSetup(false); // Marca como feito no estado
+    // Força um reload para que o main.js releia a config e inicialize o DB
+    // Ou redireciona para login (reload é mais garantido para o backend)
+    window.location.reload();
+  };
+
+  // --- RENDERIZAÇÃO CONDICIONAL PRINCIPAL ---
+
+  // 1. Mostra loading enquanto verifica o setup
+  if (checkingSetup) {
     return (
       <ThemeProvider theme={theme}>
-        {" "}
-        <CssBaseline /> <LoginScreen onLoginSuccess={login} />{" "}
+        <CssBaseline />
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100vh",
+          }}
+        >
+          <CircularProgress />
+          <Typography sx={{ ml: 2 }}>Verificando configuração...</Typography>
+        </Box>
       </ThemeProvider>
     );
   }
 
-  // Interface Principal
-  const ComponentToRender =
-    componentMap[activeComponent] ||
-    (() => (
-      <Typography>Componente '{activeComponent}' não encontrado.</Typography>
-    ));
+  // 2. Se precisa de setup, mostra a tela de setup
+  if (needsSetup === true) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <InitialSetupScreen onSetupComplete={handleSetupComplete} />
+      </ThemeProvider>
+    );
+  }
 
+  // 3. Se não precisa de setup E não está logado, mostra login
+  if (needsSetup === false && !currentUser) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <LoginScreen onLoginSuccess={login} />
+      </ThemeProvider>
+    );
+  }
+
+  // 4. Se não precisa de setup E está logado, mostra interface principal
+  if (needsSetup === false && currentUser) {
+    const ComponentToRender =
+      componentMap[activeComponent] ||
+      (() => (
+        <Typography>Componente '{activeComponent}' não encontrado.</Typography>
+      ));
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box sx={{ display: "flex" }}>
+          <AppSidebar
+            onNavigate={setActiveComponent}
+            userRole={currentUser.role}
+            currentThemeMode={themeMode}
+            toggleTheme={toggleThemeMode}
+          />
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              bgcolor: "background.default",
+              p: 3,
+              height: "100vh",
+              overflowY: "auto",
+            }}
+          >
+            <ComponentToRender />
+          </Box>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
+  // Fallback (não deve acontecer se a lógica acima estiver correta)
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ display: "flex" }}>
-        <AppSidebar
-          onNavigate={setActiveComponent}
-          userRole={currentUser.role}
-          currentThemeMode={themeMode}
-          toggleTheme={toggleThemeMode}
-        />
-        {/* Área de Conteúdo Principal */}
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            bgcolor: "background.default",
-            p: 3,
-            height: "100vh", // Ocupa altura total
-            overflowY: "auto", // Adiciona scroll se necessário
-          }}
-        >
-          {/* Adiciona um espaço no topo para não colar na barra (se houver) */}
-          {/* <Toolbar /> // Descomente se usar AppBar */}
-          <ComponentToRender />
-        </Box>
-      </Box>
+      <Typography>Erro inesperado no estado da aplicação.</Typography>
     </ThemeProvider>
   );
 }

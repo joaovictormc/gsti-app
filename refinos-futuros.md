@@ -29,3 +29,11 @@
 
 ## Usuários e Permissões (Fase 4 - Avançado)
 - [ ] Entrando no usuário com privilégios de funcionário, ainda estou com visão aos módulos de relatório e financeiro, que devem ser somente para o admin e caso eu precise de liberar algum módulo eu gostaria de seleciona-lo
+
+- [ ] **Notificações por e-mail:** Criar função atrelado a configuração de smtp para disparar e-mail para os técnicos informando que há nova ordem de serviço que entrou/aprovou e notificação para cliente informando que o produto ja está finalizado
+
+
+## Whitelabeling
+- [ ] Criar área para o usuário definir um plano de fundo para a tela de login/home ao lado da opção de adicionar a lgomarca da empresa
+
+- [ ] aAo mudar o nome da empresa que usará o sistema, alterar também na tela de login e no menu lateral
