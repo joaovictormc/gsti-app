@@ -1,0 +1,44 @@
+==================================================
+TERMOS DE LICENÇA DE USO - GSTI App v1.0
+==================================================
+
+POR FAVOR, LEIA ATENTAMENTE ESTES TERMOS ANTES DE INSTALAR OU UTILIZAR O SOFTWARE "GSTI App". AO INSTALAR, COPIAR OU UTILIZAR O SOFTWARE, VOCÊ CONCORDA EM CUMPRIR OS TERMOS DESTA LICENÇA. SE VOCÊ NÃO CONCORDAR, NÃO INSTALE OU UTILIZE O SOFTWARE.
+
+1. CONCESSÃO DE LICENÇA:
+João Victor Maciel Campos, doravante denominado LICENCIANTE, concede a você, doravante denominado LICENCIADO, uma licença não exclusiva e intransferível para instalar e utilizar o software GSTI App ("Software") em um único computador ou dispositivo compatível de sua propriedade ou controle.
+
+2. RESTRIÇÕES:
+O LICENCIADO não poderá: (a) modificar, traduzir, fazer engenharia reversa, descompilar, desmontar o Software; (b) alugar, arrendar, emprestar, vender, sublicenciar, distribuir ou transferir o Software a terceiros; (c) remover ou alterar quaisquer avisos de direitos autorais ou de propriedade do Software.
+
+3. PROPRIEDADE INTELECTUAL:
+O Software é protegido por leis de direitos autorais e tratados internacionais. O LICENCIANTE retém todos os direitos, títulos e interesses sobre o Software, incluindo todos os direitos de propriedade intelectual.
+
+4. ISENÇÃO DE GARANTIA:
+O SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA", SEM GARANTIAS DE QUALQUER TIPO, EXPRESSAS OU IMPLÍCITAS, INCLUINDO, MAS NÃO SE LIMITANDO A, GARANTIAS DE COMERCIALIZAÇÃO, ADEQUAÇÃO A UM PROPÓSITO ESPECÍFICO E NÃO VIOLAÇÃO. O LICENCIANTE NÃO GARANTE QUE O SOFTWARE ATENDERÁ ÀS SUAS NECESSIDADES OU QUE SUA OPERAÇÃO SERÁ ININTERRUPTA OU LIVRE DE ERROS.
+
+5. LIMITAÇÃO DE RESPONSABILIDADE:
+EM NENHUMA CIRCUNSTÂNCIA O LICENCIANTE SERÁ RESPONSÁVEL POR QUAISQUER DANOS INDIRETOS, INCIDENTAIS, ESPECIAIS, CONSEQUENCIAIS OU PUNITIVOS (INCLUINDO, SEM LIMITAÇÃO, DANOS POR PERDA DE LUCROS, INTERRUPÇÃO DE NEGÓCIOS, PERDA DE INFORMAÇÕES) DECORRENTES DO USO OU IMPOSSIBILIDADE DE USO DO SOFTWARE.
+
+6. LEGISLAÇÃO APLICÁVEL:
+Esta licença será regida e interpretada de acordo com as leis do Brasil.
+
+==================================================
+REQUISITOS MÍNIMOS DE SISTEMA
+==================================================
+
+Para garantir o bom funcionamento do GSTI App, recomendamos a seguinte configuração mínima:
+
+* **Sistema Operacional:**
+    * Windows 10 (64 bits) ou superior
+    * macOS 10.15 (Catalina) ou superior
+    * Linux (Distribuições baseadas em Debian/Ubuntu LTS recomendadas, 64 bits)
+* **Processador:** Processador Dual-Core de 1.5 GHz ou superior
+* **Memória RAM:** 4 GB de RAM (8 GB recomendados para melhor desempenho)
+* **Espaço em Disco:** 500 MB de espaço livre em disco para instalação (espaço adicional será necessário para o banco de dados e arquivos gerados)
+* **Banco de Dados:** Acesso a um servidor MySQL versão 5.7 ou superior (configurado separadamente).
+* **Conexão com a Internet:** Necessária para validação de CNPJ (via BrasilAPI) e envio de e-mails de recuperação de senha (se configurado).
+* **Resolução de Tela:** Mínimo de 1280x768 pixels.
+
+==================================================
+FIM DOS TERMOS
+==================================================

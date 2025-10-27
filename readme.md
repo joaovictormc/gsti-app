@@ -4,6 +4,24 @@ Este projeto é um aplicativo de desktop multiplatforma (Windows, macOS, Linux) 
 
 ---
 
+## 📋 Requisitos Mínimos de Sistema
+
+Para garantir o bom funcionamento do GSTI App, recomendamos a seguinte configuração mínima:
+
+* **Sistema Operacional:**
+    * Windows 10 (64 bits) ou superior
+    * macOS 10.15 (Catalina) ou superior
+    * Linux (Distribuições baseadas em Debian/Ubuntu LTS recomendadas, 64 bits)
+* **Processador:** Processador Dual-Core de 1.5 GHz ou superior
+* **Memória RAM:** 4 GB de RAM (8 GB recomendados)
+* **Espaço em Disco:** 500 MB de espaço livre (para instalação)
+* **Banco de Dados:** Servidor MySQL v5.7+ (configurado separadamente)
+* **Conexão com a Internet:** Para validação de CNPJ e recuperação de senha.
+* **Resolução de Tela:** 1280x768 ou superior.
+
+---
+
+
 ## 🚀 Como Rodar o Projeto
 
 1.  **Pré-requisitos:**
@@ -38,6 +56,9 @@ Este projeto é um aplicativo de desktop multiplatforma (Windows, macOS, Linux) 
 * **[Node.js](https://nodejs.org/):** Ambiente de execução do backend.
 * **[mysql2](https://www.npmjs.com/package/mysql2):** Driver de conexão com o banco de dados MySQL (com suporte a Promises).
 * **[pdfkit](https://pdfkit.org/):** Biblioteca para geração de documentos PDF no backend.
+* **[exceljs](https://www.npmjs.com/package/exceljs):** Biblioteca para criação de arquivos Excel (.xlsx).
+* **[bcrypt](https://www.npmjs.com/package/bcrypt):** Biblioteca para hashing de senhas.
+* **[nodemailer](https://nodemailer.com/):** Biblioteca para envio de e-mails.
 
 ### Frontend (Processo de Renderização - React)
 * **[React](https://react.dev/):** Biblioteca para construção da interface de usuário.
@@ -49,9 +70,10 @@ Este projeto é um aplicativo de desktop multiplatforma (Windows, macOS, Linux) 
 * **[react-imask](https://www.npmjs.com/package/react-imask):** Biblioteca para aplicar máscaras de formatação em campos de texto (CPF, CNPJ, Telefone).
 * **[react-chartjs-2](https://react-chartjs-2.js.org/):** Componentes React para a biblioteca Chart.js.
 * **[Chart.js](https://www.chartjs.org/):** Biblioteca para criação de gráficos interativos.
-* **[exceljs](https://www.npmjs.com/package/exceljs):** Biblioteca para criação de arquivos Excel (.xlsx).
-* **[bcrypt](https://www.npmjs.com/package/bcrypt):** Biblioteca para hashing de senhas.
-* **[nodemailer](https://nodemailer.com/):** Biblioteca para envio de e-mails.
+
+
+### Build e Empacotamento
+* **[electron-builder](https://www.electron.build/):** Ferramenta para empacotar e construir instaladores/executáveis Electron para Windows, macOS e Linux.
 ---
 
 ## 📂 Estrutura do Projeto (Simplificada)

@@ -2559,7 +2559,9 @@ ipcMain.handle("search-os-by-serial", async (event, serialNumber) => {
 });
 
 // Listener para buscar Relatório Detalhado de Receitas
-ipcMain.handle("get-detailed-revenue-report", async (event, { startDate, endDate }) => {
+ipcMain.handle(
+  "get-detailed-revenue-report",
+  async (event, { startDate, endDate }) => {
     if (!dbPool)
       return { success: false, error: "Banco de dados não configurado." };
     const formattedStartDate = `${startDate} 00:00:00`;
@@ -2711,31 +2713,88 @@ ipcMain.handle("test-email-settings", async (event, emailConfig) => {
 });
 
 // --- Handler para selecionar arquivo de logo ---
-ipcMain.handle('select-logo-file', async (event) => {
+ipcMain.handle("select-logo-file", async (event) => {
   // TODO: Adicionar verificação de Admin
   console.log("[Logo Select] Abrindo diálogo para selecionar logo...");
   try {
     const result = await dialog.showOpenDialog({
-      title: 'Selecionar Logo da Empresa',
-      properties: ['openFile'],
+      title: "Selecionar Logo da Empresa",
+      properties: ["openFile"],
       filters: [
-        { name: 'Imagens', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'] },
-      ]
+        {
+          name: "Imagens",
+          extensions: ["png", "jpg", "jpeg", "webp", "gif", "svg"],
+        },
+      ],
     });
 
     if (result.canceled || result.filePaths.length === 0) {
       console.log("[Logo Select] Usuário cancelou a seleção.");
-      return { success: true, filePath: null, error: 'Seleção cancelada.' }; // Não é um erro real, só cancelamento
+      return { success: true, filePath: null, error: "Seleção cancelada." }; // Não é um erro real, só cancelamento
     }
 
     const selectedPath = result.filePaths[0];
     console.log("[Logo Select] Arquivo selecionado:", selectedPath);
     // Poderíamos adicionar validação extra aqui (tamanho, tipo MIME), mas por enquanto só retornamos o caminho
     return { success: true, filePath: selectedPath };
-
   } catch (error) {
     console.error("[Logo Select] Erro ao abrir diálogo:", error);
-    return { success: false, error: 'Erro ao tentar abrir o seletor de arquivos.' };
+    return {
+      success: false,
+      error: "Erro ao tentar abrir o seletor de arquivos.",
+    };
+  }
+});
+
+// --- Handler para carregar a imagem da logo de forma segura ---
+ipcMain.handle("load-logo-image", async (event, logoPath) => {
+  console.log(`[Logo Load] Tentando carregar logo de: ${logoPath}`);
+  if (!logoPath || typeof logoPath !== "string") {
+    return { success: false, error: "Caminho da logo inválido." };
+  }
+
+  try {
+    // Verifica se o arquivo existe
+    if (!fs.existsSync(logoPath)) {
+      console.warn(`[Logo Load] Arquivo não encontrado: ${logoPath}`);
+      return {
+        success: false,
+        error: "Arquivo da logo não encontrado no caminho especificado.",
+      };
+    }
+
+    // Lê o arquivo como buffer
+    const imageBuffer = fs.readFileSync(logoPath);
+    // Converte para Base64 Data URL
+    // Precisamos determinar o tipo MIME (simplesmente baseado na extensão por enquanto)
+    const ext = path.extname(logoPath).toLowerCase();
+    let mimeType = "";
+    if (ext === ".png") mimeType = "image/png";
+    else if (ext === ".jpg" || ext === ".jpeg") mimeType = "image/jpeg";
+    else if (ext === ".gif") mimeType = "image/gif";
+    else if (ext === ".webp") mimeType = "image/webp";
+    else if (ext === ".svg") mimeType = "image/svg+xml";
+    else {
+      console.warn(`[Logo Load] Tipo de arquivo não suportado: ${ext}`);
+      return { success: false, error: "Formato de imagem não suportado." };
+    }
+
+    const base64Data = `data:${mimeType};base64,${imageBuffer.toString(
+      "base64"
+    )}`;
+    console.log(
+      "[Logo Load] Logo carregada com sucesso (convertida para Base64)."
+    );
+    return { success: true, imageData: base64Data };
+  } catch (error) {
+    console.error(
+      `[Logo Load] Erro ao carregar/converter logo: ${logoPath}`,
+      error
+    );
+    return {
+      success: false,
+      error: `Erro ao ler o arquivo da logo: ${error.message}`,
+    };
   }
 });
 

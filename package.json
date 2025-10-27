@@ -4,11 +4,17 @@
   "description": "Gestor de Serviços de TI",
   "main": "main.js",
   "scripts": {
-    "start": "concurrently \"npm:dev-renderer\" \"npm:dev-main\"",
+    "dev": "vite",
+    "electron:dev": "electron .",
+    "start": "npm run build && electron .",
     "dev-renderer": "cd renderer && npm run dev",
     "dev-main": "electron .",
-    "build": "npm run build-renderer && electron-builder",
-    "build-renderer": "cd renderer && npm run build"
+    "build": "vite build",
+    "build-renderer": "cd renderer && npm run build",
+
+    "dist:win": "npm run build && electron-builder --win --x64",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "build": {
     "appId": "com.gsti.app",
@@ -49,5 +55,39 @@
     "pdfkit": "^0.17.2",
     "react-chartjs-2": "^5.3.0",
     "react-imask": "^7.6.1"
+  },
+
+  "build": {
+    "appId": "com.joaovmc.gstiapp", 
+    "productName": "GSTI App - Gestão de Serviços de TI",
+    "directories": {
+      "output": "dist_electron", 
+      "buildResources": "build_resources"},
+    "files": [
+      "main.js",                  
+      "preload.js",               
+      "package.json",             
+      "renderer/dist/**/*",       
+      "node_modules/**/*"         
+    ],
+    "win": { 
+      "target": "nsis", 
+      "icon": "build_resources/icon.ico"
+    },
+    "mac": { 
+      "target": "dmg", 
+      "icon": "build_resources/icon.icns",
+      "category": "public.app-category.utilities" 
+    },
+    "linux": { 
+      "target": ["AppImage", "deb"], 
+      "icon": "build_resources/icons", 
+      "category": "Utility"
+    },
+    "nsis": { 
+      "oneClick": false, 
+      "allowToChangeInstallationDirectory": true,
+      "license": "build_resources/LICENSE.txt"
+    }
   }
 }

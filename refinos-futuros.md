@@ -36,4 +36,8 @@
 ## Whitelabeling
 - [ ] Criar área para o usuário definir um plano de fundo para a tela de login/home ao lado da opção de adicionar a lgomarca da empresa
 
-- [ ] aAo mudar o nome da empresa que usará o sistema, alterar também na tela de login e no menu lateral
+- [ ] Adicionar opção para inserir imagem para plano de fundo na tela de login da empresa
+
+
+## Autenticação para instalar
+- [ ] Adicionar recurso no instalador para o usuário inserir o e-mail usado para contratar o sistema e uma senha que será vinculada ao e-mail da pessoa que contratou, isso pode assegurar de possíveis usos indevidos do sistema

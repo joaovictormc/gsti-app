@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Box,
   CssBaseline,
@@ -92,7 +92,14 @@ const componentMap = {
 };
 
 // Componente Sidebar usando MUI Drawer
-function AppSidebar({ onNavigate, userRole, currentThemeMode, toggleTheme }) {
+function AppSidebar({
+  onNavigate,
+  userRole,
+  currentThemeMode,
+  toggleTheme,
+  companyName,
+  logoData,
+}) {
   const { logout, currentUser } = useAuth();
   const [reportsOpen, setReportsOpen] = useState(false); // Estado para submenu Relatórios
 
@@ -173,9 +180,23 @@ function AppSidebar({ onNavigate, userRole, currentThemeMode, toggleTheme }) {
           height: "100%",
         }}
       >
-        <Typography variant="h6" sx={{ textAlign: "center", my: 2 }}>
-          GSTI App
-        </Typography>
+        {/* --- Exibe Logo e Nome da Empresa --- */}
+        <Box sx={{ textAlign: "center", my: 2, px: 1 }}>
+          {logoData && (
+            <img
+              src={logoData} // Usa a string Base64
+              alt={`${companyName || "Logo"} Logo`}
+              style={{
+                maxHeight: "40px",
+                maxWidth: "80%",
+                marginBottom: "8px",
+              }}
+            />
+          )}
+          <Typography variant="h6" noWrap>
+            {companyName || "GSTI App"} {/* Usa o nome da config ou o padrão */}
+          </Typography>
+        </Box>
         <Divider />
         <List sx={{ flexGrow: 1 }}>
           {menuItems.map((item) => {
@@ -283,6 +304,11 @@ function App() {
   const [needsSetup, setNeedsSetup] = useState(null); // null = verificando, true = precisa, false = não precisa
   const [checkingSetup, setCheckingSetup] = useState(true); // Para mostrar loading inicial
 
+  const [brandingConfig, setBrandingConfig] = useState({
+    companyName: "GSTI App",
+    logoData: null,
+  });
+  const [loadingBranding, setLoadingBranding] = useState(false);
   // --- EFEITO PARA VERIFICAR SETUP INICIAL (Roda 1x) ---
   useEffect(() => {
     const checkSetup = async () => {
@@ -302,6 +328,62 @@ function App() {
     checkSetup();
   }, []);
   // --- FIM EFEITO SETUP ---
+
+  // --- NOVO EFEITO: Carregar Configurações de Branding após Login ---
+  useEffect(() => {
+    const loadBranding = async () => {
+      // Só executa se o setup estiver completo E houver um usuário logado
+      if (needsSetup === false && currentUser) {
+        console.log("[App] Carregando configurações de branding...");
+        setLoadingBranding(true);
+        let currentCompanyName = "GSTI App"; // Padrão
+        let currentLogoData = null;
+
+        try {
+          const result = await window.api.getAppSettings();
+          if (result.success && result.settings?.branding) {
+            currentCompanyName =
+              result.settings.branding.companyName || "GSTI App";
+            const logoPath = result.settings.branding.logoPath;
+
+            // Se houver um caminho para a logo, tenta carregá-la
+            if (logoPath) {
+              console.log("[App] Tentando carregar logo do path:", logoPath);
+              const logoResult = await window.api.loadLogoImage(logoPath);
+              if (logoResult.success && logoResult.imageData) {
+                currentLogoData = logoResult.imageData;
+                console.log("[App] Logo carregada com sucesso.");
+              } else {
+                console.warn("[App] Falha ao carregar logo:", logoResult.error);
+                // Mantém currentLogoData como null
+              }
+            }
+          } else {
+            console.warn(
+              "[App] Não foi possível carregar configurações de branding:",
+              result?.error
+            );
+          }
+        } catch (error) {
+          console.error("[App] Erro ao carregar branding:", error);
+        } finally {
+          setBrandingConfig({
+            companyName: currentCompanyName,
+            logoData: currentLogoData,
+          });
+          setLoadingBranding(false);
+          console.log("[App] Configuração de branding definida:", {
+            companyName: currentCompanyName,
+            logoData: currentLogoData ? "[Base64 Data]" : null,
+          });
+        }
+      }
+    };
+
+    loadBranding();
+    // Depende de needsSetup e currentUser para rodar QUANDO o login acontece
+  }, [needsSetup, currentUser]);
+  // --- FIM NOVO EFEITO ---
 
   useEffect(() => {
     localStorage.setItem("themeMode", themeMode);
@@ -331,7 +413,7 @@ function App() {
   // --- RENDERIZAÇÃO CONDICIONAL PRINCIPAL ---
 
   // 1. Mostra loading enquanto verifica o setup
-  if (checkingSetup) {
+  if (checkingSetup || (currentUser && loadingBranding)) {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -386,6 +468,8 @@ function App() {
             userRole={currentUser.role}
             currentThemeMode={themeMode}
             toggleTheme={toggleThemeMode}
+            companyName={brandingConfig.companyName}
+            logoData={brandingConfig.logoData}
           />
           <Box
             component="main"
