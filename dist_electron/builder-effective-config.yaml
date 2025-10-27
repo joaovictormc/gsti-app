@@ -1,0 +1,31 @@
+directories:
+  output: dist_electron
+  buildResources: build_resources
+appId: com.joaovmc.gstiapp
+productName: GSTI App - Gestão de Serviços de TI
+files:
+  - filter:
+      - main.js
+      - preload.js
+      - package.json
+      - '!node_modules/@types/'
+      - '!node_modules/.bin/'
+      - renderer/dist/**/*
+win:
+  target: nsis
+  icon: build_resources/icon.ico
+mac:
+  target: dmg
+  icon: build_resources/icon.icns
+  category: public.app-category.utilities
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: build_resources/icons
+  category: Utility
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  license: build_resources/LICENSE.txt
+electronVersion: 31.7.7
