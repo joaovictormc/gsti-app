@@ -2803,13 +2803,33 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    title: "GSTI App - Gestão de Serviços de TI",
     webPreferences: { preload: path.join(__dirname, "preload.js") },
+    contextIsolation: true, 
+    nodeIntegration: false
   });
-  if (isDev) {
-    mainWindow.loadURL("http://localhost:5173");
-    mainWindow.webContents.openDevTools();
+
+  // --- MOVER openDevTools PARA CIMA e USAR app.isPackaged ---
+  // Força a abertura ANTES de tentar carregar qualquer conteúdo
+  // Mantenha descomentado APENAS para depurar a tela branca
+  //mainWindow.webContents.openDevTools();
+
+  if (isDev && !app.isPackaged) { // Verifica se está em modo DEV e NÃO empacotado
+    console.log("[Window] Carregando URL de desenvolvimento...");
+    mainWindow.loadURL("http://localhost:5173"); // Sua porta Vite
   } else {
-    mainWindow.loadFile(path.join(__dirname, "renderer/dist/index.html"));
+    console.log("[Window] Carregando arquivo de produção...");
+    // Caminho padrão para arquivos dentro do pacote asar
+    const indexPath = path.join(__dirname, 'renderer/dist/index.html'); 
+    console.log(`[Window] Tentando carregar: ${indexPath}`);
+    mainWindow.loadFile(indexPath)
+      .then(() => {
+        console.log("[Window] loadFile bem-sucedido.");
+      })
+      .catch(err => {
+        console.error("[Window] Erro ao carregar loadFile:", err);
+        dialog.showErrorBox("Erro ao Carregar Aplicação", `Não foi possível carregar a interface.\nVerifique se a build foi gerada corretamente.\n\nErro: ${err.message}`);
+      });
   }
 }
 
