@@ -14,7 +14,7 @@
     "dist:linux": "npm run build && electron-builder --linux"
   },
   "keywords": [],
-  "author": "",
+  "author": "João Victor Maciel Campos",
   "license": "ISC",
   "devDependencies": {
     "electron": "^31.7.7", 
