@@ -1,6 +1,6 @@
-# GSTI - Gestor de Serviços de TI (v1.2 - Gráficos em Andamento)
+# GSTI - Gestor de Serviços de TI (v1.0)
 
-Este projeto é um aplicativo de desktop multiplatforma (Windows, macOS, Linux) para gestão de serviços de manutenção de computadores, desenvolvido com Electron e React.
+Este projeto é um aplicativo de desktop multiplatforma (Windows e macOS) para gestão de serviços de manutenção de computadores, desenvolvido com Electron e React.
 
 ---
 
@@ -103,28 +103,25 @@ Para garantir o bom funcionamento do GSTI App, recomendamos a seguinte configura
 * [X] Geração de PDF: Comprovante de Entrada (com Termos de Orçamento).
 * [X] Geração de PDF: Recibo de Saída / Garantia (com cálculo de expiração).
 
-### 4. **Módulo Financeiro (Básico)**
-* [X] **Gestão de Despesas (CRUD Completo):**
-    * Listagem, Adição, Edição, Exclusão.
-    * Cálculo automático para combustível.
-    * Classificação Fixa/Variável.
-* [X] **Gestão de Receitas Avulsas (CRUD Completo):**
-    * Listagem, Adição, Edição, Exclusão.
-* [X] **Resumo Financeiro:**
-    * Seleção de período (datas + botões pré-definidos).
-    * Exibição em cards: Receita Total (OS + Avulsas), Despesa Fixa, Despesa Variável, Despesa Total, Lucro Líquido.
+### 4\. Módulo Financeiro
+*   \[X\] **Gestão de Despesas:** CRUD completo, com classificação por Categoria e Tipo (Fixa/Variável). 
+*   \[X\] **Cálculo de Combustível:** Formulário de despesa calcula o custo exato baseado em KM rodado, preço do litro e consumo médio.
+*   \[X\] **Gestão de Receitas Avulsas:** CRUD completo para registrar receitas não originadas de OS.
+*   \[X\] **Dashboard Financeiro (Resumo):**
+    *   Seleção de período (datas + botões "Este Mês", "Mês Passado", "Este Ano").
+    *   Cards de resumo (Receita Total, Despesa Total, Desp. Fixa, Desp. Variável, Lucro Líquido).       
+    *   Card de "Lucro Médio Mensal" (baseado nos últimos 6 meses).      
+    *   Funcionalidade de "Meta de Investimento" com cálculo de tempo estimado.       
+*   \[X\] **Gráficos (Dashboard):**  
+    *   Gráfico de Barras: Comparativo Mensal de Receita x Despesa (com seletor de ano).      
+    *   Gráfico de Linhas: Comparativo Anual de Receita x Despesa (últimos 5 anos).       
+*   \[X\] **Exportação Excel:** Gera arquivo .xlsx do período selecionado com 5 planilhas: Resumo, Fluxo de Caixa (detalhado), Receitas (OS), Receitas (Avulsas) e Despesas.
 
+
+### 5\. Módulo de Relatórios
+*   \[X\] **Relatório de OS por Cliente:** Filtra e exibe todo o histórico de OS de um cliente específico.
+*   \[X\] **Relatório de OS por Status:** Filtra e exibe todas as OS de um status específico (ex: "Aguardando Peça").
+*   \[X\] **Relatório de Serviços Mais Utilizados:** Mostra um ranking de produtos/serviços mais adicionados às OS finalizadas em um período.
+*   \[X\] **Relatório de Histórico de Equipamento:** Permite buscar por Nº de Série e ver todas as OS associadas àquele equipamento.
+*   \[X\] **Relatório Detalhado de Receitas:** Exibe uma lista cronológica de todas as entradas (OS e Avulsas) no período.
 ---
-
-## 🔜 Próximos Passos (Planejamento)
-
-* **Refinamento Módulo Financeiro:**
-    * Adicionar Gráficos comparativos (Receita x Despesa Mensal/Anual).
-    * Implementar Exportação para Excel.
-    * (Opcional) Fluxo de Caixa Detalhado.
-* **Fase 4 (Relatórios):**
-    * Relatórios de OS por cliente, status, etc.
-* **(Avançado/Futuro):**
-    * Provisões/Projeções Financeiras.
-    * Cálculo de tempo para investimentos.
-    * Lucratividade por OS.
