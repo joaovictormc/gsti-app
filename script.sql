@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS ordens_servico (
     status              os_status_enum NOT NULL DEFAULT 'Orçamento',
     data_entrada        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     data_saida          TIMESTAMP,
+    data_prevista       TIMESTAMP,
     valor_total         DECIMAL(10, 2) DEFAULT 0.00,
     garantia_dias       INT DEFAULT 90,
     FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE RESTRICT

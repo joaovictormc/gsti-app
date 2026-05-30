@@ -97,6 +97,10 @@ function initializeDbPool() {
         connectionTimeoutMillis: 10000,
       });
       console.log("[DB] Pool de conexão inicializado com sucesso.");
+      // Migração automática de schema
+      dbPool.query("ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP NULL")
+        .then(() => console.log("[Migration] data_prevista: OK"))
+        .catch((e) => console.warn("[Migration] data_prevista:", e.message));
       // Teste de conexão opcional aqui
     } catch (error) {
       console.error("[DB] Erro ao inicializar pool de conexão:", error);
@@ -943,33 +947,18 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
     return { success: false, error: "Banco de dados não configurado." };
   // Atualizado para os novos campos
   const {
-    id_cliente,
-    tipo_equipamento,
-    marca,
-    modelo,
-    numero_serie,
-    defeito_relatado,
-    observacoes_entrada,
-    status,
-    data_entrada,
-    garantia_dias,
+    id_cliente, tipo_equipamento, marca, modelo, numero_serie,
+    defeito_relatado, observacoes_entrada, status, data_entrada,
+    garantia_dias, data_prevista,
   } = osData;
   const sql = pgQuery(`INSERT INTO ordens_servico
-    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
+    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias, data_prevista)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
   try {
     const { rows } = await dbPool.query(sql, [
-      id_cliente,
-      tipo_equipamento,
-      marca,
-      modelo,
-      numero_serie,
-      defeito_relatado,
-      observacoes_entrada,
-      status,
-      data_entrada,
-      total,
-      garantia_dias,
+      id_cliente, tipo_equipamento, marca, modelo, numero_serie,
+      defeito_relatado, observacoes_entrada, status, data_entrada,
+      total, garantia_dias, data_prevista || null,
     ]);
     return { success: true, osId: rows[0].id };
   } catch (error) {
@@ -981,19 +970,9 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const {
-    id,
-    id_cliente,
-    tipo_equipamento,
-    marca,
-    modelo,
-    numero_serie,
-    defeito_relatado,
-    observacoes_entrada,
-    laudo_tecnico,
-    solucao_aplicada,
-    status,
-    data_entrada,
-    garantia_dias,
+    id, id_cliente, tipo_equipamento, marca, modelo, numero_serie,
+    defeito_relatado, observacoes_entrada, laudo_tecnico, solucao_aplicada,
+    status, data_entrada, garantia_dias, data_prevista,
   } = osData;
   try {
     const { rows } = await dbPool.query(
@@ -1027,25 +1006,14 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       id_cliente = ?, tipo_equipamento = ?, marca = ?, modelo = ?,
       numero_serie = ?, defeito_relatado = ?, observacoes_entrada = ?,
       laudo_tecnico = ?, solucao_aplicada = ?, status = ?,
-      data_entrada = ?, valor_total = ?, garantia_dias = ?
+      data_entrada = ?, valor_total = ?, garantia_dias = ?, data_prevista = ?
       ${setDataSaidaSql}
       WHERE id = ?`);
 
     await dbPool.query(sql, [
-      id_cliente,
-      tipo_equipamento,
-      marca,
-      modelo,
-      numero_serie,
-      defeito_relatado,
-      observacoes_entrada,
-      laudo_tecnico,
-      solucao_aplicada,
-      status,
-      data_entrada,
-      total,
-      garantia_dias,
-      id,
+      id_cliente, tipo_equipamento, marca, modelo, numero_serie,
+      defeito_relatado, observacoes_entrada, laudo_tecnico, solucao_aplicada,
+      status, data_entrada, total, garantia_dias, data_prevista || null, id,
     ]);
 
     return { success: true };
@@ -2551,6 +2519,51 @@ ipcMain.handle("get-os-by-client", async (event, clientId) => {
   } catch (error) {
     console.error(`Erro ao buscar OS para cliente ${id}:`, error);
     return { success: false, error: error.message };
+  }
+});
+
+// Timeline de OS por cliente
+ipcMain.handle('get-customer-timeline', async (event, clientId) => {
+  if (!dbPool) return { success: false, error: 'Banco não configurado.' };
+  try {
+    const { rows: statsRows } = await dbPool.query(`
+      SELECT
+        COUNT(*)::int AS total_os,
+        COUNT(*) FILTER (WHERE status NOT IN ('Finalizado','Entregue','Cancelado'))::int AS os_abertas,
+        COUNT(*) FILTER (WHERE status IN ('Finalizado','Entregue'))::int AS os_finalizadas,
+        COALESCE(SUM(CASE WHEN status IN ('Finalizado','Entregue') THEN valor_total ELSE 0 END),0) AS total_gasto
+      FROM ordens_servico WHERE id_cliente = $1
+    `, [clientId]);
+    const { rows: osRows } = await dbPool.query(`
+      SELECT id, status, data_entrada, data_saida, valor_total,
+        TRIM(CONCAT(tipo_equipamento,' ',COALESCE(marca,''),' ',COALESCE(modelo,''))) AS equipamento,
+        defeito_relatado, solucao_aplicada
+      FROM ordens_servico WHERE id_cliente = $1 ORDER BY data_entrada DESC
+    `, [clientId]);
+    return { success: true, stats: statsRows[0], os: osRows };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Agenda mensal de OS (por data_prevista)
+ipcMain.handle('get-os-agenda', async (event, { month, year }) => {
+  if (!dbPool) return { success: false, error: 'Banco não configurado.' };
+  try {
+    const { rows } = await dbPool.query(`
+      SELECT o.id, o.status, o.data_prevista,
+        c.nome AS nome_cliente,
+        TRIM(CONCAT(o.tipo_equipamento,' ',COALESCE(o.marca,''),' ',COALESCE(o.modelo,''))) AS equipamento
+      FROM ordens_servico o JOIN clientes c ON c.id=o.id_cliente
+      WHERE o.data_prevista IS NOT NULL
+        AND EXTRACT(MONTH FROM o.data_prevista)::int = $1
+        AND EXTRACT(YEAR FROM o.data_prevista)::int = $2
+        AND o.status NOT IN ('Entregue','Cancelado')
+      ORDER BY o.data_prevista ASC
+    `, [month, year]);
+    return { success: true, data: rows };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
 

@@ -30,17 +30,18 @@ const toLocalISOString = (date) => {
 
 // --- CORREÇÃO: Inicializa campos de texto com '' ---
 const BLANK_OS = {
-  id_cliente: null, // Autocomplete lida bem com null
-  tipo_equipamento: "Notebook", // Select precisa de valor válido
-  marca: "", // TextField espera ''
-  modelo: "", // TextField espera ''
-  numero_serie: "", // TextField espera ''
-  defeito_relatado: "", // TextField espera ''
-  observacoes_entrada: "", // TextField espera ''
-  laudo_tecnico: "", // TextField espera ''
-  solucao_aplicada: "", // TextField espera ''
-  status: "Orçamento", // Select precisa de valor válido
+  id_cliente: null,
+  tipo_equipamento: "Notebook",
+  marca: "",
+  modelo: "",
+  numero_serie: "",
+  defeito_relatado: "",
+  observacoes_entrada: "",
+  laudo_tecnico: "",
+  solucao_aplicada: "",
+  status: "Orçamento",
   data_entrada: toLocalISOString(new Date()),
+  data_prevista: "",
   garantia_dias: 90,
 };
 
@@ -75,6 +76,7 @@ function OSForm({ initialData, onSave, onClose }) {
           (acc, key) => {
             if (key === "data_entrada")
               acc[key] = toLocalISOString(osFromDb[key]);
+            else if (key === "data_prevista") acc[key] = osFromDb[key] ? toLocalISOString(osFromDb[key]) : "";
             else if (key === "garantia_dias") acc[key] = osFromDb[key] || 90;
             else if (key === "tipo_equipamento")
               acc[key] = nullToString(osFromDb[key]) || "Notebook";
@@ -274,6 +276,17 @@ function OSForm({ initialData, onSave, onClose }) {
           InputLabelProps={{ shrink: true }}
         />
       </Box>
+
+      <TextField
+        name="data_prevista"
+        label="Data Prevista de Entrega (opcional)"
+        type="datetime-local"
+        value={osData.data_prevista}
+        onChange={handleInputChange}
+        fullWidth
+        margin="normal"
+        InputLabelProps={{ shrink: true }}
+      />
 
       <TextField
         name="numero_serie"

@@ -66,8 +66,10 @@ contextBridge.exposeInMainWorld('api', {
   updateMiscRevenue: (revenueData) => ipcRenderer.invoke('update-misc-revenue', revenueData),
   deleteMiscRevenue: (revenueId) => ipcRenderer.invoke('delete-misc-revenue', revenueId),
 
-  // Dashboard
+  // Dashboard e módulos extras
   getDashboardStats: () => ipcRenderer.invoke('get-dashboard-stats'),
+  getCustomerTimeline: (clientId) => ipcRenderer.invoke('get-customer-timeline', clientId),
+  getOSAgenda: (params) => ipcRenderer.invoke('get-os-agenda', params),
   getWarrantyPanel: () => ipcRenderer.invoke('get-warranty-panel'),
 
   // Backup e Restauração

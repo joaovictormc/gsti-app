@@ -33,12 +33,14 @@ import {
   Logout as LogoutIcon, // Ícone Logout
   Settings as SettingsIcon,
   VerifiedUser as VerifiedUserIcon,
+  CalendarMonth as CalendarMonthIcon,
 } from "@mui/icons-material";
 import { useAuth } from "./contexts/AuthContext";
 
 import LoginScreen from "./screens/LoginScreen";
 import HomeScreen from "./screens/HomeScreen";
 import WarrantyPanel from "./screens/WarrantyPanel";
+import OSAgenda from "./screens/OSAgenda";
 import CustomerGrid from "./components/CustomerGrid";
 import ProductServiceGrid from "./components/ProductServiceGrid";
 import OSGrid from "./components/OSGrid";
@@ -73,6 +75,7 @@ const componentMap = {
   SettingsScreen,
   HomeScreen,
   WarrantyPanel,
+  OSAgenda,
 };
 
 const getSidebarTheme = (mode) => {
@@ -118,6 +121,7 @@ function AppSidebar({
     { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <AttachMoneyIcon sx={{ color: st.revenueIcon }} /> },
     { label: "Resumo Financeiro", component: "FinancialDashboard", icon: <BarChartIcon /> },
     { label: "Garantias", component: "WarrantyPanel", icon: <VerifiedUserIcon /> },
+    { label: "Agenda de OS", component: "OSAgenda", icon: <CalendarMonthIcon /> },
     {
       label: "Relatórios",
       icon: <AssessmentIcon />,
