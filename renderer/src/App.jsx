@@ -91,11 +91,20 @@ const componentMap = {
   ),
 };
 
-const SIDEBAR_BG = '#1e1b4b';
-const SIDEBAR_TEXT = 'rgba(255,255,255,0.85)';
-const SIDEBAR_SUBTEXT = 'rgba(255,255,255,0.55)';
-const SIDEBAR_DIVIDER = 'rgba(255,255,255,0.1)';
-const SIDEBAR_HOVER = 'rgba(255,255,255,0.08)';
+const getSidebarTheme = (mode) => {
+  const isLight = mode === 'light';
+  return {
+    bg:          isLight ? '#ffffff'                : '#0c1424',
+    text:        isLight ? '#1e293b'                : 'rgba(255,255,255,0.85)',
+    subtext:     isLight ? '#64748b'                : 'rgba(255,255,255,0.55)',
+    divider:     isLight ? '#e2e8f0'                : 'rgba(255,255,255,0.08)',
+    hover:       isLight ? 'rgba(99,102,241,0.08)'  : 'rgba(255,255,255,0.06)',
+    shadow:      isLight ? '2px 0 8px rgba(0,0,0,0.06)' : '2px 0 16px rgba(0,0,0,0.5)',
+    border:      isLight ? '1px solid #e2e8f0'      : 'none',
+    expenseIcon: isLight ? '#dc2626'                : '#f87171',
+    revenueIcon: isLight ? '#16a34a'                : '#4ade80',
+  };
+};
 
 const getInitials = (name) => {
   if (!name) return '?';
@@ -114,14 +123,15 @@ function AppSidebar({
 }) {
   const { logout, currentUser } = useAuth();
   const [reportsOpen, setReportsOpen] = useState(false);
+  const st = getSidebarTheme(currentThemeMode);
 
   const menuItems = [
     { label: "Início", component: "HomeScreen", icon: <HomeIcon /> },
     { label: "Clientes", component: "CustomerGrid", icon: <PeopleIcon /> },
     { label: "Produtos/Serviços", component: "ProductServiceGrid", icon: <InventoryIcon /> },
     { label: "Ordens de Serviço", component: "OSGrid", icon: <AssignmentIcon /> },
-    { label: "Despesas", component: "ExpensesGrid", icon: <AttachMoneyIcon sx={{ color: "#f87171" }} /> },
-    { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <AttachMoneyIcon sx={{ color: "#4ade80" }} /> },
+    { label: "Despesas", component: "ExpensesGrid", icon: <AttachMoneyIcon sx={{ color: st.expenseIcon }} /> },
+    { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <AttachMoneyIcon sx={{ color: st.revenueIcon }} /> },
     { label: "Resumo Financeiro", component: "FinancialDashboard", icon: <BarChartIcon /> },
     {
       label: "Relatórios",
@@ -145,13 +155,14 @@ function AppSidebar({
   const activeItemSx = (component) => ({
     mx: 1,
     borderRadius: 2,
-    color: SIDEBAR_TEXT,
+    color: st.text,
     mb: 0.25,
     '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 36 },
-    '&:hover': { bgcolor: SIDEBAR_HOVER },
+    '&:hover': { bgcolor: st.hover },
     ...(currentView === component && {
       bgcolor: 'primary.main',
       color: 'white',
+      '& .MuiListItemIcon-root': { color: 'white', minWidth: 36 },
       '&:hover': { bgcolor: 'primary.dark' },
     }),
   });
@@ -165,15 +176,15 @@ function AppSidebar({
         [`& .MuiDrawer-paper`]: {
           width: drawerWidth,
           boxSizing: 'border-box',
-          bgcolor: SIDEBAR_BG,
-          borderRight: 'none',
-          boxShadow: '2px 0 12px rgba(0,0,0,0.4)',
+          bgcolor: st.bg,
+          borderRight: st.border,
+          boxShadow: st.shadow,
         },
       }}
     >
       <Box sx={{ overflow: 'auto', display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Header: Logo + Nome */}
-        <Box sx={{ py: 3, px: 2, textAlign: 'center', borderBottom: `1px solid ${SIDEBAR_DIVIDER}` }}>
+        <Box sx={{ py: 3, px: 2, textAlign: 'center', borderBottom: `1px solid ${st.divider}` }}>
           {logoData && (
             <img
               src={logoData}
@@ -181,7 +192,7 @@ function AppSidebar({
               style={{ maxHeight: 48, maxWidth: '80%', marginBottom: 8, objectFit: 'contain' }}
             />
           )}
-          <Typography variant="h6" noWrap sx={{ color: 'white', fontWeight: 700, letterSpacing: 0.5 }}>
+          <Typography variant="h6" noWrap sx={{ color: st.text, fontWeight: 700, letterSpacing: 0.5 }}>
             {companyName || 'GSTI App'}
           </Typography>
         </Box>
@@ -202,9 +213,9 @@ function AppSidebar({
                       mx: 1,
                       borderRadius: 2,
                       mb: 0.25,
-                      color: anySubActive ? 'white' : SIDEBAR_TEXT,
+                      color: anySubActive ? 'primary.main' : st.text,
                       '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 36 },
-                      '&:hover': { bgcolor: SIDEBAR_HOVER },
+                      '&:hover': { bgcolor: st.hover },
                     }}
                   >
                     <ListItemIcon>{item.icon}</ListItemIcon>
@@ -222,9 +233,9 @@ function AppSidebar({
                             mx: 1,
                             borderRadius: 2,
                             mb: 0.25,
-                            color: SIDEBAR_SUBTEXT,
+                            color: st.subtext,
                             '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 28 },
-                            '&:hover': { bgcolor: SIDEBAR_HOVER, color: SIDEBAR_TEXT },
+                            '&:hover': { bgcolor: st.hover, color: st.text },
                             ...(currentView === subItem.component && {
                               bgcolor: 'primary.main',
                               color: 'white',
@@ -259,18 +270,18 @@ function AppSidebar({
         </List>
 
         {/* Footer: usuário + tema + logout */}
-        <Box sx={{ p: 2, borderTop: `1px solid ${SIDEBAR_DIVIDER}` }}>
+        <Box sx={{ p: 2, borderTop: `1px solid ${st.divider}` }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
             <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.75rem' }}>
               {getInitials(currentUser?.nome)}
             </Avatar>
-            <Typography variant="caption" noWrap sx={{ color: SIDEBAR_TEXT, flex: 1 }}>
+            <Typography variant="caption" noWrap sx={{ color: st.text, flex: 1 }}>
               {currentUser?.nome}
             </Typography>
             <IconButton
               onClick={toggleTheme}
               size="small"
-              sx={{ color: SIDEBAR_SUBTEXT }}
+              sx={{ color: st.subtext }}
               title={currentThemeMode === 'dark' ? 'Tema claro' : 'Tema escuro'}
             >
               {currentThemeMode === 'dark' ? (
@@ -282,15 +293,11 @@ function AppSidebar({
           </Box>
           <Button
             variant="outlined"
+            color="error"
             onClick={logout}
             size="small"
             startIcon={<LogoutIcon />}
             fullWidth
-            sx={{
-              borderColor: 'rgba(239,68,68,0.4)',
-              color: '#f87171',
-              '&:hover': { borderColor: '#f87171', bgcolor: 'rgba(239,68,68,0.1)' },
-            }}
           >
             Logout
           </Button>
@@ -406,8 +413,8 @@ function App() {
           primary: { main: '#6366f1' },
           secondary: { main: '#06b6d4' },
           background: {
-            default: themeMode === 'light' ? '#f1f5f9' : '#0f172a',
-            paper: themeMode === 'light' ? '#ffffff' : '#1e293b',
+            default: themeMode === 'light' ? '#f1f5f9' : '#0a1120',
+            paper:   themeMode === 'light' ? '#ffffff'  : '#111c2e',
           },
         },
         typography: {
