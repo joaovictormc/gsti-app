@@ -26,9 +26,8 @@ const modalStyle = {
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  width: 500,
+  width: { xs: '95vw', sm: 560 },
   bgcolor: "background.paper",
-  border: "2px solid #000",
   boxShadow: 24,
   p: 4,
   maxHeight: "90vh",
@@ -251,7 +250,7 @@ function ExpensesGrid() {
           Adicionar Nova Despesa
         </Button>
       </Box>
-      <Box sx={{ height: 500, width: "100%" }}>
+      <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={expenses}
           columns={columns}

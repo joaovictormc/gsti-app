@@ -34,9 +34,8 @@ const modalStyle = {
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  width: 600,
+  width: { xs: '95vw', sm: '90vw', md: 640 },
   bgcolor: "background.paper",
-  border: "2px solid #000",
   boxShadow: 24,
   p: 4,
   maxHeight: "90vh",
@@ -277,7 +276,7 @@ function OSGrid() {
           </Button>
         </Box>
       </Box>
-      <Box sx={{ height: 500, width: "100%" }}>
+      <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={filteredOSList}
           columns={columns}

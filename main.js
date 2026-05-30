@@ -2799,12 +2799,15 @@ ipcMain.handle("load-logo-image", async (event, logoPath) => {
 // --- FUNÇÕES DA JANELA ---
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1200,
+    width: 1280,
     height: 800,
+    minWidth: 1024,
+    minHeight: 680,
     title: "GSTI App - Gestão de Serviços de TI",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       devTools: !app.isPackaged,
+      backgroundThrottling: false,
     },
     contextIsolation: true,
     nodeIntegration: false

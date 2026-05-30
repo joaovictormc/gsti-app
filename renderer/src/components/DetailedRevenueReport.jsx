@@ -278,7 +278,7 @@ function DetailedRevenueReport() {
       </Paper>
 
       {/* Tabela de Resultados */}
-      <Box sx={{ height: 500, width: "100%" }}>
+      <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={reportData}
           columns={columns}

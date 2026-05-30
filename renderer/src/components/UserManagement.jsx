@@ -25,9 +25,8 @@ const modalStyle = {
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  width: 400,
+  width: { xs: '95vw', sm: 480 },
   bgcolor: "background.paper",
-  border: "2px solid #000",
   boxShadow: 24,
   p: 4,
   maxHeight: "90vh",
@@ -214,7 +213,7 @@ function UserManagement() {
           Adicionar Novo Usuário
         </Button>
       </Box>
-      <Box sx={{ height: 500, width: "100%" }}>
+      <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={users}
           columns={columns}

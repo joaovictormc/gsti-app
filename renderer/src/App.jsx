@@ -4,6 +4,7 @@ import {
   Box,
   Collapse,
   CssBaseline,
+  GlobalStyles,
   ThemeProvider,
   createTheme,
   IconButton,
@@ -451,6 +452,17 @@ function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        <GlobalStyles styles={(theme) => ({
+          '*::-webkit-scrollbar': { width: 8, height: 8 },
+          '*::-webkit-scrollbar-track': { background: theme.palette.background.default },
+          '*::-webkit-scrollbar-thumb': {
+            background: theme.palette.mode === 'light' ? '#cbd5e1' : '#1e293b',
+            borderRadius: 4,
+          },
+          '*::-webkit-scrollbar-thumb:hover': {
+            background: theme.palette.mode === 'light' ? '#94a3b8' : '#334155',
+          },
+        })} />
         <Box
           sx={{
             display: "flex",
@@ -471,6 +483,17 @@ function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        <GlobalStyles styles={(theme) => ({
+          '*::-webkit-scrollbar': { width: 8, height: 8 },
+          '*::-webkit-scrollbar-track': { background: theme.palette.background.default },
+          '*::-webkit-scrollbar-thumb': {
+            background: theme.palette.mode === 'light' ? '#cbd5e1' : '#1e293b',
+            borderRadius: 4,
+          },
+          '*::-webkit-scrollbar-thumb:hover': {
+            background: theme.palette.mode === 'light' ? '#94a3b8' : '#334155',
+          },
+        })} />
         <InitialSetupScreen onSetupComplete={handleSetupComplete} />
       </ThemeProvider>
     );
@@ -481,6 +504,17 @@ function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        <GlobalStyles styles={(theme) => ({
+          '*::-webkit-scrollbar': { width: 8, height: 8 },
+          '*::-webkit-scrollbar-track': { background: theme.palette.background.default },
+          '*::-webkit-scrollbar-thumb': {
+            background: theme.palette.mode === 'light' ? '#cbd5e1' : '#1e293b',
+            borderRadius: 4,
+          },
+          '*::-webkit-scrollbar-thumb:hover': {
+            background: theme.palette.mode === 'light' ? '#94a3b8' : '#334155',
+          },
+        })} />
         <LoginScreen onLoginSuccess={login} />
       </ThemeProvider>
     );
@@ -496,6 +530,17 @@ function App() {
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        <GlobalStyles styles={(theme) => ({
+          '*::-webkit-scrollbar': { width: 8, height: 8 },
+          '*::-webkit-scrollbar-track': { background: theme.palette.background.default },
+          '*::-webkit-scrollbar-thumb': {
+            background: theme.palette.mode === 'light' ? '#cbd5e1' : '#1e293b',
+            borderRadius: 4,
+          },
+          '*::-webkit-scrollbar-thumb:hover': {
+            background: theme.palette.mode === 'light' ? '#94a3b8' : '#334155',
+          },
+        })} />
         <Box sx={{ display: "flex" }}>
           <AppSidebar
             onNavigate={setActiveComponent}

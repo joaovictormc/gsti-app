@@ -212,7 +212,7 @@ function OSForm({ initialData, onSave, onClose }) {
       />
 
       {/* Campos de Equipamento */}
-      <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
+      <Box sx={{ display: "flex", gap: 2, mt: 1, flexWrap: 'wrap' }}>
         <FormControl fullWidth margin="normal">
           <InputLabel>Tipo de Equipamento</InputLabel>
           <Select
@@ -245,7 +245,7 @@ function OSForm({ initialData, onSave, onClose }) {
         />
       </Box>
       {/* Status e Data */}
-      <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
+      <Box sx={{ display: "flex", gap: 2, mt: 1, flexWrap: 'wrap' }}>
         <FormControl fullWidth>
           <InputLabel>Status</InputLabel>
           <Select
