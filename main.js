@@ -1112,6 +1112,45 @@ ipcMain.handle("delete-os", async (event, osId) => {
   }
 });
 
+// --- Cabeçalho de Branding para PDFs ---
+function drawPdfHeader(doc, docTitle, osId) {
+  const companyName = appConfig?.branding?.companyName || 'GSTI App';
+  const logoPath = appConfig?.branding?.logoPath;
+  const margin = doc.page.margins.left;
+  const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const startY = doc.y;
+  let logoDrawn = false;
+
+  if (logoPath && fs.existsSync(logoPath)) {
+    try {
+      doc.image(logoPath, margin, startY, { height: 50, fit: [90, 50] });
+      logoDrawn = true;
+    } catch (e) {
+      console.warn('[PDF] Logo não carregada:', e.message);
+    }
+  }
+
+  const textX = logoDrawn ? margin + 100 : margin;
+  const textWidth = logoDrawn ? contentWidth - 100 : contentWidth;
+  const align = logoDrawn ? 'left' : 'center';
+
+  doc.font('Helvetica-Bold').fontSize(logoDrawn ? 15 : 18)
+     .text(companyName, textX, startY, { width: textWidth, align });
+  doc.font('Helvetica').fontSize(logoDrawn ? 12 : 14)
+     .text(docTitle, textX, doc.y, { width: textWidth, align });
+  doc.fontSize(10)
+     .text(`OS Nº: ${osId}  ·  ${new Date().toLocaleDateString('pt-BR')}`, textX, doc.y, { width: textWidth, align });
+
+  if (logoDrawn) doc.y = Math.max(doc.y, startY + 58);
+
+  doc.moveDown(0.5);
+  doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
+     .strokeColor('#aaaaaa').lineWidth(0.75).stroke();
+  doc.strokeColor('black').lineWidth(1);
+  doc.font('Helvetica').fontSize(10);
+  doc.moveDown(1);
+}
+
 // --- FUNÇÃO PDF ATUALIZADA ---
 ipcMain.handle("generate-entry-receipt", async (event, osId) => {
   if (!dbPool)
@@ -1158,12 +1197,9 @@ TERMOS PARA ORÇAMENTO E SERVIÇO (Baseado na Lei 8.078/90 - CDC)
     // --- Função para desenhar o conteúdo (para as 2 vias) ---
     const drawReceipt = (isCliente) => {
       const via = isCliente ? "Via do Cliente" : "Via da Empresa";
-      doc
-        .fontSize(16)
-        .text("Comprovante de Entrada de Equipamento", { align: "center" });
+      drawPdfHeader(doc, "Comprovante de Entrada de Equipamento", osData.id);
       doc.fontSize(10).text(via, { align: "right" });
-      doc.fontSize(12).text(`OS Nº: ${osData.id}`, { align: "left" });
-      doc.moveDown(1);
+      doc.moveDown(0.5);
 
       // --- Dados do Cliente (ATUALIZADO) ---
       doc.fontSize(14).text("Dados do Cliente", { underline: true });
@@ -1314,22 +1350,14 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
     };
 
     // --- Cabeçalho ---
-    doc
-      .fontSize(18)
-      .text("Recibo de Entrega e Termo de Garantia", { align: "center" });
-    let currentY = doc.y; // Pega a posição Y após o título
-    doc.fontSize(12).text(`OS Nº: ${osData.id}`, leftMargin, currentY); // Posição X explícita
+    drawPdfHeader(doc, "Recibo de Entrega e Termo de Garantia", osData.id);
     const dataSaida = new Date(osData.data_saida);
-    doc
-      .fontSize(10)
-      .text(
-        `Data de Entrega: ${dataSaida.toLocaleDateString("pt-BR")}`,
-        leftMargin,
-        currentY,
-        { align: "right" }
-      ); // Alinhado à direita da página
-    doc.moveDown(2);
-    currentY = doc.y;
+    doc.fontSize(10).text(
+      `Data de Entrega: ${dataSaida.toLocaleDateString("pt-BR")}`,
+      { align: "right" }
+    );
+    doc.moveDown(1);
+    let currentY = doc.y;
 
     // --- Dados do Cliente ---
     currentY = checkAddPage(currentY, 60); // Estima altura necessária
