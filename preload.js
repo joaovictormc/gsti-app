@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Dashboard
   getDashboardStats: () => ipcRenderer.invoke('get-dashboard-stats'),
+  getWarrantyPanel: () => ipcRenderer.invoke('get-warranty-panel'),
 
   // Funções Financeiras (getFinancialSummary já existe)
   getFinancialSummary: (period) => ipcRenderer.invoke('get-financial-summary', period),

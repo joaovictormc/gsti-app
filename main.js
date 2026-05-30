@@ -2507,6 +2507,36 @@ ipcMain.handle("get-os-by-client", async (event, clientId) => {
   }
 });
 
+// Painel de Garantias
+ipcMain.handle('get-warranty-panel', async () => {
+  if (!dbPool) return { success: false, error: 'Banco de dados não configurado.' };
+  try {
+    const { rows } = await dbPool.query(`
+      SELECT
+        o.id,
+        c.nome AS nome_cliente,
+        c.telefone,
+        TRIM(CONCAT(o.tipo_equipamento, ' ', COALESCE(o.marca,''), ' ', COALESCE(o.modelo,''))) AS equipamento,
+        o.numero_serie,
+        o.data_saida,
+        o.garantia_dias,
+        o.solucao_aplicada,
+        (o.data_saida + (o.garantia_dias || ' days')::INTERVAL)::DATE AS data_vencimento,
+        ((o.data_saida + (o.garantia_dias || ' days')::INTERVAL)::DATE - CURRENT_DATE)::int AS dias_restantes
+      FROM ordens_servico o
+      JOIN clientes c ON c.id = o.id_cliente
+      WHERE o.status = 'Entregue'
+        AND o.data_saida IS NOT NULL
+        AND o.garantia_dias > 0
+      ORDER BY dias_restantes ASC
+    `);
+    return { success: true, data: rows };
+  } catch (error) {
+    console.error('[get-warranty-panel] Erro:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Listener para buscar OS por Status
 ipcMain.handle("get-os-by-status", async (event, status) => {
   if (!dbPool)
