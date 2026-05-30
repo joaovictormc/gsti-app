@@ -26,19 +26,20 @@ import {
   Inventory2 as InventoryIcon,
   Assignment as AssignmentIcon, // Ícones Menu
   Assessment as AssessmentIcon,
-  AttachMoney as AttachMoneyIcon,
-  BarChart as BarChartIcon, // Ícones Menu
+  BarChart as BarChartIcon,
   ExpandLess,
-  ExpandMore, // Ícones Submenu
-  Home as HomeIcon, // Ícone Home
-  Logout as LogoutIcon, // Ícone Logout
+  ExpandMore,
+  Home as HomeIcon,
+  Logout as LogoutIcon,
   Settings as SettingsIcon,
-  VerifiedUser as VerifiedUserIcon,
   CalendarMonth as CalendarMonthIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Inventory as InventoryStockIcon,
-  TrendingUp as TrendingUpReportIcon,
+  TrendingDown as TrendingDownIcon,
+  TrendingUp as TrendingUpIcon,
+  Shield as ShieldIcon,
+  ManageAccounts as ManageAccountsIcon,
 } from "@mui/icons-material";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -139,11 +140,11 @@ function AppSidebar({
     { label: "Produtos/Serviços", component: "ProductServiceGrid", icon: <InventoryIcon /> },
     { label: "Ordens de Serviço", component: "OSGrid", icon: <AssignmentIcon /> },
     ...(canSeeFinancial ? [
-      { label: "Despesas", component: "ExpensesGrid", icon: <AttachMoneyIcon sx={{ color: st.expenseIcon }} /> },
-      { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <AttachMoneyIcon sx={{ color: st.revenueIcon }} /> },
+      { label: "Despesas", component: "ExpensesGrid", icon: <TrendingDownIcon sx={{ color: st.expenseIcon }} /> },
+      { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <TrendingUpIcon sx={{ color: st.revenueIcon }} /> },
       { label: "Resumo Financeiro", component: "FinancialDashboard", icon: <BarChartIcon /> },
     ] : []),
-    { label: "Garantias", component: "WarrantyPanel", icon: <VerifiedUserIcon /> },
+    { label: "Garantias", component: "WarrantyPanel", icon: <ShieldIcon /> },
     { label: "Agenda de OS", component: "OSAgenda", icon: <CalendarMonthIcon /> },
     { label: "Estoque", component: "StockControl", icon: <InventoryStockIcon /> },
     ...(canSeeReports ? [
@@ -161,7 +162,7 @@ function AppSidebar({
       },
     ] : []),
     ...(isAdmin ? [
-      { label: "Gerenciar Usuários", component: "UserManagement", icon: <SettingsIcon /> },
+      { label: "Gerenciar Usuários", component: "UserManagement", icon: <ManageAccountsIcon /> },
       { label: "Configurações", component: "SettingsScreen", icon: <SettingsIcon /> },
     ] : []),
   ];

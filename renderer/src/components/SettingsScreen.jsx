@@ -12,12 +12,27 @@ import {
   Checkbox,
   Grid,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  MenuItem,
+  Select,
+  InputLabel,
+  FormControl as MuiFormControl,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
 } from "@mui/material";
 import BackupIcon from "@mui/icons-material/Backup";
 import RestoreIcon from "@mui/icons-material/Restore";
 import StorageIcon from "@mui/icons-material/Storage";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import LockPersonIcon from "@mui/icons-material/LockPerson";
+import SchoolIcon from "@mui/icons-material/School";
+import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import Switch from "@mui/material/Switch";
 import { useAuth } from "../contexts/AuthContext"; // Para verificar se é admin
 
@@ -28,7 +43,9 @@ function SettingsScreen() {
     branding: { companyName: "", logoPath: null },
     emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
     permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
+    autoBackup: { enabled: false, intervalHours: 24, destinationPath: "" },
   });
+  const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
@@ -55,6 +72,7 @@ function SettingsScreen() {
           const defaultBranding = { companyName: "GSTI App", logoPath: null };
           const defaultNotifications = { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" };
           const defaultPerms = { canSeeFinancial: false, canSeeReports: false };
+          const defaultAutoBackup = { enabled: false, intervalHours: 24, destinationPath: "" };
           setSettings({
             email: { ...defaultEmail, ...(result.settings.email || {}) },
             branding: { ...defaultBranding, ...(result.settings.branding || {}) },
@@ -62,6 +80,7 @@ function SettingsScreen() {
             permissions: {
               funcionario: { ...defaultPerms, ...(result.settings.permissions?.funcionario || {}) },
             },
+            autoBackup: { ...defaultAutoBackup, ...(result.settings.autoBackup || {}) },
           });
         } else {
           console.error("Erro ao carregar configurações:", result?.error);
@@ -130,6 +149,21 @@ function SettingsScreen() {
     }
   };
 
+  const handleAutoBackupChange = useCallback((field, value) => {
+    setSettings((prev) => ({
+      ...prev,
+      autoBackup: { ...prev.autoBackup, [field]: value },
+    }));
+    setSaveStatus({ type: "", text: "" });
+  }, []);
+
+  const handleSelectBackupFolder = async () => {
+    const result = await window.api.selectBackupFolder();
+    if (result.success && result.folderPath) {
+      handleAutoBackupChange("destinationPath", result.folderPath);
+    }
+  };
+
   const handlePermChange = useCallback((role, field, value) => {
     setSettings((prev) => ({
       ...prev,
@@ -152,6 +186,7 @@ function SettingsScreen() {
         branding: settings.branding,
         emailNotifications: settings.emailNotifications,
         permissions: settings.permissions,
+        autoBackup: settings.autoBackup,
       };
       const result = await window.api.saveAppSettings(settingsToSave);
       if (result.success) {
@@ -588,11 +623,132 @@ function SettingsScreen() {
         </Stack>
 
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-          Requer <code>pg_dump</code> e <code>psql</code> instalados — encontrados
-          automaticamente no PATH ou na instalação padrão do PostgreSQL.
+          Requer <code>pg_dump</code> e <code>psql</code> instalados. O backup é gerado como arquivo <code>.zip</code> e o restore aceita <code>.zip</code> ou <code>.sql</code>.
         </Typography>
+
+        <Divider sx={{ my: 2 }} />
+
+        {/* Backup automático */}
+        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+          Backup Automático
+        </Typography>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={settings.autoBackup.enabled}
+              onChange={(e) => handleAutoBackupChange("enabled", e.target.checked)}
+              disabled={saving}
+            />
+          }
+          label="Ativar backup automático agendado"
+        />
+        {settings.autoBackup.enabled && (
+          <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <MuiFormControl size="small" sx={{ maxWidth: 200 }}>
+              <InputLabel>Intervalo</InputLabel>
+              <Select
+                value={settings.autoBackup.intervalHours}
+                label="Intervalo"
+                onChange={(e) => handleAutoBackupChange("intervalHours", e.target.value)}
+                disabled={saving}
+              >
+                <MenuItem value={6}>A cada 6 horas</MenuItem>
+                <MenuItem value={12}>A cada 12 horas</MenuItem>
+                <MenuItem value={24}>A cada 24 horas</MenuItem>
+                <MenuItem value={48}>A cada 48 horas</MenuItem>
+                <MenuItem value={72}>A cada 72 horas</MenuItem>
+              </Select>
+            </MuiFormControl>
+
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <TextField
+                size="small"
+                label="Pasta de destino"
+                value={settings.autoBackup.destinationPath}
+                onChange={(e) => handleAutoBackupChange("destinationPath", e.target.value)}
+                fullWidth
+                disabled={saving}
+                placeholder="Selecione uma pasta..."
+                InputProps={{ readOnly: true }}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<FolderOpenIcon />}
+                onClick={handleSelectBackupFolder}
+                disabled={saving}
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                Selecionar
+              </Button>
+            </Box>
+            <Typography variant="caption" color="text.secondary">
+              Para backup na nuvem, selecione uma pasta sincronizada pelo Google Drive, OneDrive ou Dropbox.
+            </Typography>
+          </Box>
+        )}
       </Paper>
       {/* --- Fim Backup e Restauração --- */}
+
+      {/* --- Migração de Banco de Dados --- */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          <StorageIcon color="primary" />
+          <Typography variant="h6">Migração de Banco de Dados</Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          O GSTI utiliza PostgreSQL. Para migrar para um novo servidor ou ambiente,
+          use as ferramentas de Backup e Restauração acima.
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<SchoolIcon />}
+          onClick={() => setMigrationDialogOpen(true)}
+        >
+          Ver tutorial de migração
+        </Button>
+      </Paper>
+      {/* --- Fim Migração --- */}
+
+      {/* Dialog Tutorial */}
+      <Dialog open={migrationDialogOpen} onClose={() => setMigrationDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <SchoolIcon color="primary" />
+            <Typography variant="h6" component="span">Tutorial de Migração PostgreSQL</Typography>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Siga os passos abaixo para migrar o banco de dados do GSTI para outro servidor PostgreSQL.
+          </Typography>
+          <List dense>
+            {[
+              { label: "Fazer Backup", desc: 'Clique em "Fazer Backup" na seção acima. Um arquivo .zip será gerado contendo o dump completo do banco.' },
+              { label: "Configurar o novo servidor", desc: "Instale o PostgreSQL no novo ambiente. Crie o banco de dados gsti_db e um usuário com permissões completas sobre ele." },
+              { label: "Restaurar o Backup", desc: 'No novo ambiente, clique em "Restaurar Backup" e selecione o arquivo .zip gerado no passo 1. O banco será recriado automaticamente.' },
+              { label: "Atualizar a conexão", desc: 'Vá em Configurações > Banco de Dados e insira os dados do novo servidor (host, porta, usuário e senha).' },
+              { label: "Testar e verificar", desc: "Faça login no GSTI e confira se os dados aparecem corretamente. Em caso de erro, verifique as credenciais e permissões do usuário PostgreSQL." },
+            ].map((step, i) => (
+              <ListItem key={i} alignItems="flex-start" sx={{ px: 0 }}>
+                <ListItemIcon sx={{ minWidth: 36, mt: 0.5 }}>
+                  <CheckCircleIcon color="primary" fontSize="small" />
+                </ListItemIcon>
+                <ListItemText
+                  primary={<Typography variant="body2" fontWeight={600}>{`${i + 1}. ${step.label}`}</Typography>}
+                  secondary={step.desc}
+                />
+              </ListItem>
+            ))}
+          </List>
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            A restauração sobrescreve todos os dados existentes no banco de destino. Certifique-se de ter um backup antes de prosseguir.
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMigrationDialogOpen(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* --- Botão Salvar Geral --- */}
       {saveStatus.text && (

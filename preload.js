@@ -79,10 +79,13 @@ contextBridge.exposeInMainWorld('api', {
   // Lucratividade
   getProfitabilityReport: () => ipcRenderer.invoke('get-profitability-report'),
   getWarrantyPanel: () => ipcRenderer.invoke('get-warranty-panel'),
+  sendWarrantyEmail: (data) => ipcRenderer.invoke('send-warranty-email', data),
+  openWhatsappLink: (data) => ipcRenderer.invoke('open-whatsapp-link', data),
 
   // Backup e Restauração
   backupDatabase: () => ipcRenderer.invoke('backup-database'),
   restoreDatabase: () => ipcRenderer.invoke('restore-database'),
+  selectBackupFolder: () => ipcRenderer.invoke('select-backup-folder'),
 
   // Funções Financeiras (getFinancialSummary já existe)
   getFinancialSummary: (period) => ipcRenderer.invoke('get-financial-summary', period),

@@ -71,7 +71,8 @@ const modalStyle = {
 };
 
 const BLANK_CUSTOMER = {
-  nome: "", tipo_pessoa: "Física", cpf_cnpj: "", telefone: "", email: "", endereco: "",
+  nome: "", tipo_pessoa: "Física", cpf_cnpj: "", telefone: "", email: "",
+  cep: "", logradouro: "", numero: "", bairro: "", cidade: "", estado: "",
 };
 
 function CustomerGrid() {
@@ -106,6 +107,10 @@ function CustomerGrid() {
     const sanitized = Object.fromEntries(
       Object.entries(customer).map(([k, v]) => [k, v === null ? "" : v])
     );
+    // Retrocompatibilidade: se logradouro vazio mas endereco tem conteúdo, usa endereco como logradouro
+    if (!sanitized.logradouro && sanitized.endereco) {
+      sanitized.logradouro = sanitized.endereco;
+    }
     setEditingCustomer(sanitized);
     setFormKey((k) => k + 1);
     setIsModalOpen(true);
@@ -142,7 +147,25 @@ function CustomerGrid() {
     { field: "cpf_cnpj", headerName: "CPF/CNPJ", width: 160, renderCell: (p) => formatDocument(p.row.cpf_cnpj) },
     { field: "telefone", headerName: "Telefone", width: 140, renderCell: (p) => formatPhone(p.row.telefone) },
     { field: "email", headerName: "E-Mail", flex: 1, minWidth: 200 },
-    { field: "endereco", headerName: "Endereço", flex: 1, minWidth: 200 },
+    {
+      field: "endereco",
+      headerName: "Endereço",
+      flex: 1,
+      minWidth: 200,
+      renderCell: (p) => {
+        const r = p.row;
+        if (r.logradouro) {
+          const parts = [
+            r.logradouro,
+            r.numero,
+            r.bairro,
+            r.cidade && r.estado ? `${r.cidade}/${r.estado}` : (r.cidade || r.estado),
+          ].filter(Boolean);
+          return parts.join(", ");
+        }
+        return r.endereco || "";
+      },
+    },
     {
       field: "actions", headerName: "Ações", width: 130, sortable: false,
       renderCell: (params) => (

@@ -1,7 +1,6 @@
-// renderer/src/components/CustomerForm.jsx
-
-import { useState, useEffect, forwardRef } from "react";
+import { useState, useEffect, useRef, forwardRef } from "react";
 import {
+  Alert,
   Box,
   Button,
   TextField,
@@ -12,12 +11,10 @@ import {
   FormControl,
   FormLabel,
   CircularProgress,
-  InputAdornment,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import { IMaskInput } from "react-imask";
 
-// --- Componentes Customizados com Máscara ---
 const PhoneMask = forwardRef(function PhoneMask(props, ref) {
   const { onChange, ...other } = props;
   return (
@@ -71,7 +68,6 @@ const CepMask = forwardRef(function CepMask(props, ref) {
   );
 });
 
-// --- Componente Principal do Formulário ---
 export default function CustomerForm({ initialData, onSave, onClose, onValidate }) {
   const [formData, setFormData] = useState(initialData);
   const [loading, setLoading] = useState(false);
@@ -79,12 +75,15 @@ export default function CustomerForm({ initialData, onSave, onClose, onValidate 
   const [loadingCep, setLoadingCep] = useState(false);
   const [cepError, setCepError] = useState("");
   const [cepAutoFilled, setCepAutoFilled] = useState(false);
+  const [validationError, setValidationError] = useState(null);
+  const numeroRef = useRef(null);
 
   useEffect(() => {
     setFormData(initialData);
-    setCepValue("");
+    setCepValue(initialData.cep || "");
     setCepError("");
     setCepAutoFilled(false);
+    setValidationError(null);
   }, [initialData]);
 
   const handleInputChange = (e) => {
@@ -94,11 +93,17 @@ export default function CustomerForm({ initialData, onSave, onClose, onValidate 
       if (name === "tipo_pessoa") {
         next.cpf_cnpj = "";
         next.nome = "";
-        next.endereco = "";
+        next.logradouro = "";
+        next.numero = "";
+        next.bairro = "";
+        next.cidade = "";
+        next.estado = "";
+        setCepValue("");
+        setCepAutoFilled(false);
       }
-      if (name === "endereco") setCepAutoFilled(false);
       return next;
     });
+    setValidationError(null);
   };
 
   const handleValidateCnpj = async () => {
@@ -107,17 +112,21 @@ export default function CustomerForm({ initialData, onSave, onClose, onValidate 
     setLoading(false);
     if (result && result.success) {
       const { name, data } = result;
-      let fullAddress = "";
-      if (data && data.logradouro) {
-        fullAddress = `${data.logradouro}, ${data.numero} - ${data.bairro}, ${data.municipio} - ${data.uf}, CEP: ${data.cep}`;
-      }
       setFormData((prev) => ({
         ...prev,
         nome: name || prev.nome,
-        endereco: fullAddress || prev.endereco,
+        logradouro: data?.logradouro || prev.logradouro,
+        numero: data?.numero || prev.numero,
+        bairro: data?.bairro || prev.bairro,
+        cidade: data?.municipio || prev.cidade,
+        estado: data?.uf || prev.estado,
       }));
+      if (data?.cep) {
+        const formatted = data.cep.replace(/\D/g, "").replace(/^(\d{5})(\d{3})$/, "$1-$2");
+        setCepValue(formatted);
+      }
     } else if (result) {
-      alert(`Aviso: ${result.error}`);
+      setValidationError(`Aviso: ${result.error}`);
     }
   };
 
@@ -131,29 +140,37 @@ export default function CustomerForm({ initialData, onSave, onClose, onValidate 
     const result = await window.api.searchCep(cleanCep);
     setLoadingCep(false);
     if (result.success) {
-      const { logradouro, bairro, localidade, uf } = result.data;
-      const parts = [logradouro, bairro, `${localidade} - ${uf}`].filter(Boolean);
-      setFormData((prev) => ({ ...prev, endereco: parts.join(", ") }));
+      const { logradouro, bairro, localidade, uf, cep: foundCep } = result.data;
+      setFormData((prev) => ({
+        ...prev,
+        logradouro: logradouro || "",
+        bairro: bairro || "",
+        cidade: localidade || "",
+        estado: uf || "",
+      }));
+      if (foundCep) setCepValue(foundCep);
       setCepAutoFilled(true);
+      setTimeout(() => numeroRef.current?.focus(), 50);
     } else {
       setCepError(result.error || "CEP não encontrado.");
     }
   };
 
   const handleSubmit = () => {
+    if (!formData.nome || !String(formData.cpf_cnpj).replace(/\D/g, "")) {
+      setValidationError("Os campos de Nome/Razão Social e CPF/CNPJ são obrigatórios.");
+      return;
+    }
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      setValidationError("Informe um e-mail válido.");
+      return;
+    }
     const dataToSave = {
       ...formData,
+      cep: cepValue,
       cpf_cnpj: String(formData.cpf_cnpj).replace(/\D/g, ""),
       telefone: String(formData.telefone).replace(/\D/g, ""),
     };
-    if (!dataToSave.nome || !dataToSave.cpf_cnpj) {
-      alert("Os campos de Nome/Razão Social e CPF/CNPJ são obrigatórios.");
-      return;
-    }
-    if (dataToSave.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dataToSave.email)) {
-      alert("Informe um email válido.");
-      return;
-    }
     onSave(dataToSave);
   };
 
@@ -165,12 +182,7 @@ export default function CustomerForm({ initialData, onSave, onClose, onValidate 
 
       <FormControl component="fieldset" margin="normal">
         <FormLabel component="legend">Tipo de Pessoa</FormLabel>
-        <RadioGroup
-          row
-          name="tipo_pessoa"
-          value={formData.tipo_pessoa}
-          onChange={handleInputChange}
-        >
+        <RadioGroup row name="tipo_pessoa" value={formData.tipo_pessoa} onChange={handleInputChange}>
           <FormControlLabel value="Física" control={<Radio />} label="Física" />
           <FormControlLabel value="Jurídica" control={<Radio />} label="Jurídica" />
         </RadioGroup>
@@ -185,9 +197,7 @@ export default function CustomerForm({ initialData, onSave, onClose, onValidate 
           label={formData.tipo_pessoa === "Física" ? "CPF" : "CNPJ"}
           value={formData.cpf_cnpj}
           onChange={handleInputChange}
-          InputProps={{
-            inputComponent: formData.tipo_pessoa === "Física" ? CpfMask : CnpjMask,
-          }}
+          InputProps={{ inputComponent: formData.tipo_pessoa === "Física" ? CpfMask : CnpjMask }}
         />
         {formData.tipo_pessoa === "Jurídica" && (
           <Button
@@ -225,15 +235,14 @@ export default function CustomerForm({ initialData, onSave, onClose, onValidate 
         margin="normal"
         fullWidth
         name="email"
-        label="Email"
+        label="E-mail"
         value={formData.email}
         onChange={handleInputChange}
       />
 
-      {/* CEP com busca automática */}
-      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+      {/* Endereço dividido */}
+      <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", mt: 1 }}>
         <TextField
-          margin="normal"
           label="CEP"
           name="cep"
           value={cepValue}
@@ -247,46 +256,73 @@ export default function CustomerForm({ initialData, onSave, onClose, onValidate 
           }}
           InputProps={{ inputComponent: CepMask }}
           error={!!cepError}
-          helperText={cepError || (cepAutoFilled ? "✓ Endereço preenchido — adicione o número do imóvel." : "")}
-          FormHelperTextProps={{
-            sx: { color: cepAutoFilled && !cepError ? "success.main" : undefined },
-          }}
-          sx={{ width: 180, flexShrink: 0 }}
+          helperText={cepError || (cepAutoFilled ? "✓ Endereço preenchido." : "")}
+          FormHelperTextProps={{ sx: { color: cepAutoFilled && !cepError ? "success.main" : undefined } }}
+          sx={{ width: 150, flexShrink: 0 }}
         />
         <Button
           variant="outlined"
           onClick={handleSearchCep}
           disabled={loadingCep || cleanCep.length !== 8}
-          sx={{ mt: 2, whiteSpace: "nowrap" }}
-          startIcon={
-            loadingCep
-              ? <CircularProgress size={16} color="inherit" />
-              : <SearchIcon />
-          }
+          sx={{ mt: 0.5, whiteSpace: "nowrap", alignSelf: "flex-start" }}
+          startIcon={loadingCep ? <CircularProgress size={16} color="inherit" /> : <SearchIcon />}
         >
-          {loadingCep ? "Buscando..." : "Buscar CEP"}
+          {loadingCep ? "Buscando..." : "Buscar"}
         </Button>
+        <TextField
+          label="Logradouro"
+          name="logradouro"
+          value={formData.logradouro || ""}
+          onChange={handleInputChange}
+          fullWidth
+        />
       </Box>
 
-      <TextField
-        margin="normal"
-        fullWidth
-        name="endereco"
-        label="Endereço"
-        value={formData.endereco}
-        onChange={handleInputChange}
-        helperText={cepAutoFilled ? "Adicione o número do imóvel ao final." : ""}
-        multiline
-        rows={2}
-      />
+      <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+        <TextField
+          label="Número"
+          name="numero"
+          value={formData.numero || ""}
+          onChange={handleInputChange}
+          inputRef={numeroRef}
+          sx={{ width: 100, flexShrink: 0 }}
+        />
+        <TextField
+          label="Bairro"
+          name="bairro"
+          value={formData.bairro || ""}
+          onChange={handleInputChange}
+          fullWidth
+        />
+      </Box>
+
+      <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
+        <TextField
+          label="Cidade"
+          name="cidade"
+          value={formData.cidade || ""}
+          onChange={handleInputChange}
+          fullWidth
+        />
+        <TextField
+          label="UF"
+          name="estado"
+          value={formData.estado || ""}
+          onChange={handleInputChange}
+          inputProps={{ maxLength: 2, style: { textTransform: "uppercase" } }}
+          sx={{ width: 80, flexShrink: 0 }}
+        />
+      </Box>
+
+      {validationError && (
+        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setValidationError(null)}>
+          {validationError}
+        </Alert>
+      )}
 
       <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
-        <Button onClick={onClose} sx={{ mr: 1 }}>
-          Cancelar
-        </Button>
-        <Button variant="contained" onClick={handleSubmit}>
-          Salvar
-        </Button>
+        <Button onClick={onClose} sx={{ mr: 1 }}>Cancelar</Button>
+        <Button variant="contained" onClick={handleSubmit}>Salvar</Button>
       </Box>
     </>
   );

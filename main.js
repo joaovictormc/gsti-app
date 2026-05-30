@@ -11,6 +11,8 @@ const crypto = require("crypto");
 const { execFile, execSync } = require("child_process");
 const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
+const archiver = require("archiver");
+const unzipper = require("unzipper");
 
 const isDev = process.env.NODE_ENV !== "production";
 const saltRounds = 10;
@@ -49,6 +51,7 @@ const defaultConfig = {
   branding: { companyName: "GSTI App", logoPath: null },
   emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
   permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
+  autoBackup: { enabled: false, intervalHours: 24, destinationPath: "" },
   setupComplete: false,
 };
 
@@ -106,6 +109,12 @@ function initializeDbPool() {
         "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS estoque_baixado BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_atual INT NOT NULL DEFAULT 0",
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_minimo INT NOT NULL DEFAULT 0",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cep VARCHAR(10)",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS logradouro TEXT",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS numero VARCHAR(50)",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS bairro VARCHAR(100)",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cidade VARCHAR(100)",
+        "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS estado VARCHAR(2)",
       ].forEach((sql) =>
         dbPool.query(sql)
           .then(() => console.log("[Migration] OK:", sql.slice(0, 60)))
@@ -263,12 +272,63 @@ async function notifyOSFinalized(osId, osData, total) {
   console.log(`[Email] OS finalizada #${osId} notificada para ${customer.email}`);
 }
 
+// --- BACKUP AUTOMÁTICO ---
+
+let autoBackupTimer = null;
+
+async function runAutoBackup() {
+  const config = appConfig?.autoBackup;
+  if (!config?.enabled || !config?.destinationPath || !appConfig?.database) return;
+
+  const db = appConfig.database;
+  const pgDump = findPgTool("pg_dump");
+  if (!pgDump) { console.error("[AutoBackup] pg_dump não encontrado."); return; }
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const sqlName = `gsti_backup_${dateStr}.sql`;
+  const zipName = `gsti_backup_${dateStr}.zip`;
+  const tempSqlPath = path.join(app.getPath("temp"), sqlName);
+  const destZipPath = path.join(config.destinationPath, zipName);
+
+  try {
+    await execFileAsync(pgDump,
+      ["-h", db.host, "-p", String(db.port), "-U", db.user, "-d", db.database,
+       "--clean", "--if-exists", "-F", "p", "-f", tempSqlPath],
+      { env: { ...process.env, PGPASSWORD: db.password } }
+    );
+    await new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(destZipPath);
+      const arc = archiver("zip", { zlib: { level: 9 } });
+      output.on("close", resolve);
+      arc.on("error", reject);
+      arc.pipe(output);
+      arc.file(tempSqlPath, { name: sqlName });
+      arc.finalize();
+    });
+    try { fs.unlinkSync(tempSqlPath); } catch (_) {}
+    console.log(`[AutoBackup] Salvo: ${destZipPath}`);
+  } catch (err) {
+    try { fs.unlinkSync(tempSqlPath); } catch (_) {}
+    console.error("[AutoBackup] Erro:", err.message);
+  }
+}
+
+function scheduleAutoBackup() {
+  if (autoBackupTimer) { clearInterval(autoBackupTimer); autoBackupTimer = null; }
+  const config = appConfig?.autoBackup;
+  if (!config?.enabled || !config?.destinationPath || !config?.intervalHours) return;
+  const intervalMs = config.intervalHours * 3600 * 1000;
+  autoBackupTimer = setInterval(runAutoBackup, intervalMs);
+  console.log(`[AutoBackup] Agendado a cada ${config.intervalHours}h → ${config.destinationPath}`);
+}
+
 // --- CARREGA A CONFIGURAÇÃO AO INICIAR ---
 loadConfig();
 // --- INICIALIZA OS SERVIÇOS QUE DEPENDEM DA CONFIG ---
 // O dbPool e mailTransporter só serão realmente criados se setupComplete for true
 initializeDbPool();
 initializeMailTransporter();
+scheduleAutoBackup();
 // --- FIM GERENCIAMENTO DE CONFIGURAÇÃO ---
 
 // --- FUNÇÕES DE FORMATAÇÃO (Definidas globalmente no módulo) ---
@@ -410,8 +470,9 @@ ipcMain.handle(
 
       // 5. Re-inicializa o dbPool global principal agora que a config está salva
       console.log("[Setup] Re-inicializando dbPool global...");
-      initializeDbPool(); // Tenta inicializar o pool principal
-      initializeMailTransporter(); // Tenta inicializar o mailer (pode não ter config ainda)
+      initializeDbPool();
+      initializeMailTransporter();
+      scheduleAutoBackup();
 
       return { success: true };
     } catch (error) {
@@ -498,6 +559,7 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
           ...(newSettings.permissions?.funcionario || {}),
         },
       },
+      autoBackup: { ...appConfig.autoBackup, ...(newSettings.autoBackup || {}) },
       database: currentDbConfig,
       setupComplete: currentSetupStatus,
     };
@@ -506,8 +568,8 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
     fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
     console.log("[Config] Configurações salvas com sucesso.");
 
-    // Re-inicializa o mail transporter com as novas configurações
     initializeMailTransporter();
+    scheduleAutoBackup();
 
     return { success: true };
   } catch (error) {
@@ -831,23 +893,13 @@ ipcMain.handle("get-customers", async () => {
 ipcMain.handle("add-customer", async (event, customerData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  // Agora pegamos os novos campos do objeto recebido
-  const { nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } =
-    customerData;
+  const { nome, tipo_pessoa, cpf_cnpj, telefone, email, logradouro, numero, bairro, cidade, estado, cep } = customerData;
   const sql = pgQuery(
-    "INSERT INTO clientes (nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco) VALUES (?, ?, ?, ?, ?, ?) RETURNING id"
+    `INSERT INTO clientes (nome, tipo_pessoa, cpf_cnpj, telefone, email, logradouro, numero, bairro, cidade, estado, cep)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
   );
-
   try {
-    // Passamos os novos campos como parâmetros na ordem correta
-    const { rows } = await dbPool.query(sql, [
-      nome,
-      tipo_pessoa,
-      cpf_cnpj,
-      telefone,
-      email,
-      endereco,
-    ]);
+    const { rows } = await dbPool.query(sql, [nome, tipo_pessoa, cpf_cnpj, telefone, email, logradouro || null, numero || null, bairro || null, cidade || null, estado || null, cep || null]);
     return { success: true, id: rows[0].id };
   } catch (error) {
     return { success: false, error: error.message };
@@ -891,22 +943,14 @@ ipcMain.handle("validate-cnpj", async (event, cnpj) => {
 ipcMain.handle("update-customer", async (event, customerData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  const { id, nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } =
-    customerData;
+  const { id, nome, tipo_pessoa, cpf_cnpj, telefone, email, logradouro, numero, bairro, cidade, estado, cep } = customerData;
   const sql = pgQuery(
-    "UPDATE clientes SET nome = ?, tipo_pessoa = ?, cpf_cnpj = ?, telefone = ?, email = ?, endereco = ? WHERE id = ?"
+    `UPDATE clientes SET nome = ?, tipo_pessoa = ?, cpf_cnpj = ?, telefone = ?, email = ?,
+     logradouro = ?, numero = ?, bairro = ?, cidade = ?, estado = ?, cep = ?
+     WHERE id = ?`
   );
-
   try {
-    await dbPool.query(sql, [
-      nome,
-      tipo_pessoa,
-      cpf_cnpj,
-      telefone,
-      email,
-      endereco,
-      id,
-    ]);
+    await dbPool.query(sql, [nome, tipo_pessoa, cpf_cnpj, telefone, email, logradouro || null, numero || null, bairro || null, cidade || null, estado || null, cep || null, id]);
     return { success: true };
   } catch (error) {
     console.error("Erro ao atualizar cliente:", error);
@@ -2782,6 +2826,7 @@ ipcMain.handle('get-warranty-panel', async () => {
         o.id,
         c.nome AS nome_cliente,
         c.telefone,
+        c.email,
         TRIM(CONCAT(o.tipo_equipamento, ' ', COALESCE(o.marca,''), ' ', COALESCE(o.modelo,''))) AS equipamento,
         o.numero_serie,
         o.data_saida,
@@ -2803,6 +2848,53 @@ ipcMain.handle('get-warranty-panel', async () => {
   }
 });
 
+// Handler para enviar e-mail de aviso de garantia
+ipcMain.handle("send-warranty-email", async (event, { clienteEmail, clienteNome, equipamento, diasRestantes, dataVencimento }) => {
+  if (!mailTransporter) return { success: false, error: "E-mail não configurado. Configure o SMTP nas Configurações." };
+  if (!clienteEmail) return { success: false, error: "Cliente sem e-mail cadastrado." };
+
+  const companyName = appConfig.branding?.companyName || "GSTI App";
+  const from = appConfig.email?.from || appConfig.email?.user;
+  const diasTexto = diasRestantes < 0
+    ? "já expirou"
+    : diasRestantes === 0
+    ? "vence hoje"
+    : `vence em ${diasRestantes} dia${diasRestantes !== 1 ? "s" : ""}`;
+
+  try {
+    await mailTransporter.sendMail({
+      from: `"${companyName}" <${from}>`,
+      to: clienteEmail,
+      subject: `Aviso de Garantia — ${equipamento} · ${companyName}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+          <h2 style="color:#3949ab;margin-bottom:4px">Aviso de Vencimento de Garantia</h2>
+          <p style="color:#757575;margin-top:0">${companyName}</p>
+          <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+          <p>Olá, <strong>${clienteNome}</strong>!</p>
+          <p>Informamos que a garantia do seu equipamento <strong>${equipamento}</strong>
+             <strong>${diasTexto}</strong> (${dataVencimento}).</p>
+          <p>Caso precise de assistência ou tenha dúvidas, entre em contato conosco.</p>
+          <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+          <p style="color:#9e9e9e;font-size:12px">Enviado automaticamente pelo ${companyName}</p>
+        </div>`,
+    });
+    return { success: true };
+  } catch (err) {
+    console.error("[send-warranty-email] Erro:", err.message);
+    return { success: false, error: err.message };
+  }
+});
+
+// Handler para abrir link do WhatsApp
+ipcMain.handle("open-whatsapp-link", async (event, { telefone, mensagem }) => {
+  const digits = String(telefone || "").replace(/\D/g, "");
+  if (!digits) return { success: false, error: "Telefone inválido." };
+  const url = `https://wa.me/55${digits}?text=${encodeURIComponent(mensagem)}`;
+  shell.openExternal(url);
+  return { success: true };
+});
+
 // --- Utilitário: localiza pg_dump / psql no sistema ---
 function findPgTool(toolName) {
   try {
@@ -2821,71 +2913,110 @@ function findPgTool(toolName) {
   return null;
 }
 
-// Backup do banco via pg_dump
+// Backup do banco via pg_dump (comprimido em .zip)
 ipcMain.handle("backup-database", async () => {
   const db = appConfig?.database;
   if (!db) return { success: false, error: "Banco não configurado." };
 
   const pgDump = findPgTool("pg_dump");
   if (!pgDump)
-    return {
-      success: false,
-      error: "pg_dump não encontrado. Verifique se o PostgreSQL está instalado e disponível no PATH.",
-    };
+    return { success: false, error: "pg_dump não encontrado. Verifique se o PostgreSQL está instalado e disponível no PATH." };
 
-  const defaultName = `gsti_backup_${new Date().toISOString().slice(0, 10)}.sql`;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const sqlName = `gsti_backup_${dateStr}.sql`;
   const { canceled, filePath } = await dialog.showSaveDialog({
     title: "Salvar Backup do Banco",
-    defaultPath: path.join(app.getPath("documents"), defaultName),
-    filters: [{ name: "Arquivos SQL", extensions: ["sql"] }],
+    defaultPath: path.join(app.getPath("documents"), `gsti_backup_${dateStr}.zip`),
+    filters: [{ name: "Backup ZIP", extensions: ["zip"] }],
   });
   if (canceled || !filePath) return { success: false, canceled: true };
 
+  const tempSqlPath = path.join(app.getPath("temp"), sqlName);
   try {
-    await execFileAsync(
-      pgDump,
+    await execFileAsync(pgDump,
       ["-h", db.host, "-p", String(db.port), "-U", db.user, "-d", db.database,
-       "--clean", "--if-exists", "-F", "p", "-f", filePath],
+       "--clean", "--if-exists", "-F", "p", "-f", tempSqlPath],
       { env: { ...process.env, PGPASSWORD: db.password } }
     );
+    await new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(filePath);
+      const arc = archiver("zip", { zlib: { level: 9 } });
+      output.on("close", resolve);
+      arc.on("error", reject);
+      arc.pipe(output);
+      arc.file(tempSqlPath, { name: sqlName });
+      arc.finalize();
+    });
+    try { fs.unlinkSync(tempSqlPath); } catch (_) {}
     return { success: true, path: filePath };
   } catch (err) {
+    try { fs.unlinkSync(tempSqlPath); } catch (_) {}
     console.error("[backup-database] Erro:", err);
     return { success: false, error: err.stderr || err.message };
   }
 });
 
-// Restauração do banco via psql
+// Restauração do banco via psql (aceita .zip ou .sql)
 ipcMain.handle("restore-database", async () => {
   const db = appConfig?.database;
   if (!db) return { success: false, error: "Banco não configurado." };
 
   const psql = findPgTool("psql");
   if (!psql)
-    return {
-      success: false,
-      error: "psql não encontrado. Verifique se o PostgreSQL está instalado e disponível no PATH.",
-    };
+    return { success: false, error: "psql não encontrado. Verifique se o PostgreSQL está instalado e disponível no PATH." };
 
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: "Selecionar Arquivo de Backup",
-    filters: [{ name: "Arquivos SQL", extensions: ["sql"] }],
+    filters: [
+      { name: "Backup ZIP", extensions: ["zip"] },
+      { name: "Arquivo SQL", extensions: ["sql"] },
+    ],
     properties: ["openFile"],
   });
   if (canceled || !filePaths?.length) return { success: false, canceled: true };
 
+  const selectedFile = filePaths[0];
+  let sqlPath = selectedFile;
+  let tempDir = null;
+
   try {
-    await execFileAsync(
-      psql,
+    if (selectedFile.toLowerCase().endsWith(".zip")) {
+      tempDir = path.join(app.getPath("temp"), `gsti_restore_${Date.now()}`);
+      fs.mkdirSync(tempDir, { recursive: true });
+      await new Promise((resolve, reject) => {
+        fs.createReadStream(selectedFile)
+          .pipe(unzipper.Extract({ path: tempDir }))
+          .on("close", resolve)
+          .on("error", reject);
+      });
+      const files = fs.readdirSync(tempDir);
+      const sqlFile = files.find((f) => f.endsWith(".sql"));
+      if (!sqlFile) throw new Error("Nenhum arquivo .sql encontrado no ZIP.");
+      sqlPath = path.join(tempDir, sqlFile);
+    }
+
+    await execFileAsync(psql,
       ["-h", db.host, "-p", String(db.port), "-U", db.user, "-d", db.database,
-       "-v", "ON_ERROR_STOP=1", "-f", filePaths[0]],
+       "-v", "ON_ERROR_STOP=1", "-f", sqlPath],
       { env: { ...process.env, PGPASSWORD: db.password } }
     );
     return { success: true };
   } catch (err) {
     console.error("[restore-database] Erro:", err);
     return { success: false, error: err.stderr || err.message };
+  } finally {
+    if (tempDir) { try { fs.rmSync(tempDir, { recursive: true }); } catch (_) {} }
   }
+});
+
+// Selecionar pasta de destino para backup automático
+ipcMain.handle("select-backup-folder", async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: "Selecionar Pasta de Destino para Backup",
+    properties: ["openDirectory"],
+  });
+  if (canceled || !filePaths?.length) return { success: false, canceled: true };
+  return { success: true, folderPath: filePaths[0] };
 });
 
 // Listener para buscar OS por Status
