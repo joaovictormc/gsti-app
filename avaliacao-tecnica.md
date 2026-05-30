@@ -1,6 +1,7 @@
 # Avaliação Técnica — GSTI App
 
-> Documento gerado na sprint de otimização — Maio/2026
+> Documento gerado na sprint de otimização — Maio/2026  
+> Última atualização: Maio/2026 (após Sprint 5)
 
 ---
 
@@ -13,221 +14,143 @@
 | Node.js embutido | 20.x |
 | Builder | electron-builder 26.0.12 |
 
-### Veredicto: **Manter o Electron**
+### Veredicto: **Manter o Electron** ✅
 
 Trocar para Tauri ou NW.js não é recomendado neste momento:
 - Tauri exige reescrita do backend em Rust — custo muito alto
 - O app já tem IPC bem estruturado e segurança correta (contextIsolation, sandbox)
 - Electron 31 tem suporte ativo e boa performance para apps de uso interno
 
-### Problemas identificados e correções aplicadas
+### Correções aplicadas ✅
+| Problema | Correção |
+|----------|----------|
+| Sem `minWidth`/`minHeight` | `minWidth: 1024, minHeight: 680` |
+| `backgroundThrottling` padrão | `backgroundThrottling: false` |
 
-| Problema | Impacto | Correção |
-|----------|---------|----------|
-| Sem `minWidth`/`minHeight` | Janela pode ser reduzida até inutilizável | `minWidth: 1024, minHeight: 680` |
-| `backgroundThrottling` padrão | Lentidão quando app está minimizado | `backgroundThrottling: false` |
-| Sem `minWidth` na janela | UI quebrada em telas muito pequenas | Resolvido com limite mínimo |
-
-### Configuração `createWindow` pós-correção
-
-```js
-new BrowserWindow({
-  width: 1280,
-  height: 800,
-  minWidth: 1024,
-  minHeight: 680,
-  webPreferences: {
-    preload: path.join(__dirname, 'preload.js'),
-    devTools: !app.isPackaged,
-    backgroundThrottling: false,
-  },
-})
-```
-
-### Pontos de segurança (todos OK)
-- ✅ `contextIsolation: true` (default Electron 12+)
-- ✅ `nodeIntegration: false` (default)
-- ✅ `sandbox: true` (default Electron 20+)
-- ✅ DevTools bloqueados em produção
+### Pontos de segurança (todos OK) ✅
+- ✅ `contextIsolation: true` · `nodeIntegration: false` · `sandbox: true`
+- ✅ DevTools bloqueados em produção (`devTools: !app.isPackaged`)
 - ✅ API exposta via `contextBridge` (preload.js)
 
 ---
 
-## 2. Responsividade — Diagnóstico e Correções
+## 2. Responsividade — Diagnóstico e Correções ✅
 
-### Escopo do problema
+Todas as correções foram aplicadas:
 
-O app foi construído com alturas e larguras fixas em pixels, funcionando bem apenas em monitores 1920×1080. Abaixo do diagnóstico completo:
+| Item | Status | Detalhe |
+|------|--------|---------|
+| DataGrids `height: 500` fixo | ✅ Corrigido | `calc(100vh - 240px)` + `minHeight: 320` em 11 componentes |
+| Modais com largura fixa | ✅ Corrigido | Objetos responsivos MUI `{ xs: '95vw', sm: N }` em 6 modais |
+| Borders de debug nos modais | ✅ Removido | `border: "2px solid #000"` eliminado |
+| OSForm flex sem wrap | ✅ Corrigido | `flexWrap: 'wrap'` nas rows de múltiplos campos |
+| Sidebar permanente e fixa | ✅ Corrigido | Sidebar colapsável implementada no Sprint 5 |
 
-### 2.1 DataGrids — Altura fixa de 500px
-
-**Problema:** Todos os 10 DataGrids usavam `height: 500` fixo.
-- Em monitores 1366×768: grid ocupa 65% da altura disponível, deixando pouco espaço
-- Em monitores 4K/2K: grid fica pequeno comparado ao espaço disponível
-
-**Correção aplicada:**
-```jsx
-// Antes
-<Box sx={{ height: 500, width: "100%" }}>
-
-// Depois — cresce com a janela, nunca vai abaixo de 320px
-<Box sx={{ height: 'calc(100vh - 240px)', minHeight: 320, width: "100%" }}>
-```
-
-**Componentes corrigidos:** OSGrid, CustomerGrid, ProductServiceGrid, ExpensesGrid, MiscRevenueGrid, OSReportClient, OSReportStatus, MostUsedServicesReport, EquipmentHistoryReport, DetailedRevenueReport, UserManagement
-
-### 2.2 Modais — Largura fixa
-
-**Problema:** Modais com larguras de 400–600px fixos não respeitam viewports menores.
-
-**Correção aplicada:**
-```js
-// Antes: width: 600 (OSGrid), 400 (demais), 500 (Expenses)
-// Depois: objeto responsivo MUI (funciona dentro de sx)
-width: { xs: '95vw', sm: '90vw', md: 640 }  // OSGrid
-width: { xs: '95vw', sm: 480 }               // CustomerGrid, ProductGrid, etc
-width: { xs: '95vw', sm: 560 }               // ExpensesGrid
-```
-
-Removido também `border: "2px solid #000"` dos modais (resquício de debug, substituído pela boxShadow existente).
-
-### 2.3 Formulário de OS
-
-Linhas com múltiplos campos `display: flex` sem quebra. Adicionado `flexWrap: 'wrap'` para que os campos empilhem em telas menores.
-
-### 2.4 Sidebar
-
-A sidebar de 240px é permanente e não colapsa. Em conjunto com o `minWidth: 1024` da janela, isso garante que a sidebar sempre tenha espaço adequado. Sidebar colapsável está no roadmap.
-
-### Dimensões recomendadas de uso
-
+### Dimensões suportadas
 | Resolução | Status |
 |-----------|--------|
-| 1024×680 | Mínimo suportado (janela não pode ser menor) |
-| 1280×800 | Tamanho padrão ao abrir |
-| 1366×768 | Funcional, DataGrids se ajustam |
+| 1024×680 | Mínimo suportado |
+| 1280×800 | Padrão ao abrir |
+| 1366×768 | Funcional |
 | 1920×1080 | Ideal |
-| 2560×1440 | Excelente, todo o espaço é aproveitado |
+| 2560×1440 | Excelente |
 
 ---
 
-## 3. Scrollbars Temáticas
+## 3. Scrollbars Temáticas ✅
 
-**Problema:** As scrollbars do sistema operacional (cinza padrão) quebravam a estética em dark mode.
-
-**Correção:** `GlobalStyles` do MUI injetado dentro do `ThemeProvider` — as scrollbars passam a usar cores do tema Chromium/Webkit (funciona no Electron).
-
-```jsx
-<GlobalStyles styles={(theme) => ({
-  '*::-webkit-scrollbar': { width: 8, height: 8 },
-  '*::-webkit-scrollbar-track': { background: theme.palette.background.default },
-  '*::-webkit-scrollbar-thumb': {
-    background: theme.palette.mode === 'light' ? '#cbd5e1' : '#1e293b',
-    borderRadius: 4,
-  },
-  '*::-webkit-scrollbar-thumb:hover': {
-    background: theme.palette.mode === 'light' ? '#94a3b8' : '#334155',
-  },
-})} />
-```
-
-| Modo | Track | Thumb | Thumb hover |
-|------|-------|-------|-------------|
-| Light | `#f1f5f9` | `#cbd5e1` | `#94a3b8` |
-| Dark  | `#0a1120` | `#1e293b` | `#334155` |
+`GlobalStyles` MUI com `::-webkit-scrollbar` — cores do tema aplicadas automaticamente em light e dark mode.
 
 ---
 
-## 4. Novos Módulos Propostos
+## 4. Módulos Implementados
 
-### Prioridade Alta
+### Sprint 1 ✅ — Base técnica
+- ✅ Performance Electron (minWidth, minHeight, backgroundThrottling)
+- ✅ Responsividade (DataGrids, modais, forms)
+- ✅ Scrollbars temáticas
+- ✅ Tema MUI customizado (Inter, indigo/cyan, dark mode consistente)
+- ✅ Sidebar com dark theme e avatar do usuário
 
-#### 🏠 Home Dashboard (KPIs na tela inicial)
-- OS abertas, em andamento e finalizadas no mês
-- Receita e despesa do mês corrente (mini cards)
-- Alertas de OS com garantia vencendo em 7 dias
-- Últimas 5 OS abertas com link direto
+### Sprint 2 ✅ — Módulos core
+- ✅ **Home Dashboard** — saudação dinâmica, 4 KPI cards, painel de garantias vencendo, últimas OS ativas
+- ✅ **Painel de Garantias** — grid com dias restantes, chips coloridos, filtros por urgência e busca
 
-#### 💾 Backup e Restauração
-- Exportar banco via `pg_dump` para arquivo `.sql`
-- Importar via `pg_restore` / `psql`
-- Botão na tela de Configurações (admin only)
-- Confirmação com dialog antes de restaurar
+### Sprint 3 ✅ — Integrações e documentos
+- ✅ **Backup e Restauração** — pg_dump/psql com detecção automática do PostgreSQL, dialog de arquivo
+- ✅ **CEP Auto-fill** — ViaCEP no cadastro de clientes, IMaskInput `00000-000`, preenchimento automático
+- ✅ **PDF com Logo** — `drawPdfHeader()` lê `appConfig.branding`, logo à esquerda, nome + título à direita
 
-#### 🛡️ Painel de Garantias
-- Lista de OS com status "Entregue" e garantia ativa
-- Dias restantes de garantia por OS
-- Alertas visuais: verde (>30 dias), amarelo (7–30 dias), vermelho (<7 dias)
-- Filtro por cliente ou por vencimento
+### Sprint 4 ✅ — Histórico e agenda
+- ✅ **Timeline do Cliente** — Dialog com 3 stat cards + lista cronológica de OS com bordas coloridas por status
+- ✅ **Agenda de OS** — Campo `data_prevista` no formulário, calendário mensal, chips por dia, painel de detalhes
 
----
-
-### Prioridade Média
-
-#### 📅 Agenda de OS
-- Calendário mensal com OS agrupadas por data de entrega prevista
-- Drag-and-drop para reagendar
-- Integração com campo `data_prevista` (novo campo na tabela `ordens_servico`)
-
-#### 📋 Timeline do Cliente
-- Dentro da tela de clientes, aba "Histórico"
-- Lista de todas as OS do cliente em ordem cronológica
-- Totais gastos, OS abertas, OS finalizadas
-
-#### 📄 PDF com Logo da Empresa
-- Incluir `companyName`, `logoData` (Base64) e dados de contato no cabeçalho dos PDFs de OS
-- Configurável na tela de Configurações
-
-#### 📮 CEP Auto-fill
-- No cadastro de cliente, campo CEP com botão "Buscar"
-- Chamada à API ViaCEP (`https://viacep.com.br/ws/{cep}/json/`)
-- Preenche: logradouro, bairro, cidade, UF
+### Sprint 5 ✅ — UX, estoque e relatórios
+- ✅ **Sidebar Colapsável** — 60px/240px com transição, Tooltips, estado no localStorage
+- ✅ **Controle de Estoque** — `estoque_atual` + `estoque_minimo` em produtos, entrada/saída/ajuste de mínimo, alertas visuais
+- ✅ **Lucratividade por Serviço** — cross com `os_itens`, gráfico Top 5, DataGrid com receita destacada
 
 ---
 
-### Prioridade Baixa / Futuro
-
-#### 📧 Notificações por E-mail
-- Envio automático quando OS muda para "Finalizado" ou "Entregue"
-- Template HTML com dados da OS e resumo do serviço
-- Configurar SMTP na tela de Configurações
-
-#### 📦 Controle de Estoque
-- Novo módulo para gerenciar peças em estoque
-- Entrada manual e saída automática ao fechar uma OS
-- Alerta quando estoque mínimo é atingido
-- Integração com `produtos_servicos` (campo `estoque_atual`)
-
-#### 📊 Lucratividade por Serviço
-- Relatório de quais serviços geram mais receita e maior margem
-- Cross-referência com `os_itens` e `produtos_servicos`
-
-#### ☰ Sidebar Colapsável
-- Botão hambúrguer para recolher sidebar a 60px (só ícones)
-- Estado salvo no localStorage
-- Ganha 180px de espaço horizontal para grids
-
----
-
-## 5. Roadmap de Implementação
+## 5. Roadmap Atualizado
 
 ```
-Sprint 1 (atual)  — Performance, Responsividade, Scrollbars ✅
-Sprint 2          — Home Dashboard + Painel de Garantias
-Sprint 3          — Backup/Restauração + CEP Auto-fill + PDF com Logo
-Sprint 4          — Timeline do Cliente + Agenda de OS
-Sprint 5+         — Estoque, Notificações, Sidebar Colapsável
+Sprint 1  ✅  Performance, Responsividade, Scrollbars, Tema visual
+Sprint 2  ✅  Home Dashboard + Painel de Garantias
+Sprint 3  ✅  Backup/Restauração + CEP Auto-fill + PDF com Logo
+Sprint 4  ✅  Timeline do Cliente + Agenda de OS
+Sprint 5  ✅  Sidebar Colapsável + Controle de Estoque + Lucratividade
+Sprint 6  🔲  Notificações por E-mail + melhorias pontuais (a definir)
 ```
 
 ---
 
-## 6. Dívida Técnica Registrada
+## 6. Pendências e Dívida Técnica
 
-| Item | Tipo | Prioridade |
-|------|------|-----------|
-| Sidebar fixa (não colapsa) | UX | Baixa |
-| Sem timeout em queries PostgreSQL | Robustez | Média |
-| Geração de PDF síncrona (bloqueia main process) | Performance | Média |
-| Sem testes automatizados | Qualidade | Alta |
-| Bundle JS > 1.3MB (sem code splitting) | Performance | Baixa |
-| `alert()` ainda presente em CustomerForm e OSForm | UX | Baixa |
+| Item | Tipo | Prioridade | Status |
+|------|------|-----------|--------|
+| Notificações por e-mail ao finalizar OS | Feature | Média | 🔲 Pendente |
+| Saída automática de estoque ao fechar OS | Feature | Média | 🔲 Pendente |
+| Drag-and-drop na Agenda de OS | UX | Baixa | 🔲 Pendente |
+| Sem timeout em queries PostgreSQL | Robustez | Média | 🔲 Pendente |
+| Geração de PDF síncrona (bloqueia main process) | Performance | Média | 🔲 Pendente |
+| Sem testes automatizados | Qualidade | Alta | 🔲 Pendente |
+| Bundle JS > 1.3MB (sem code splitting) | Performance | Baixa | 🔲 Pendente |
+| `alert()` ainda presente em OSForm (validações) | UX | Baixa | 🔲 Pendente |
+| Sidebar fixa (não colapsa) | UX | —— | ✅ Resolvido |
+
+---
+
+## 7. Arquitetura Atual do Sistema
+
+```
+gsti-app/
+├── main.js              — Processo principal Electron (IPC, DB, PDFs, backups)
+├── preload.js           — contextBridge: ~70 métodos expostos ao renderer
+├── script.sql           — Schema PostgreSQL (referência para novas instalações)
+├── renderer/
+│   └── src/
+│       ├── App.jsx              — Tema MUI, sidebar colapsável, roteamento por componente
+│       ├── contexts/
+│       │   └── AuthContext.jsx  — Autenticação global
+│       ├── screens/             — Telas principais
+│       │   ├── HomeScreen.jsx        ✅ Dashboard com KPIs
+│       │   ├── LoginScreen.jsx       ✅ Gradiente dark
+│       │   ├── WarrantyPanel.jsx     ✅ Painel de garantias
+│       │   ├── OSAgenda.jsx          ✅ Calendário mensal
+│       │   ├── StockControl.jsx      ✅ Controle de estoque
+│       │   ├── ProfitabilityReport.jsx ✅ Lucratividade
+│       │   └── InitialSetupScreen.jsx
+│       └── components/          — Grids e formulários
+│           ├── OSGrid.jsx / OSForm.jsx
+│           ├── CustomerGrid.jsx / CustomerForm.jsx
+│           ├── ProductServiceGrid.jsx
+│           ├── ExpensesGrid.jsx / MiscRevenueGrid.jsx
+│           ├── UserManagement.jsx / SettingsScreen.jsx
+│           ├── ConfirmDialog.jsx
+│           └── FinancialPages/
+│               ├── FinancialDashboard.jsx
+│               ├── SummaryCards.jsx / MonthlyChart.jsx
+│               ├── AnnualChart.jsx / PeriodSelector.jsx
+│               └── InvestmentGoal.jsx
+```
