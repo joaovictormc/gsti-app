@@ -6,6 +6,8 @@ import {
   Modal,
   TextField,
   IconButton,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import OSForm from "./OSForm";
@@ -13,6 +15,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PrintIcon from "@mui/icons-material/Print";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import ConfirmDialog from "./ConfirmDialog";
 
 const modalStyle = {
   position: "absolute",
@@ -35,11 +38,19 @@ function OSGrid() {
   const [editingOS, setEditingOS] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [modalKey, setModalKey] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, id: null, isDeleting: false });
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "error" });
+
+  const showSnackbar = (message, severity = "error") =>
+    setSnackbar({ open: true, message, severity });
 
   const fetchOSList = async () => {
+    setIsLoading(true);
     const data = await window.api.getOSList();
     setOSList(data);
     setFilteredOSList(data);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -72,16 +83,19 @@ function OSGrid() {
       setModalKey((prevKey) => prevKey + 1); // Muda a chave
       setIsModalOpen(true);
     } else {
-      alert(`Erro ao buscar detalhes: ${result.error}`);
+      showSnackbar(`Erro ao buscar detalhes: ${result.error}`);
     }
   };
 
-  const handleDeleteOS = async (osId) => {
-    if (window.confirm(`Tem certeza que deseja excluir a OS Nº ${osId}?`)) {
-      const result = await window.api.deleteOS(osId);
-      if (result.success) fetchOSList();
-      else alert(`Erro ao excluir: ${result.error}`);
-    }
+  const handleDeleteRequest = (osId) =>
+    setConfirmDialog({ open: true, id: osId, isDeleting: false });
+
+  const handleDeleteConfirm = async () => {
+    setConfirmDialog((d) => ({ ...d, isDeleting: true }));
+    const result = await window.api.deleteOS(confirmDialog.id);
+    setConfirmDialog({ open: false, id: null, isDeleting: false });
+    if (result.success) fetchOSList();
+    else showSnackbar(`Erro ao excluir: ${result.error}`);
   };
 
   const handleCloseModal = () => {
@@ -96,13 +110,13 @@ function OSGrid() {
       const osPromise = window.api.updateOS({ osData, total });
       const itemsPromise = window.api.updateOSItems({ osId: osData.id, items });
       const [osResult] = await Promise.all([osPromise, itemsPromise]);
-      if (!osResult.success) alert(`Erro ao salvar OS: ${osResult.error}`);
+      if (!osResult.success) showSnackbar(`Erro ao salvar OS: ${osResult.error}`);
     } else {
       const osResult = await window.api.addOS({ osData, total });
       if (osResult.success) {
         await window.api.addOSItems({ osId: osResult.osId, items });
       } else {
-        alert(`Erro ao criar OS: ${osResult.error}`);
+        showSnackbar(`Erro ao criar OS: ${osResult.error}`);
       }
     }
     handleCloseModal();
@@ -113,15 +127,14 @@ function OSGrid() {
   const handlePrintReceipt = async (osId) => {
     const result = await window.api.generateEntryReceipt(osId);
     if (!result.success) {
-      alert(`Erro ao gerar PDF: ${result.error}`);
+      showSnackbar(`Erro ao gerar PDF: ${result.error}`);
     }
   };
 
-  // --- NOVA FUNÇÃO PARA IMPRIMIR RECIBO DE SAÍDA ---
   const handlePrintExitReceipt = async (osId) => {
     const result = await window.api.generateExitReceipt(osId);
     if (!result.success) {
-      alert(`Erro ao gerar PDF de Saída: ${result.error}`);
+      showSnackbar(`Erro ao gerar PDF de Saída: ${result.error}`);
     } else {
       // Opcional: Atualizar a lista caso a data de saída tenha sido definida agora
       fetchOSList();
@@ -202,8 +215,9 @@ function OSGrid() {
             <EditIcon />
           </IconButton>
           <IconButton
-            onClick={() => handleDeleteOS(params.row.id)}
+            onClick={() => handleDeleteRequest(params.row.id)}
             title="Excluir OS"
+            color="error"
           >
             <DeleteIcon />
           </IconButton>
@@ -244,10 +258,13 @@ function OSGrid() {
           rows={filteredOSList}
           columns={columns}
           getRowId={(row) => row.id}
+          loading={isLoading}
           getRowLabel={(row) =>
             `${row.id} - ${row.nome_cliente} - ${row.equipamento}`
           }
           localeText={{ noRowsLabel: "Nenhuma Ordem de Serviço encontrada." }}
+          initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+          pageSizeOptions={[10, 25, 50]}
         />
       </Box>
       <Modal open={isModalOpen} onClose={handleCloseModal}>
@@ -260,6 +277,23 @@ function OSGrid() {
           />
         </Box>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title="Confirmar Exclusão"
+        message={`Tem certeza que deseja excluir a OS Nº ${confirmDialog.id}?`}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setConfirmDialog({ open: false, id: null, isDeleting: false })}
+        isLoading={confirmDialog.isDeleting}
+      />
+
+      <Snackbar open={snackbar.open} autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 }

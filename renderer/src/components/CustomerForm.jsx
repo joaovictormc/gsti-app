@@ -111,6 +111,10 @@ export default function CustomerForm({
       alert("Os campos de Nome/Razão Social e CPF/CNPJ são obrigatórios.");
       return;
     }
+    if (dataToSave.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dataToSave.email)) {
+      alert("Informe um email válido.");
+      return;
+    }
     onSave(dataToSave);
   };
 

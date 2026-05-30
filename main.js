@@ -2755,6 +2755,12 @@ ipcMain.handle("load-logo-image", async (event, logoPath) => {
       };
     }
 
+    // Valida tamanho máximo de 2 MB antes de converter
+    const stats = fs.statSync(logoPath);
+    if (stats.size / (1024 * 1024) > 2) {
+      return { success: false, error: 'A imagem da logo deve ter no máximo 2 MB.' };
+    }
+
     // Lê o arquivo como buffer
     const imageBuffer = fs.readFileSync(logoPath);
     // Converte para Base64 Data URL
@@ -2796,8 +2802,11 @@ function createWindow() {
     width: 1200,
     height: 800,
     title: "GSTI App - Gestão de Serviços de TI",
-    webPreferences: { preload: path.join(__dirname, "preload.js") },
-    contextIsolation: true, 
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      devTools: !app.isPackaged,
+    },
+    contextIsolation: true,
     nodeIntegration: false
   });
 

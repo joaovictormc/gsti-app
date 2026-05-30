@@ -74,20 +74,20 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
   const handleSaveAndCreate = async () => {
     setAdminStatus({ saving: true, error: "" });
     // Validação extra no frontend (opcional, backend já valida)
-    if (adminUser.password !== adminUser.confirmPassword) {
-      setAdminStatus({ saving: false, error: "As senhas não coincidem." });
+    if (!adminUser.nome || !adminUser.email || !adminUser.login || !adminUser.password) {
+      setAdminStatus({ saving: false, error: "Todos os campos do administrador são obrigatórios." });
       return;
     }
-    if (
-      !adminUser.nome ||
-      !adminUser.email ||
-      !adminUser.login ||
-      !adminUser.password
-    ) {
-      setAdminStatus({
-        saving: false,
-        error: "Todos os campos do administrador são obrigatórios.",
-      });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminUser.email)) {
+      setAdminStatus({ saving: false, error: "Informe um email válido para o administrador." });
+      return;
+    }
+    if (adminUser.password.length < 6) {
+      setAdminStatus({ saving: false, error: "A senha deve ter no mínimo 6 caracteres." });
+      return;
+    }
+    if (adminUser.password !== adminUser.confirmPassword) {
+      setAdminStatus({ saving: false, error: "As senhas não coincidem." });
       return;
     }
 

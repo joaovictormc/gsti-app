@@ -11,8 +11,10 @@ import {
   FormControl,
   IconButton,
   Alert,
+  CircularProgress,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
+import ConfirmDialog from "./ConfirmDialog";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useAuth } from "../contexts/AuthContext"; // Importa o hook de autenticação
@@ -48,7 +50,9 @@ function UserManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [modalKey, setModalKey] = useState(0);
-  const [error, setError] = useState(""); // Para erros no modal
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, id: null, name: "", isDeleting: false });
 
   const fetchUsers = async () => {
     // Idealmente, a API get-users deveria ser protegida no backend,
@@ -95,20 +99,15 @@ function UserManagement() {
     setError("");
   };
 
-  const handleDelete = async (userId, userName) => {
-    if (
-      window.confirm(
-        `Tem certeza que deseja excluir o usuário "${userName}"? Esta ação não pode ser desfeita.`
-      )
-    ) {
-      // Passamos o ID do admin logado para verificação futura no backend (opcional)
-      const result = await window.api.deleteUser(userId /*, currentUser.id */);
-      if (result.success) {
-        fetchUsers(); // Atualiza a lista
-      } else {
-        alert(`Erro ao excluir usuário: ${result.error}`);
-      }
-    }
+  const handleDeleteRequest = (userId, userName) =>
+    setConfirmDialog({ open: true, id: userId, name: userName, isDeleting: false });
+
+  const handleDeleteConfirm = async () => {
+    setConfirmDialog((d) => ({ ...d, isDeleting: true }));
+    const result = await window.api.deleteUser(confirmDialog.id);
+    setConfirmDialog({ open: false, id: null, name: "", isDeleting: false });
+    if (result.success) fetchUsers();
+    else setError(`Erro ao excluir usuário: ${result.error}`);
   };
 
   const handleInputChange = (e) => {
@@ -120,23 +119,22 @@ function UserManagement() {
     setError(""); // Limpa erro anterior
     const isEditing = !!editingUser?.id;
 
-    // --- CORREÇÃO: Adiciona email à validação ---
-    if (
-      !editingUser.nome ||
-      !editingUser.email ||
-      !editingUser.login ||
-      !editingUser.role
-    ) {
+    if (!editingUser.nome || !editingUser.email || !editingUser.login || !editingUser.role) {
       setError("Nome, Email, Login e Papel são obrigatórios.");
       return;
     }
-    // TODO: Adicionar validação de formato de email no frontend
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editingUser.email)) {
+      setError("Informe um email válido.");
+      return;
+    }
     if (!isEditing && !editingUser.password) {
       setError("Senha é obrigatória para novos usuários.");
       return;
     }
-    // --- FIM CORREÇÃO ---
-    // TODO: Adicionar validação de complexidade de senha se desejado
+    if (!isEditing && editingUser.password.length < 6) {
+      setError("A senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
 
     const dataToSend = { ...editingUser };
     // Remove a senha se estiver editando e o campo senha estiver vazio
@@ -145,14 +143,15 @@ function UserManagement() {
     }
 
     const apiCall = isEditing ? window.api.updateUser : window.api.addUser;
-    // Passamos o ID do admin logado para verificação futura no backend (opcional)
-    const result = await apiCall(dataToSend /*, currentUser.id */);
+    setIsSaving(true);
+    const result = await apiCall(dataToSend);
+    setIsSaving(false);
 
     if (result.success) {
       handleCloseModal();
       fetchUsers();
     } else {
-      setError(result.error || "Erro desconhecido ao salvar."); // Mostra erro no modal
+      setError(result.error || "Erro desconhecido ao salvar.");
     }
   };
 
@@ -178,7 +177,7 @@ function UserManagement() {
             <EditIcon />
           </IconButton>
           <IconButton
-            onClick={() => handleDelete(params.row.id, params.row.nome)}
+            onClick={() => handleDeleteRequest(params.row.id, params.row.nome)}
             title="Excluir Usuário"
           >
             <DeleteIcon />
@@ -300,16 +299,26 @@ function UserManagement() {
             </FormControl>
 
             <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
-              <Button onClick={handleCloseModal} sx={{ mr: 1 }}>
+              <Button onClick={handleCloseModal} sx={{ mr: 1 }} disabled={isSaving}>
                 Cancelar
               </Button>
-              <Button variant="contained" onClick={handleSave}>
-                Salvar
+              <Button variant="contained" onClick={handleSave} disabled={isSaving}
+                startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : null}>
+                {isSaving ? "Salvando..." : "Salvar"}
               </Button>
             </Box>
           </Box>
         </Modal>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title="Confirmar Exclusão"
+        message={`Tem certeza que deseja excluir o usuário "${confirmDialog.name}"? Esta ação não pode ser desfeita.`}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setConfirmDialog({ open: false, id: null, name: "", isDeleting: false })}
+        isLoading={confirmDialog.isDeleting}
+      />
     </>
   );
 }

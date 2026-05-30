@@ -9,11 +9,15 @@ import {
   MenuItem,
   InputLabel,
   FormControl,
-  IconButton, // <-- Importe o IconButton
+  IconButton,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import EditIcon from "@mui/icons-material/Edit"; // <-- Importe o ícone de Edição
-import DeleteIcon from "@mui/icons-material/Delete"; // <-- Importe o ícone de Deleção
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
+import ConfirmDialog from "./ConfirmDialog";
 
 const modalStyle = {
   position: "absolute",
@@ -32,12 +36,20 @@ const BLANK_PRODUCT = { descricao: "", valor: "", tipo: "Serviço" };
 function ProductServiceGrid() {
   const [products, setProducts] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // Renomeado para refletir que pode ser um produto novo ou existente
   const [editingProduct, setEditingProduct] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, id: null, isDeleting: false });
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "error" });
+
+  const showSnackbar = (message, severity = "error") =>
+    setSnackbar({ open: true, message, severity });
 
   const fetchProducts = async () => {
+    setIsLoading(true);
     const productsData = await window.api.getProducts();
     setProducts(productsData);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -50,58 +62,55 @@ function ProductServiceGrid() {
   };
 
   const handleOpenEditModal = (product) => {
-    // Garante que o valor seja uma string para o campo de texto
     setEditingProduct({ ...product, valor: String(product.valor) });
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setEditingProduct(null); // Limpa o estado ao fechar
+    setEditingProduct(null);
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setEditingProduct((prevState) => ({ ...prevState, [name]: value }));
   };
-  
-  const handleDelete = async (productId) => {
-    if (window.confirm("Tem certeza que deseja excluir este item?")) {
-      const result = await window.api.deleteProduct(productId);
-      if (result.success) {
-        fetchProducts(); // Atualiza a lista após a exclusão
-      } else {
-        alert(`Erro ao excluir: ${result.error}`);
-      }
+
+  const handleDeleteRequest = (productId) => {
+    setConfirmDialog({ open: true, id: productId, isDeleting: false });
+  };
+
+  const handleDeleteConfirm = async () => {
+    setConfirmDialog((d) => ({ ...d, isDeleting: true }));
+    const result = await window.api.deleteProduct(confirmDialog.id);
+    setConfirmDialog({ open: false, id: null, isDeleting: false });
+    if (result.success) {
+      fetchProducts();
+    } else {
+      showSnackbar(`Erro ao excluir: ${result.error}`);
     }
   };
 
   const handleSave = async () => {
     if (!editingProduct.descricao || !editingProduct.valor) {
-      alert("Descrição e Valor são obrigatórios.");
+      showSnackbar("Descrição e Valor são obrigatórios.");
       return;
     }
 
     const valorString = String(editingProduct.valor).replace(",", ".");
     const valorNumerico = parseFloat(valorString) || 0;
+    const dataToSend = { ...editingProduct, valor: valorNumerico };
 
-    const dataToSend = {
-      ...editingProduct,
-      valor: valorNumerico,
-    };
-
-    // Decide se deve chamar a API de 'update' ou 'add'
-    const apiCall = dataToSend.id
-      ? window.api.updateProduct
-      : window.api.addProduct;
-      
+    setIsSaving(true);
+    const apiCall = dataToSend.id ? window.api.updateProduct : window.api.addProduct;
     const result = await apiCall(dataToSend);
+    setIsSaving(false);
 
     if (result.success) {
       handleCloseModal();
       fetchProducts();
     } else {
-      alert(`Erro ao salvar: ${result.error}`);
+      showSnackbar(`Erro ao salvar: ${result.error}`);
     }
   };
 
@@ -116,13 +125,9 @@ function ProductServiceGrid() {
       renderCell: (params) => {
         const value = Number(params.row.valor);
         if (isNaN(value)) return "R$ 0,00";
-        return new Intl.NumberFormat("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        }).format(value);
+        return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
       },
     },
-    // --- NOVA COLUNA DE AÇÕES ---
     {
       field: "actions",
       headerName: "Ações",
@@ -133,7 +138,7 @@ function ProductServiceGrid() {
           <IconButton onClick={() => handleOpenEditModal(params.row)}>
             <EditIcon />
           </IconButton>
-          <IconButton onClick={() => handleDelete(params.row.id)}>
+          <IconButton onClick={() => handleDeleteRequest(params.row.id)} color="error">
             <DeleteIcon />
           </IconButton>
         </>
@@ -156,10 +161,12 @@ function ProductServiceGrid() {
           rows={products}
           columns={columns}
           getRowId={(row) => row.id}
+          loading={isLoading}
+          initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+          pageSizeOptions={[10, 25, 50]}
         />
       </Box>
 
-      {/* O Modal agora só renderiza se houver um 'editingProduct' */}
       {editingProduct && (
         <Modal open={isModalOpen} onClose={handleCloseModal}>
           <Box sx={modalStyle}>
@@ -199,16 +206,37 @@ function ProductServiceGrid() {
               </Select>
             </FormControl>
             <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
-              <Button onClick={handleCloseModal} sx={{ mr: 1 }}>
+              <Button onClick={handleCloseModal} sx={{ mr: 1 }} disabled={isSaving}>
                 Cancelar
               </Button>
-              <Button variant="contained" onClick={handleSave}>
-                Salvar
+              <Button variant="contained" onClick={handleSave} disabled={isSaving}
+                startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : null}>
+                {isSaving ? "Salvando..." : "Salvar"}
               </Button>
             </Box>
           </Box>
         </Modal>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title="Confirmar Exclusão"
+        message="Tem certeza que deseja excluir este item?"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setConfirmDialog({ open: false, id: null, isDeleting: false })}
+        isLoading={confirmDialog.isDeleting}
+      />
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 }

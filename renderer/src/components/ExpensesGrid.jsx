@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import ConfirmDialog from "./ConfirmDialog";
 import {
   Box,
   Button,
@@ -11,6 +12,9 @@ import {
   FormControl,
   IconButton,
   InputAdornment,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import EditIcon from "@mui/icons-material/Edit";
@@ -68,11 +72,20 @@ function ExpensesGrid() {
   const [expenses, setExpenses] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
-  const [modalKey, setModalKey] = useState(0); // Para resetar o formulário
+  const [modalKey, setModalKey] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, id: null, isDeleting: false });
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "error" });
+
+  const showSnackbar = (message, severity = "error") =>
+    setSnackbar({ open: true, message, severity });
 
   const fetchExpenses = async () => {
+    setIsLoading(true);
     const data = await window.api.getExpenses();
     setExpenses(data);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -108,15 +121,15 @@ function ExpensesGrid() {
     setEditingExpense(null);
   };
 
-  const handleDelete = async (expenseId) => {
-    if (window.confirm("Tem certeza que deseja excluir esta despesa?")) {
-      const result = await window.api.deleteExpense(expenseId);
-      if (result.success) {
-        fetchExpenses();
-      } else {
-        alert(`Erro ao excluir despesa: ${result.error}`);
-      }
-    }
+  const handleDeleteRequest = (id) =>
+    setConfirmDialog({ open: true, id, isDeleting: false });
+
+  const handleDeleteConfirm = async () => {
+    setConfirmDialog((d) => ({ ...d, isDeleting: true }));
+    const result = await window.api.deleteExpense(confirmDialog.id);
+    setConfirmDialog({ open: false, id: null, isDeleting: false });
+    if (result.success) fetchExpenses();
+    else showSnackbar(`Erro ao excluir despesa: ${result.error}`);
   };
 
   const handleInputChange = (e) => {
@@ -130,14 +143,12 @@ function ExpensesGrid() {
       !editingExpense.data ||
       !editingExpense.tipo_despesa
     ) {
-      // Adicionado tipo_despesa à validação
-      alert("Descrição, Data e Tipo (Fixa/Variável) são obrigatórios.");
+      showSnackbar("Descrição, Data e Tipo (Fixa/Variável) são obrigatórios.");
       return;
     }
 
-    // Se não for combustível, valor é obrigatório
     if (editingExpense.categoria !== "Combustível" && !editingExpense.valor) {
-      alert("O campo Valor é obrigatório para esta categoria.");
+      showSnackbar("O campo Valor é obrigatório para esta categoria.");
       return;
     }
     // Se for combustível, os campos específicos são obrigatórios
@@ -151,16 +162,16 @@ function ExpensesGrid() {
     }
 
     const dataToSend = { ...editingExpense };
-    const apiCall = dataToSend.id
-      ? window.api.updateExpense
-      : window.api.addExpense;
+    const apiCall = dataToSend.id ? window.api.updateExpense : window.api.addExpense;
+    setIsSaving(true);
     const result = await apiCall(dataToSend);
+    setIsSaving(false);
 
     if (result.success) {
       handleCloseModal();
       fetchExpenses();
     } else {
-      alert(`Erro ao salvar despesa: ${result.error}`);
+      showSnackbar(`Erro ao salvar despesa: ${result.error}`);
     }
   };
 
@@ -212,8 +223,9 @@ function ExpensesGrid() {
             <EditIcon />
           </IconButton>
           <IconButton
-            onClick={() => handleDelete(params.row.id)}
+            onClick={() => handleDeleteRequest(params.row.id)}
             title="Excluir Despesa"
+            color="error"
           >
             <DeleteIcon />
           </IconButton>
@@ -244,7 +256,10 @@ function ExpensesGrid() {
           rows={expenses}
           columns={columns}
           getRowId={(row) => row.id}
+          loading={isLoading}
           localeText={{ noRowsLabel: "Nenhuma despesa encontrada." }}
+          initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+          pageSizeOptions={[10, 25, 50]}
         />
       </Box>
 
@@ -387,16 +402,34 @@ function ExpensesGrid() {
             />
 
             <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
-              <Button onClick={handleCloseModal} sx={{ mr: 1 }}>
+              <Button onClick={handleCloseModal} sx={{ mr: 1 }} disabled={isSaving}>
                 Cancelar
               </Button>
-              <Button variant="contained" onClick={handleSave}>
-                Salvar
+              <Button variant="contained" onClick={handleSave} disabled={isSaving}
+                startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : null}>
+                {isSaving ? "Salvando..." : "Salvar"}
               </Button>
             </Box>
           </Box>
         </Modal>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title="Confirmar Exclusão"
+        message="Tem certeza que deseja excluir esta despesa?"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setConfirmDialog({ open: false, id: null, isDeleting: false })}
+        isLoading={confirmDialog.isDeleting}
+      />
+
+      <Snackbar open={snackbar.open} autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 }

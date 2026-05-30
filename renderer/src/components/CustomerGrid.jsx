@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Box, Button, Modal, IconButton } from "@mui/material";
+import { Box, Button, Modal, IconButton, Snackbar, Alert } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import CustomerForm from "./CustomerForm";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ConfirmDialog from "./ConfirmDialog";
 
 // --- FUNÇÕES DE FORMATAÇÃO (Seu código, já estão ótimas) ---
 const formatPhone = (phone) => {
@@ -55,11 +56,19 @@ function CustomerGrid() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [formKey, setFormKey] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, id: null, isDeleting: false });
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "error" });
+
+  const showSnackbar = (message, severity = "error") =>
+    setSnackbar({ open: true, message, severity });
 
   // --- LÓGICA DE BUSCA DE DADOS OTIMIZADA ---
   const fetchCustomers = async () => {
+    setIsLoading(true);
     const data = await window.api.getCustomers();
     setCustomers(data);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -89,24 +98,25 @@ function CustomerGrid() {
     setEditingCustomer(null);
   };
 
-  const handleDelete = async (customerId) => {
-    if (window.confirm("Tem certeza que deseja excluir este cliente?")) {
-      const result = await window.api.deleteCustomer(customerId);
-      if (result.success) fetchCustomers();
-      else alert(`Erro ao excluir cliente: ${result.error}`);
-    }
+  const handleDeleteRequest = (customerId) =>
+    setConfirmDialog({ open: true, id: customerId, isDeleting: false });
+
+  const handleDeleteConfirm = async () => {
+    setConfirmDialog((d) => ({ ...d, isDeleting: true }));
+    const result = await window.api.deleteCustomer(confirmDialog.id);
+    setConfirmDialog({ open: false, id: null, isDeleting: false });
+    if (result.success) fetchCustomers();
+    else showSnackbar(`Erro ao excluir cliente: ${result.error}`);
   };
 
   const handleSave = async (customerData) => {
-    const apiCall = customerData.id
-      ? window.api.updateCustomer
-      : window.api.addCustomer;
+    const apiCall = customerData.id ? window.api.updateCustomer : window.api.addCustomer;
     const result = await apiCall(customerData);
     if (result.success) {
       handleCloseModal();
       fetchCustomers();
     } else {
-      alert(`Erro ao salvar cliente: ${result.error}`);
+      showSnackbar(`Erro ao salvar cliente: ${result.error}`);
     }
   };
 
@@ -143,7 +153,7 @@ function CustomerGrid() {
           <IconButton onClick={() => handleOpenEditModal(params.row)}>
             <EditIcon />
           </IconButton>
-          <IconButton onClick={() => handleDelete(params.row.id)}>
+          <IconButton onClick={() => handleDeleteRequest(params.row.id)} color="error">
             <DeleteIcon />
           </IconButton>
         </>
@@ -163,6 +173,9 @@ function CustomerGrid() {
           rows={customers}
           columns={columns}
           getRowId={(row) => row.id}
+          loading={isLoading}
+          initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+          pageSizeOptions={[10, 25, 50]}
         />
       </Box>
       <Modal open={isModalOpen} onClose={handleCloseModal}>
@@ -178,6 +191,23 @@ function CustomerGrid() {
           )}
         </Box>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title="Confirmar Exclusão"
+        message="Tem certeza que deseja excluir este cliente?"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setConfirmDialog({ open: false, id: null, isDeleting: false })}
+        isLoading={confirmDialog.isDeleting}
+      />
+
+      <Snackbar open={snackbar.open} autoHideDuration={4000}
+        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 }
