@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
-const mysql = require("mysql2");
+const { Pool } = require("pg");
 const axios = require("axios");
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
@@ -11,6 +11,12 @@ const crypto = require("crypto"); // <-- Módulo Node.js para gerar tokens
 
 const isDev = process.env.NODE_ENV !== "production";
 const saltRounds = 10;
+
+// Converte placeholders ? para $1, $2, ... compatíveis com pg
+function pgQuery(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
 
 // --- GERENCIAMENTO DE CONFIGURAÇÃO ---
 const userDataPath = app.getPath("userData"); // Pasta de dados do usuário
@@ -24,7 +30,7 @@ let mailTransporter = null; // Transporter do email será inicializado depois
 const defaultConfig = {
   database: {
     host: "localhost",
-    port: 3306,
+    port: 5432,
     database: "gsti_db",
     user: "",
     password: "",
@@ -77,18 +83,16 @@ function initializeDbPool() {
     // Só inicializa se setup completo e user definido
     console.log("[DB] Inicializando pool de conexão...");
     try {
-      dbPool = mysql
-        .createPool({
-          host: appConfig.database.host,
-          port: appConfig.database.port,
-          user: appConfig.database.user,
-          password: appConfig.database.password,
-          database: appConfig.database.database,
-          waitForConnections: true,
-          connectionLimit: 10,
-          queueLimit: 0,
-        })
-        .promise();
+      dbPool = new Pool({
+        host: appConfig.database.host,
+        port: appConfig.database.port,
+        user: appConfig.database.user,
+        password: appConfig.database.password,
+        database: appConfig.database.database,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+      });
       console.log("[DB] Pool de conexão inicializado com sucesso.");
       // Teste de conexão opcional aqui
     } catch (error) {
@@ -184,34 +188,28 @@ ipcMain.handle("test-db-connection", async (event, dbConfig) => {
   console.log("[Setup] Testando conexão com o BD:", dbConfig);
   let tempPool = null;
   try {
-    // Cria um pool temporário APENAS para teste
-    tempPool = mysql
-      .createPool({
-        host: dbConfig.host,
-        port: dbConfig.port,
-        user: dbConfig.user,
-        password: dbConfig.password,
-        database: dbConfig.database,
-        connectionLimit: 1, // Só precisa de uma conexão para teste
-      })
-      .promise();
-
-    // Tenta pegar uma conexão
-    const connection = await tempPool.getConnection();
+    tempPool = new Pool({
+      host: dbConfig.host,
+      port: dbConfig.port,
+      user: dbConfig.user,
+      password: dbConfig.password,
+      database: dbConfig.database,
+      max: 1,
+      connectionTimeoutMillis: 10000,
+    });
+    await tempPool.query("SELECT 1");
     console.log("[Setup] Conexão com BD testada com sucesso.");
-    connection.release(); // Libera a conexão
-    await tempPool.end(); // Fecha o pool temporário
+    await tempPool.end();
     return { success: true };
   } catch (error) {
     console.error("[Setup] Erro ao testar conexão com BD:", error);
-    if (tempPool) await tempPool.end(); // Garante fechar o pool se ele foi criado
-    // Retorna uma mensagem de erro mais amigável
+    if (tempPool) { try { await tempPool.end(); } catch (_) {} }
     let errorMessage = "Erro desconhecido.";
     if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED")
       errorMessage = "Não foi possível conectar ao Host/Porta especificados.";
-    else if (error.code === "ER_ACCESS_DENIED_ERROR")
+    else if (error.code === "28P01")
       errorMessage = "Usuário ou Senha do banco inválidos.";
-    else if (error.code === "ER_BAD_DB_ERROR")
+    else if (error.code === "3D000")
       errorMessage = "Banco de dados não encontrado.";
     else errorMessage = error.message;
     return { success: false, error: errorMessage };
@@ -263,7 +261,7 @@ ipcMain.handle(
       appConfig.database = {
         // Atualiza SÓ a seção database
         host: dbConfig.host,
-        port: parseInt(dbConfig.port, 10) || 3306,
+        port: parseInt(dbConfig.port, 10) || 5432,
         database: dbConfig.database,
         user: dbConfig.user,
         password: dbConfig.password, // Salva a senha aqui
@@ -275,19 +273,18 @@ ipcMain.handle(
 
       // 2. Tenta conectar ao banco recém-configurado para criar o admin
       console.log("[Setup] Criando pool temporário para inserir admin...");
-      tempPool = mysql
-        .createPool({ ...appConfig.database, connectionLimit: 1 })
-        .promise();
-      const connection = await tempPool.getConnection(); // Testa conexão ao mesmo tempo
+      tempPool = new Pool({ ...appConfig.database, max: 1, connectionTimeoutMillis: 10000 });
+      await tempPool.query("SELECT 1"); // Testa conexão
       console.log("[Setup] Conectado ao banco para criar admin.");
 
       // 3. Hashea a senha do admin
       const hashedPassword = await bcrypt.hash(adminUser.password, saltRounds);
 
       // 4. Insere o admin na tabela usuarios
-      const sql =
-        "INSERT INTO usuarios (nome, email, login, senha, role) VALUES (?, ?, ?, ?, 'Admin')";
-      await connection.query(sql, [
+      const sql = pgQuery(
+        "INSERT INTO usuarios (nome, email, login, senha, role) VALUES (?, ?, ?, ?, 'Admin')"
+      );
+      await tempPool.query(sql, [
         adminUser.nome,
         adminUser.email,
         adminUser.login,
@@ -295,7 +292,6 @@ ipcMain.handle(
       ]);
       console.log("[Setup] Usuário admin criado com sucesso.");
 
-      connection.release();
       await tempPool.end();
 
       // 5. Re-inicializa o dbPool global principal agora que a config está salva
@@ -331,14 +327,14 @@ ipcMain.handle(
       let errorMessage = "Erro desconhecido.";
       if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED")
         errorMessage = "Não foi possível conectar ao Host/Porta do banco.";
-      else if (error.code === "ER_ACCESS_DENIED_ERROR")
+      else if (error.code === "28P01")
         errorMessage = "Usuário ou Senha do banco inválidos.";
-      else if (error.code === "ER_BAD_DB_ERROR")
+      else if (error.code === "3D000")
         errorMessage = "Banco de dados não encontrado.";
-      else if (error.code === "ER_DUP_ENTRY") {
-        if (error.message.includes("login"))
+      else if (error.code === "23505") {
+        if (error.constraint && error.constraint.includes("login"))
           errorMessage = "O Login do admin já existe no banco.";
-        else if (error.message.includes("email"))
+        else if (error.constraint && error.constraint.includes("email"))
           errorMessage = "O Email do admin já existe no banco.";
         else errorMessage = "Erro de duplicidade ao criar admin.";
       } else errorMessage = error.message;
@@ -412,8 +408,8 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
     return { success: false, error: "Login e senha são obrigatórios." };
   }
   try {
-    const sql = "SELECT id, nome, senha, role FROM usuarios WHERE login = ?";
-    const [rows] = await dbPool.query(sql, [login]);
+    const sql = pgQuery("SELECT id, nome, senha, role FROM usuarios WHERE login = ?");
+    const { rows } = await dbPool.query(sql, [login]);
 
     if (rows.length === 0) {
       return { success: false, error: "Usuário não encontrado." };
@@ -456,7 +452,7 @@ ipcMain.handle("get-users", async (event /*, adminUserId */) => {
     "SELECT id, nome, email, login, role FROM usuarios ORDER BY nome ASC";
   // --- FIM CORREÇÃO ---
   try {
-    const [rows] = await dbPool.query(sql);
+    const { rows } = await dbPool.query(sql);
     // Filtra o próprio admin logado para segurança (se currentUser for passado no futuro)
     // const filteredRows = adminUserId ? rows.filter(user => user.id !== adminUserId) : rows;
     return { success: true, data: rows };
@@ -484,21 +480,22 @@ ipcMain.handle("add-user", async (event, userData /*, adminUserId */) => {
   try {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     // Adicionado email ao SQL
-    const sql =
-      "INSERT INTO usuarios (nome, email, login, senha, role) VALUES (?, ?, ?, ?, ?)";
-    const [result] = await dbPool.query(sql, [
+    const sql = pgQuery(
+      "INSERT INTO usuarios (nome, email, login, senha, role) VALUES (?, ?, ?, ?, ?) RETURNING id"
+    );
+    const { rows } = await dbPool.query(sql, [
       nome,
       email,
       login,
       hashedPassword,
       role,
     ]);
-    return { success: true, id: result.insertId };
+    return { success: true, id: rows[0].id };
   } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") {
-      if (error.message.includes("login"))
+    if (error.code === "23505") {
+      if (error.constraint && error.constraint.includes("login"))
         return { success: false, error: "Este login já está em uso." };
-      if (error.message.includes("email"))
+      if (error.constraint && error.constraint.includes("email"))
         return { success: false, error: "Este email já está em uso." };
     }
     console.error("Erro ao adicionar usuário:", error);
@@ -528,18 +525,19 @@ ipcMain.handle("update-user", async (event, userData /*, adminUserId */) => {
 
   try {
     // Adicionado email ao SQL
-    const sql =
-      "UPDATE usuarios SET nome = ?, email = ?, login = ?, role = ? WHERE id = ?";
+    const sql = pgQuery(
+      "UPDATE usuarios SET nome = ?, email = ?, login = ?, role = ? WHERE id = ?"
+    );
     await dbPool.query(sql, [nome, email, login, role, id]);
     return { success: true };
   } catch (error) {
-    if (error.code === "ER_DUP_ENTRY") {
-      if (error.message.includes("login"))
+    if (error.code === "23505") {
+      if (error.constraint && error.constraint.includes("login"))
         return {
           success: false,
           error: "Este login já está em uso por outro usuário.",
         };
-      if (error.message.includes("email"))
+      if (error.constraint && error.constraint.includes("email"))
         return {
           success: false,
           error: "Este email já está em uso por outro usuário.",
@@ -565,7 +563,7 @@ ipcMain.handle("delete-user", async (event, userId /*, adminUserId */) => {
   }
 
   try {
-    const sql = "DELETE FROM usuarios WHERE id = ?";
+    const sql = pgQuery("DELETE FROM usuarios WHERE id = ?");
     await dbPool.query(sql, [id]);
     return { success: true };
   } catch (error) {
@@ -585,8 +583,8 @@ ipcMain.handle("handle-forgot-password", async (event, { email }) => {
 
   try {
     // 1. Encontra usuário pelo email
-    const [rows] = await dbPool.query(
-      "SELECT id, nome, email FROM usuarios WHERE email = ?",
+    const { rows } = await dbPool.query(
+      pgQuery("SELECT id, nome, email FROM usuarios WHERE email = ?"),
       [email]
     );
     if (rows.length === 0) {
@@ -609,7 +607,7 @@ ipcMain.handle("handle-forgot-password", async (event, { email }) => {
 
     // 4. Salva o token HASHED e a expiração no banco
     await dbPool.query(
-      "UPDATE usuarios SET reset_token = ?, reset_token_expiry = ? WHERE id = ?",
+      pgQuery("UPDATE usuarios SET reset_token = ?, reset_token_expiry = ? WHERE id = ?"),
       [hashedToken, expiry, user.id]
     );
 
@@ -657,8 +655,8 @@ ipcMain.handle(
       // Ou usar um link único com o token. Para simplificar, faremos a comparação aqui.
 
       const now = new Date();
-      const [usersWithToken] = await dbPool.query(
-        "SELECT id, reset_token, reset_token_expiry FROM usuarios WHERE reset_token IS NOT NULL AND reset_token_expiry > ?",
+      const { rows: usersWithToken } = await dbPool.query(
+        pgQuery("SELECT id, reset_token, reset_token_expiry FROM usuarios WHERE reset_token IS NOT NULL AND reset_token_expiry > ?"),
         [now]
       );
 
@@ -680,7 +678,7 @@ ipcMain.handle(
 
       // 3. Atualiza a senha e invalida o token
       await dbPool.query(
-        "UPDATE usuarios SET senha = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?",
+        pgQuery("UPDATE usuarios SET senha = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?"),
         [hashedPassword, foundUser.id]
       );
 
@@ -700,7 +698,7 @@ ipcMain.handle("get-customers", async () => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
-    const [rows] = await dbPool.query("SELECT * FROM clientes");
+    const { rows } = await dbPool.query("SELECT * FROM clientes");
     return rows;
   } catch (error) {
     console.error(error);
@@ -715,12 +713,13 @@ ipcMain.handle("add-customer", async (event, customerData) => {
   // Agora pegamos os novos campos do objeto recebido
   const { nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } =
     customerData;
-  const sql =
-    "INSERT INTO clientes (nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco) VALUES (?, ?, ?, ?, ?, ?)";
+  const sql = pgQuery(
+    "INSERT INTO clientes (nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco) VALUES (?, ?, ?, ?, ?, ?) RETURNING id"
+  );
 
   try {
     // Passamos os novos campos como parâmetros na ordem correta
-    const [result] = await dbPool.query(sql, [
+    const { rows } = await dbPool.query(sql, [
       nome,
       tipo_pessoa,
       cpf_cnpj,
@@ -728,7 +727,7 @@ ipcMain.handle("add-customer", async (event, customerData) => {
       email,
       endereco,
     ]);
-    return { success: true, id: result.insertId };
+    return { success: true, id: rows[0].id };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -757,8 +756,9 @@ ipcMain.handle("update-customer", async (event, customerData) => {
     return { success: false, error: "Banco de dados não configurado." };
   const { id, nome, tipo_pessoa, cpf_cnpj, telefone, email, endereco } =
     customerData;
-  const sql =
-    "UPDATE clientes SET nome = ?, tipo_pessoa = ?, cpf_cnpj = ?, telefone = ?, email = ?, endereco = ? WHERE id = ?";
+  const sql = pgQuery(
+    "UPDATE clientes SET nome = ?, tipo_pessoa = ?, cpf_cnpj = ?, telefone = ?, email = ?, endereco = ? WHERE id = ?"
+  );
 
   try {
     await dbPool.query(sql, [
@@ -781,7 +781,7 @@ ipcMain.handle("update-customer", async (event, customerData) => {
 ipcMain.handle("delete-customer", async (event, customerId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  const sql = "DELETE FROM clientes WHERE id = ?";
+  const sql = pgQuery("DELETE FROM clientes WHERE id = ?");
 
   try {
     await dbPool.query(sql, [customerId]);
@@ -797,7 +797,7 @@ ipcMain.handle("get-products", async () => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
-    const [rows] = await dbPool.query("SELECT * FROM produtos_servicos");
+    const { rows } = await dbPool.query("SELECT * FROM produtos_servicos");
     return rows;
   } catch (error) {
     console.error("Erro ao buscar produtos/serviços:", error);
@@ -810,11 +810,12 @@ ipcMain.handle("add-product", async (event, productData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const { descricao, valor, tipo } = productData;
-  const sql =
-    "INSERT INTO produtos_servicos (descricao, valor, tipo) VALUES (?, ?, ?)";
+  const sql = pgQuery(
+    "INSERT INTO produtos_servicos (descricao, valor, tipo) VALUES (?, ?, ?) RETURNING id"
+  );
   try {
-    const [result] = await dbPool.query(sql, [descricao, valor, tipo]);
-    return { success: true, id: result.insertId };
+    const { rows } = await dbPool.query(sql, [descricao, valor, tipo]);
+    return { success: true, id: rows[0].id };
   } catch (error) {
     console.error("Erro ao adicionar produto/serviço:", error);
     return { success: false, error: error.message };
@@ -826,8 +827,9 @@ ipcMain.handle("update-product", async (event, productData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const { id, descricao, valor, tipo } = productData;
-  const sql =
-    "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ? WHERE id = ?";
+  const sql = pgQuery(
+    "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ? WHERE id = ?"
+  );
 
   try {
     await dbPool.query(sql, [descricao, valor, tipo, id]);
@@ -842,7 +844,7 @@ ipcMain.handle("update-product", async (event, productData) => {
 ipcMain.handle("delete-product", async (event, productId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  const sql = "DELETE FROM produtos_servicos WHERE id = ?";
+  const sql = pgQuery("DELETE FROM produtos_servicos WHERE id = ?");
 
   try {
     await dbPool.query(sql, [productId]);
@@ -867,7 +869,7 @@ ipcMain.handle("get-os-list", async () => {
     JOIN clientes AS c ON os.id_cliente = c.id
     ORDER BY os.id DESC`;
   try {
-    const [rows] = await dbPool.query(sql);
+    const { rows } = await dbPool.query(sql);
     return rows;
   } catch (error) {
     return [];
@@ -878,10 +880,10 @@ ipcMain.handle("get-active-data", async () => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
-    const [customers] = await dbPool.query(
+    const { rows: customers } = await dbPool.query(
       "SELECT id, nome FROM clientes ORDER BY nome ASC"
     );
-    const [products] = await dbPool.query(
+    const { rows: products } = await dbPool.query(
       "SELECT id, descricao, valor, tipo FROM produtos_servicos ORDER BY descricao ASC"
     );
     return { success: true, customers, products };
@@ -895,19 +897,19 @@ ipcMain.handle("get-os-details", async (event, osId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
-    const [osRows] = await dbPool.query(
-      "SELECT * FROM ordens_servico WHERE id = ?",
+    const { rows: osRows } = await dbPool.query(
+      pgQuery("SELECT * FROM ordens_servico WHERE id = ?"),
       [osId]
     );
     if (osRows.length === 0)
       return { success: false, error: "OS não encontrada." };
 
     // CORREÇÃO: Alterado de 'produtos_serviços' para 'produtos_servicos'
-    const [itemRows] = await dbPool.query(
-      `SELECT ps.id, ps.descricao, ps.valor, ps.tipo, oi.quantidade 
-       FROM os_itens oi 
-       JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id 
-       WHERE oi.id_os = ?`,
+    const { rows: itemRows } = await dbPool.query(
+      pgQuery(`SELECT ps.id, ps.descricao, ps.valor, ps.tipo, oi.quantidade
+       FROM os_itens oi
+       JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id
+       WHERE oi.id_os = ?`),
       [osId]
     );
 
@@ -933,11 +935,11 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
     data_entrada,
     garantia_dias,
   } = osData;
-  const sql = `INSERT INTO ordens_servico 
-    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const sql = pgQuery(`INSERT INTO ordens_servico
+    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
   try {
-    const [result] = await dbPool.query(sql, [
+    const { rows } = await dbPool.query(sql, [
       id_cliente,
       tipo_equipamento,
       marca,
@@ -950,7 +952,7 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
       total,
       garantia_dias,
     ]);
-    return { success: true, osId: result.insertId };
+    return { success: true, osId: rows[0].id };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -974,21 +976,19 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
     data_entrada,
     garantia_dias,
   } = osData;
-  const connection = await dbPool.getConnection();
   try {
-    const [rows] = await connection.query(
-      "SELECT status, data_saida, garantia_dias FROM ordens_servico WHERE id = ?",
+    const { rows } = await dbPool.query(
+      pgQuery("SELECT status, data_saida, garantia_dias FROM ordens_servico WHERE id = ?"),
       [id]
     );
     const osAtual = rows[0];
 
     // --- VERIFICAÇÃO GARANTIA (sem alterações) ---
     if (osAtual.status === "Entregue" && osAtual.data_saida) {
-      // ... (código de verificação da garantia) ...
       const dataSaida = new Date(osAtual.data_saida);
       const dataExpiracaoGarantia = new Date(
         dataSaida.setDate(dataSaida.getDate() + (osAtual.garantia_dias || 0))
-      ); // Usa 0 se garantia for null
+      );
       const hoje = new Date();
       if (hoje > dataExpiracaoGarantia) {
         throw new Error(
@@ -997,22 +997,22 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       }
     }
 
-    // --- CORREÇÃO: Define data_saida se status for Finalizado/Entregue e data_saida for NULL ---
+    // Define data_saida se status for Finalizado/Entregue e data_saida for NULL
     let setDataSaidaSql = "";
     if (["Finalizado", "Entregue"].includes(status) && !osAtual.data_saida) {
-      setDataSaidaSql = ", data_saida = NOW()"; // Define data_saida AGORA
+      setDataSaidaSql = ", data_saida = NOW()";
     }
 
-    const sql = `
-      UPDATE ordens_servico SET 
-      id_cliente = ?, tipo_equipamento = ?, marca = ?, modelo = ?, 
-      numero_serie = ?, defeito_relatado = ?, observacoes_entrada = ?, 
-      laudo_tecnico = ?, solucao_aplicada = ?, status = ?, 
+    const sql = pgQuery(`
+      UPDATE ordens_servico SET
+      id_cliente = ?, tipo_equipamento = ?, marca = ?, modelo = ?,
+      numero_serie = ?, defeito_relatado = ?, observacoes_entrada = ?,
+      laudo_tecnico = ?, solucao_aplicada = ?, status = ?,
       data_entrada = ?, valor_total = ?, garantia_dias = ?
       ${setDataSaidaSql}
-      WHERE id = ?`;
+      WHERE id = ?`);
 
-    await connection.query(sql, [
+    await dbPool.query(sql, [
       id_cliente,
       tipo_equipamento,
       marca,
@@ -1029,11 +1029,9 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       id,
     ]);
 
-    connection.release();
     return { success: true };
   } catch (error) {
-    connection.release();
-    console.error("Erro ao atualizar OS:", error); // Log do erro
+    console.error("Erro ao atualizar OS:", error);
     return { success: false, error: error.message };
   }
 });
@@ -1042,16 +1040,15 @@ ipcMain.handle("add-os-items", async (event, { osId, items }) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   if (items.length === 0) return { success: true };
-  const sql =
-    "INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario) VALUES ?";
-  const values = items.map((item) => [
-    osId,
-    item.id,
-    item.quantidade,
-    item.valor,
-  ]);
   try {
-    await dbPool.query(sql, [values]);
+    const productIds = items.map((i) => i.id);
+    const quantities = items.map((i) => i.quantidade);
+    const prices = items.map((i) => i.valor);
+    await dbPool.query(
+      `INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario)
+       SELECT $1, unnest($2::int[]), unnest($3::int[]), unnest($4::numeric[])`,
+      [osId, productIds, quantities, prices]
+    );
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -1061,28 +1058,27 @@ ipcMain.handle("add-os-items", async (event, { osId, items }) => {
 ipcMain.handle("update-os-items", async (event, { osId, items }) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  const connection = await dbPool.getConnection();
+  const client = await dbPool.connect();
   try {
-    await connection.beginTransaction();
-    await connection.query("DELETE FROM os_itens WHERE id_os = ?", [osId]);
+    await client.query("BEGIN");
+    await client.query(pgQuery("DELETE FROM os_itens WHERE id_os = ?"), [osId]);
     if (items.length > 0) {
-      const sql =
-        "INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario) VALUES ?";
-      const values = items.map((item) => [
-        osId,
-        item.id,
-        item.quantidade,
-        item.valor,
-      ]);
-      await connection.query(sql, [values]);
+      const productIds = items.map((i) => i.id);
+      const quantities = items.map((i) => i.quantidade);
+      const prices = items.map((i) => i.valor);
+      await client.query(
+        `INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario)
+         SELECT $1, unnest($2::int[]), unnest($3::int[]), unnest($4::numeric[])`,
+        [osId, productIds, quantities, prices]
+      );
     }
-    await connection.commit();
+    await client.query("COMMIT");
     return { success: true };
   } catch (error) {
-    await connection.rollback();
+    await client.query("ROLLBACK");
     return { success: false, error: error.message };
   } finally {
-    connection.release();
+    client.release();
   }
 });
 
@@ -1090,7 +1086,7 @@ ipcMain.handle("delete-os", async (event, osId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
-    await dbPool.query("DELETE FROM ordens_servico WHERE id = ?", [osId]);
+    await dbPool.query(pgQuery("DELETE FROM ordens_servico WHERE id = ?"), [osId]);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -1102,10 +1098,10 @@ ipcMain.handle("generate-entry-receipt", async (event, osId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   // 1. Buscar todos os dados necessários (SQL ATUALIZADO)
-  const sql = `SELECT os.*, c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj, c.email AS email_cliente, c.endereco AS endereco_cliente FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id WHERE os.id = ?`;
+  const sql = pgQuery(`SELECT os.*, c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj, c.email AS email_cliente, c.endereco AS endereco_cliente FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id WHERE os.id = ?`);
   let osData;
   try {
-    const [rows] = await dbPool.query(sql, [osId]);
+    const { rows } = await dbPool.query(sql, [osId]);
     if (rows.length === 0) throw new Error("OS não encontrada.");
     osData = rows[0];
   } catch (error) {
@@ -1238,32 +1234,30 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
   // 1. Buscar dados da OS, Cliente e Itens
   let osData, itemsData;
   try {
-    const osSql = `
+    const osSql = pgQuery(`
       SELECT os.*, c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj,
              c.email AS email_cliente, c.endereco AS endereco_cliente
       FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id
-      WHERE os.id = ?`;
-    const [osRows] = await dbPool.query(osSql, [osId]);
+      WHERE os.id = ?`);
+    const { rows: osRows } = await dbPool.query(osSql, [osId]);
     if (osRows.length === 0) throw new Error("OS não encontrada.");
     osData = osRows[0];
 
     // Verifica se a OS tem data de saída (necessária para garantia)
     if (!osData.data_saida) {
-      // Define a data de saída como AGORA se ainda não tiver sido definida
       await dbPool.query(
-        "UPDATE ordens_servico SET data_saida = NOW() WHERE id = ?",
+        pgQuery("UPDATE ordens_servico SET data_saida = NOW() WHERE id = ?"),
         [osId]
       );
-      // Busca novamente os dados para pegar a data_saida atualizada
-      const [updatedOsRows] = await dbPool.query(osSql, [osId]);
+      const { rows: updatedOsRows } = await dbPool.query(osSql, [osId]);
       osData = updatedOsRows[0];
     }
 
-    const itemsSql = `
+    const itemsSql = pgQuery(`
       SELECT ps.descricao, oi.quantidade, oi.valor_unitario
       FROM os_itens oi JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id
-      WHERE oi.id_os = ?`;
-    const [itemRows] = await dbPool.query(itemsSql, [osId]);
+      WHERE oi.id_os = ?`);
+    const { rows: itemRows } = await dbPool.query(itemsSql, [osId]);
     itemsData = itemRows;
   } catch (error) {
     return { success: false, error: `Erro ao buscar dados: ${error.message}` };
@@ -1562,7 +1556,7 @@ ipcMain.handle("get-expenses", async () => {
   // Busca também o novo campo tipo_despesa
   const sql = "SELECT * FROM despesas ORDER BY data DESC, id DESC";
   try {
-    const [rows] = await dbPool.query(sql);
+    const { rows } = await dbPool.query(sql);
     return rows;
   } catch (error) {
     console.error("Erro ao buscar despesas:", error);
@@ -1602,15 +1596,13 @@ ipcMain.handle("add-expense", async (event, expenseData) => {
     valor = (km_rodados / consumo_medio) * preco_litro;
   }
 
-  // --- ALTERAÇÃO: Adiciona tipo_despesa ao SQL ---
-  const sql = `
-    INSERT INTO despesas 
-    (descricao, data, categoria, tipo_despesa, km_rodados, preco_litro, consumo_medio, valor) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
-  `;
+  const sql = pgQuery(`
+    INSERT INTO despesas
+    (descricao, data, categoria, tipo_despesa, km_rodados, preco_litro, consumo_medio, valor)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
+  `);
   try {
-    // --- ALTERAÇÃO: Passa tipo_despesa ---
-    const [result] = await dbPool.query(sql, [
+    const { rows } = await dbPool.query(sql, [
       descricao,
       data,
       categoria,
@@ -1620,7 +1612,7 @@ ipcMain.handle("add-expense", async (event, expenseData) => {
       consumo_medio,
       valor,
     ]);
-    return { success: true, id: result.insertId };
+    return { success: true, id: rows[0].id };
   } catch (error) {
     console.error("Erro ao adicionar despesa:", error);
     return { success: false, error: error.message };
@@ -1660,15 +1652,13 @@ ipcMain.handle("update-expense", async (event, expenseData) => {
     valor = (km_rodados / consumo_medio) * preco_litro;
   }
 
-  // --- ALTERAÇÃO: Adiciona tipo_despesa ao SQL ---
-  const sql = `
-    UPDATE despesas SET 
+  const sql = pgQuery(`
+    UPDATE despesas SET
     descricao = ?, data = ?, categoria = ?, tipo_despesa = ?,
-    km_rodados = ?, preco_litro = ?, consumo_medio = ?, valor = ? 
+    km_rodados = ?, preco_litro = ?, consumo_medio = ?, valor = ?
     WHERE id = ?
-  `;
+  `);
   try {
-    // --- ALTERAÇÃO: Passa tipo_despesa ---
     await dbPool.query(sql, [
       descricao,
       data,
@@ -1691,7 +1681,7 @@ ipcMain.handle("update-expense", async (event, expenseData) => {
 ipcMain.handle("delete-expense", async (event, expenseId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  const sql = "DELETE FROM despesas WHERE id = ?";
+  const sql = pgQuery("DELETE FROM despesas WHERE id = ?");
   try {
     await dbPool.query(sql, [expenseId]);
     return { success: true };
@@ -1715,27 +1705,25 @@ ipcMain.handle(
 
     try {
       // 1. Receita das OS
-      const osRevenueSql = `SELECT SUM(valor_total) AS totalOSRevenue FROM ordens_servico WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL AND data_saida >= ? AND data_saida <= ?`;
-      const [osRevenueResult] = await dbPool.query(osRevenueSql, [
+      const osRevenueSql = pgQuery(`SELECT SUM(valor_total) AS totalOSRevenue FROM ordens_servico WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL AND data_saida >= ? AND data_saida <= ?`);
+      const { rows: osRevenueResult } = await dbPool.query(osRevenueSql, [
         formattedStartDate,
         formattedEndDate,
       ]);
-      // --- CORREÇÃO: Garante que é número ---
-      const totalOSRevenue = Number(osRevenueResult[0].totalOSRevenue) || 0;
+      const totalOSRevenue = Number(osRevenueResult[0].totalosrevenue) || 0;
       console.log(
         `[get-financial-summary] Resultado Receita OS (Numérico):`,
         totalOSRevenue
       );
 
       // 2. Receita Avulsa
-      const miscRevenueSql = `SELECT SUM(valor) AS totalMiscRevenue FROM receitas_avulsas WHERE data BETWEEN ? AND ?`;
-      const [miscRevenueResult] = await dbPool.query(miscRevenueSql, [
+      const miscRevenueSql = pgQuery(`SELECT SUM(valor) AS totalMiscRevenue FROM receitas_avulsas WHERE data BETWEEN ? AND ?`);
+      const { rows: miscRevenueResult } = await dbPool.query(miscRevenueSql, [
         startDate,
         endDate,
       ]);
-      // --- CORREÇÃO: Garante que é número ---
       const totalMiscRevenue =
-        Number(miscRevenueResult[0].totalMiscRevenue) || 0;
+        Number(miscRevenueResult[0].totalmiscrevenue) || 0;
       console.log(
         `[get-financial-summary] Resultado Receita Avulsa (Numérico):`,
         totalMiscRevenue
@@ -1749,21 +1737,21 @@ ipcMain.handle(
       );
 
       // 4. Despesas Fixas e Variáveis
-      const fixedExpenseSql = `SELECT SUM(valor) AS totalFixedExpenses FROM despesas WHERE tipo_despesa = 'Fixa' AND data BETWEEN ? AND ?`;
-      const [fixedExpenseResult] = await dbPool.query(fixedExpenseSql, [
+      const fixedExpenseSql = pgQuery(`SELECT SUM(valor) AS totalFixedExpenses FROM despesas WHERE tipo_despesa = 'Fixa' AND data BETWEEN ? AND ?`);
+      const { rows: fixedExpenseResult } = await dbPool.query(fixedExpenseSql, [
         startDate,
         endDate,
       ]);
       const totalFixedExpenses =
-        Number(fixedExpenseResult[0].totalFixedExpenses) || 0; // Garante número
+        Number(fixedExpenseResult[0].totalfixedexpenses) || 0;
 
-      const variableExpenseSql = `SELECT SUM(valor) AS totalVariableExpenses FROM despesas WHERE tipo_despesa = 'Variável' AND data BETWEEN ? AND ?`;
-      const [variableExpenseResult] = await dbPool.query(variableExpenseSql, [
+      const variableExpenseSql = pgQuery(`SELECT SUM(valor) AS totalVariableExpenses FROM despesas WHERE tipo_despesa = 'Variável' AND data BETWEEN ? AND ?`);
+      const { rows: variableExpenseResult } = await dbPool.query(variableExpenseSql, [
         startDate,
         endDate,
       ]);
       const totalVariableExpenses =
-        Number(variableExpenseResult[0].totalVariableExpenses) || 0; // Garante número
+        Number(variableExpenseResult[0].totalvariableexpenses) || 0;
 
       const totalExpenses = totalFixedExpenses + totalVariableExpenses;
       console.log(
@@ -1817,50 +1805,49 @@ ipcMain.handle("get-monthly-summary", async (event, { year }) => {
     }));
 
     // 1. Busca Receitas de OS agregadas por mês
-    const osRevenueSql = `
-      SELECT MONTH(data_saida) AS month, SUM(valor_total) AS monthlyRevenue 
-      FROM ordens_servico 
-      WHERE status IN ('Finalizado', 'Entregue') 
-        AND data_saida IS NOT NULL 
-        AND YEAR(data_saida) = ? 
-      GROUP BY MONTH(data_saida)
-    `;
-    const [osRevenues] = await dbPool.query(osRevenueSql, [numericYear]);
+    const osRevenueSql = pgQuery(`
+      SELECT EXTRACT(MONTH FROM data_saida)::int AS month, SUM(valor_total) AS monthlyRevenue
+      FROM ordens_servico
+      WHERE status IN ('Finalizado', 'Entregue')
+        AND data_saida IS NOT NULL
+        AND EXTRACT(YEAR FROM data_saida)::int = ?
+      GROUP BY EXTRACT(MONTH FROM data_saida)
+    `);
+    const { rows: osRevenues } = await dbPool.query(osRevenueSql, [numericYear]);
     osRevenues.forEach((row) => {
-      // Ajusta o índice (month - 1) pois o array é 0-indexado
       if (row.month >= 1 && row.month <= 12) {
         monthlyData[row.month - 1].totalRevenue +=
-          Number(row.monthlyRevenue) || 0;
+          Number(row.monthlyrevenue) || 0;
       }
     });
 
     // 2. Busca Receitas Avulsas agregadas por mês
-    const miscRevenueSql = `
-      SELECT MONTH(data) AS month, SUM(valor) AS monthlyRevenue 
-      FROM receitas_avulsas 
-      WHERE YEAR(data) = ? 
-      GROUP BY MONTH(data)
-    `;
-    const [miscRevenues] = await dbPool.query(miscRevenueSql, [numericYear]);
+    const miscRevenueSql = pgQuery(`
+      SELECT EXTRACT(MONTH FROM data)::int AS month, SUM(valor) AS monthlyRevenue
+      FROM receitas_avulsas
+      WHERE EXTRACT(YEAR FROM data)::int = ?
+      GROUP BY EXTRACT(MONTH FROM data)
+    `);
+    const { rows: miscRevenues } = await dbPool.query(miscRevenueSql, [numericYear]);
     miscRevenues.forEach((row) => {
       if (row.month >= 1 && row.month <= 12) {
         monthlyData[row.month - 1].totalRevenue +=
-          Number(row.monthlyRevenue) || 0;
+          Number(row.monthlyrevenue) || 0;
       }
     });
 
     // 3. Busca Despesas agregadas por mês e tipo
-    const expensesSql = `
-      SELECT MONTH(data) AS month, tipo_despesa, SUM(valor) AS monthlyExpense 
-      FROM despesas 
-      WHERE YEAR(data) = ? 
-      GROUP BY MONTH(data), tipo_despesa
-    `;
-    const [expenses] = await dbPool.query(expensesSql, [numericYear]);
+    const expensesSql = pgQuery(`
+      SELECT EXTRACT(MONTH FROM data)::int AS month, tipo_despesa, SUM(valor) AS monthlyExpense
+      FROM despesas
+      WHERE EXTRACT(YEAR FROM data)::int = ?
+      GROUP BY EXTRACT(MONTH FROM data), tipo_despesa
+    `);
+    const { rows: expenses } = await dbPool.query(expensesSql, [numericYear]);
     expenses.forEach((row) => {
       if (row.month >= 1 && row.month <= 12) {
         const monthIndex = row.month - 1;
-        const value = Number(row.monthlyExpense) || 0;
+        const value = Number(row.monthlyexpense) || 0;
         monthlyData[monthIndex].totalExpenses += value; // Adiciona ao total geral de despesas
         if (row.tipo_despesa === "Fixa") {
           monthlyData[monthIndex].totalFixedExpenses += value;
@@ -1893,24 +1880,24 @@ ipcMain.handle(
 
     try {
       // 1. Buscar Dados Detalhados
-      const osRevenueSql = `
+      const osRevenueSql = pgQuery(`
         SELECT os.id, os.data_saida AS data, c.nome AS nome_cliente, os.valor_total AS valor
         FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id
         WHERE os.status IN ('Finalizado', 'Entregue') AND os.data_saida IS NOT NULL
-        AND os.data_saida >= ? AND os.data_saida <= ?`;
-      const [osRevenues] = await dbPool.query(osRevenueSql, [
+        AND os.data_saida >= ? AND os.data_saida <= ?`);
+      const { rows: osRevenues } = await dbPool.query(osRevenueSql, [
         formattedStartDate,
         formattedEndDate,
       ]);
 
-      const miscRevenueSql = `SELECT id, data, descricao, valor FROM receitas_avulsas WHERE data BETWEEN ? AND ?`;
-      const [miscRevenues] = await dbPool.query(miscRevenueSql, [
+      const miscRevenueSql = pgQuery(`SELECT id, data, descricao, valor FROM receitas_avulsas WHERE data BETWEEN ? AND ?`);
+      const { rows: miscRevenues } = await dbPool.query(miscRevenueSql, [
         dateOnlyStart,
         dateOnlyEnd,
       ]);
 
-      const expensesSql = `SELECT id, data, descricao, categoria, tipo_despesa, valor FROM despesas WHERE data BETWEEN ? AND ?`;
-      const [expenses] = await dbPool.query(expensesSql, [
+      const expensesSql = pgQuery(`SELECT id, data, descricao, categoria, tipo_despesa, valor FROM despesas WHERE data BETWEEN ? AND ?`);
+      const { rows: expenses } = await dbPool.query(expensesSql, [
         dateOnlyStart,
         dateOnlyEnd,
       ]);
@@ -2146,7 +2133,7 @@ ipcMain.handle("get-misc-revenues", async () => {
     return { success: false, error: "Banco de dados não configurado." };
   const sql = "SELECT * FROM receitas_avulsas ORDER BY data DESC, id DESC";
   try {
-    const [rows] = await dbPool.query(sql);
+    const { rows } = await dbPool.query(sql);
     return rows;
   } catch (error) {
     console.error("Erro ao buscar receitas avulsas:", error);
@@ -2159,15 +2146,16 @@ ipcMain.handle("add-misc-revenue", async (event, revenueData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const { descricao, valor, data } = revenueData;
-  const sql =
-    "INSERT INTO receitas_avulsas (descricao, valor, data) VALUES (?, ?, ?)";
+  const sql = pgQuery(
+    "INSERT INTO receitas_avulsas (descricao, valor, data) VALUES (?, ?, ?) RETURNING id"
+  );
   try {
-    const [result] = await dbPool.query(sql, [
+    const { rows } = await dbPool.query(sql, [
       descricao,
       parseFloat(valor) || 0,
       data,
     ]);
-    return { success: true, id: result.insertId };
+    return { success: true, id: rows[0].id };
   } catch (error) {
     console.error("Erro ao adicionar receita avulsa:", error);
     return { success: false, error: error.message };
@@ -2179,8 +2167,9 @@ ipcMain.handle("update-misc-revenue", async (event, revenueData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const { id, descricao, valor, data } = revenueData;
-  const sql =
-    "UPDATE receitas_avulsas SET descricao = ?, valor = ?, data = ? WHERE id = ?";
+  const sql = pgQuery(
+    "UPDATE receitas_avulsas SET descricao = ?, valor = ?, data = ? WHERE id = ?"
+  );
   try {
     await dbPool.query(sql, [descricao, parseFloat(valor) || 0, data, id]);
     return { success: true };
@@ -2194,7 +2183,7 @@ ipcMain.handle("update-misc-revenue", async (event, revenueData) => {
 ipcMain.handle("delete-misc-revenue", async (event, revenueId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  const sql = "DELETE FROM receitas_avulsas WHERE id = ?";
+  const sql = pgQuery("DELETE FROM receitas_avulsas WHERE id = ?");
   try {
     await dbPool.query(sql, [revenueId]);
     return { success: true };
@@ -2220,46 +2209,46 @@ ipcMain.handle("get-annual-summary", async () => {
     }
 
     // 1. Busca Receitas de OS agregadas por ANO
-    const osRevenueSql = `
-      SELECT YEAR(data_saida) AS year, SUM(valor_total) AS annualRevenue 
-      FROM ordens_servico 
-      WHERE status IN ('Finalizado', 'Entregue') 
-        AND data_saida IS NOT NULL 
-        AND YEAR(data_saida) >= ? 
-      GROUP BY YEAR(data_saida)
-    `;
-    const [osRevenues] = await dbPool.query(osRevenueSql, [startYear]);
+    const osRevenueSql = pgQuery(`
+      SELECT EXTRACT(YEAR FROM data_saida)::int AS year, SUM(valor_total) AS annualRevenue
+      FROM ordens_servico
+      WHERE status IN ('Finalizado', 'Entregue')
+        AND data_saida IS NOT NULL
+        AND EXTRACT(YEAR FROM data_saida)::int >= ?
+      GROUP BY EXTRACT(YEAR FROM data_saida)
+    `);
+    const { rows: osRevenues } = await dbPool.query(osRevenueSql, [startYear]);
     osRevenues.forEach((row) => {
       if (annualData[row.year]) {
-        annualData[row.year].totalRevenue += Number(row.annualRevenue) || 0;
+        annualData[row.year].totalRevenue += Number(row.annualrevenue) || 0;
       }
     });
 
     // 2. Busca Receitas Avulsas agregadas por ANO
-    const miscRevenueSql = `
-      SELECT YEAR(data) AS year, SUM(valor) AS annualRevenue 
-      FROM receitas_avulsas 
-      WHERE YEAR(data) >= ? 
-      GROUP BY YEAR(data)
-    `;
-    const [miscRevenues] = await dbPool.query(miscRevenueSql, [startYear]);
+    const miscRevenueSql = pgQuery(`
+      SELECT EXTRACT(YEAR FROM data)::int AS year, SUM(valor) AS annualRevenue
+      FROM receitas_avulsas
+      WHERE EXTRACT(YEAR FROM data)::int >= ?
+      GROUP BY EXTRACT(YEAR FROM data)
+    `);
+    const { rows: miscRevenues } = await dbPool.query(miscRevenueSql, [startYear]);
     miscRevenues.forEach((row) => {
       if (annualData[row.year]) {
-        annualData[row.year].totalRevenue += Number(row.annualRevenue) || 0;
+        annualData[row.year].totalRevenue += Number(row.annualrevenue) || 0;
       }
     });
 
     // 3. Busca Despesas agregadas por ANO
-    const expensesSql = `
-      SELECT YEAR(data) AS year, SUM(valor) AS annualExpense 
-      FROM despesas 
-      WHERE YEAR(data) >= ? 
-      GROUP BY YEAR(data)
-    `;
-    const [expenses] = await dbPool.query(expensesSql, [startYear]);
+    const expensesSql = pgQuery(`
+      SELECT EXTRACT(YEAR FROM data)::int AS year, SUM(valor) AS annualExpense
+      FROM despesas
+      WHERE EXTRACT(YEAR FROM data)::int >= ?
+      GROUP BY EXTRACT(YEAR FROM data)
+    `);
+    const { rows: expenses } = await dbPool.query(expensesSql, [startYear]);
     expenses.forEach((row) => {
       if (annualData[row.year]) {
-        annualData[row.year].totalExpenses += Number(row.annualExpense) || 0;
+        annualData[row.year].totalExpenses += Number(row.annualexpense) || 0;
       }
     });
 
@@ -2298,44 +2287,47 @@ ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
 
   try {
     // 1. Busca Receitas de OS agrupadas por ANO e MÊS
-    const osRevenueSql = `
-      SELECT 
-        YEAR(data_saida) AS year, MONTH(data_saida) AS month, 
-        SUM(valor_total) AS monthlyOsRevenue 
-      FROM ordens_servico 
-      WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL 
-        AND data_saida >= ? AND data_saida <= ? 
-      GROUP BY YEAR(data_saida), MONTH(data_saida)
-    `;
-    const [osRevenues] = await dbPool.query(osRevenueSql, [
+    const osRevenueSql = pgQuery(`
+      SELECT
+        EXTRACT(YEAR FROM data_saida)::int AS year,
+        EXTRACT(MONTH FROM data_saida)::int AS month,
+        SUM(valor_total) AS monthlyOsRevenue
+      FROM ordens_servico
+      WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL
+        AND data_saida >= ? AND data_saida <= ?
+      GROUP BY EXTRACT(YEAR FROM data_saida), EXTRACT(MONTH FROM data_saida)
+    `);
+    const { rows: osRevenues } = await dbPool.query(osRevenueSql, [
       `${formattedStartDate} 00:00:00`,
       `${formattedEndDate} 23:59:59`,
     ]);
 
     // 2. Busca Receitas Avulsas agrupadas por ANO e MÊS
-    const miscRevenueSql = `
-      SELECT 
-        YEAR(data) AS year, MONTH(data) AS month, 
-        SUM(valor) AS monthlyMiscRevenue 
-      FROM receitas_avulsas 
-      WHERE data >= ? AND data <= ? 
-      GROUP BY YEAR(data), MONTH(data)
-    `;
-    const [miscRevenues] = await dbPool.query(miscRevenueSql, [
+    const miscRevenueSql = pgQuery(`
+      SELECT
+        EXTRACT(YEAR FROM data)::int AS year,
+        EXTRACT(MONTH FROM data)::int AS month,
+        SUM(valor) AS monthlyMiscRevenue
+      FROM receitas_avulsas
+      WHERE data >= ? AND data <= ?
+      GROUP BY EXTRACT(YEAR FROM data), EXTRACT(MONTH FROM data)
+    `);
+    const { rows: miscRevenues } = await dbPool.query(miscRevenueSql, [
       formattedStartDate,
       formattedEndDate,
     ]);
 
     // 3. Busca Despesas agrupadas por ANO e MÊS
-    const expensesSql = `
-      SELECT 
-        YEAR(data) AS year, MONTH(data) AS month, 
-        SUM(valor) AS monthlyExpense 
-      FROM despesas 
-      WHERE data >= ? AND data <= ? 
-      GROUP BY YEAR(data), MONTH(data)
-    `;
-    const [expenses] = await dbPool.query(expensesSql, [
+    const expensesSql = pgQuery(`
+      SELECT
+        EXTRACT(YEAR FROM data)::int AS year,
+        EXTRACT(MONTH FROM data)::int AS month,
+        SUM(valor) AS monthlyExpense
+      FROM despesas
+      WHERE data >= ? AND data <= ?
+      GROUP BY EXTRACT(YEAR FROM data), EXTRACT(MONTH FROM data)
+    `);
+    const { rows: expenses } = await dbPool.query(expensesSql, [
       formattedStartDate,
       formattedEndDate,
     ]);
@@ -2353,7 +2345,7 @@ ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
         revenue: 0,
         expense: 0,
       };
-      monthlyProfitsMap[key].revenue += Number(row.monthlyOsRevenue) || 0;
+      monthlyProfitsMap[key].revenue += Number(row.monthlyosrevenue) || 0;
     });
 
     miscRevenues.forEach((row) => {
@@ -2362,7 +2354,7 @@ ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
         revenue: 0,
         expense: 0,
       };
-      monthlyProfitsMap[key].revenue += Number(row.monthlyMiscRevenue) || 0;
+      monthlyProfitsMap[key].revenue += Number(row.monthlymiscrevenue) || 0;
     });
 
     expenses.forEach((row) => {
@@ -2371,7 +2363,7 @@ ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
         revenue: 0,
         expense: 0,
       };
-      monthlyProfitsMap[key].expense += Number(row.monthlyExpense) || 0;
+      monthlyProfitsMap[key].expense += Number(row.monthlyexpense) || 0;
     });
 
     // 5. Calcula o lucro de cada mês e a média
@@ -2433,7 +2425,7 @@ ipcMain.handle("get-os-by-client", async (event, clientId) => {
   `;
 
   try {
-    const [rows] = await dbPool.query(sql, [id]);
+    const { rows } = await dbPool.query(pgQuery(sql), [id]);
     return { success: true, data: rows };
   } catch (error) {
     console.error(`Erro ao buscar OS para cliente ${id}:`, error);
@@ -2467,7 +2459,7 @@ ipcMain.handle("get-os-by-status", async (event, status) => {
   `;
 
   try {
-    const [rows] = await dbPool.query(sql, [status]);
+    const { rows } = await dbPool.query(pgQuery(sql), [status]);
     return { success: true, data: rows };
   } catch (error) {
     console.error(`Erro ao buscar OS com status ${status}:`, error);
@@ -2508,7 +2500,7 @@ ipcMain.handle(
   `;
 
     try {
-      const [rows] = await dbPool.query(sql, [
+      const { rows } = await dbPool.query(pgQuery(sql), [
         formattedStartDate,
         formattedEndDate,
       ]);
@@ -2550,7 +2542,7 @@ ipcMain.handle("search-os-by-serial", async (event, serialNumber) => {
   `;
 
   try {
-    const [rows] = await dbPool.query(sql, [searchTerm]);
+    const { rows } = await dbPool.query(pgQuery(sql), [searchTerm]);
     return { success: true, data: rows };
   } catch (error) {
     console.error(`Erro ao buscar OS pelo serial ${serialNumber}:`, error);
@@ -2575,34 +2567,34 @@ ipcMain.handle(
 
     try {
       // 1. Busca detalhes das Receitas de OS no período
-      const osRevenueSql = `
-      SELECT 
-        os.id, 
-        os.data_saida AS data, 
-        CONCAT('OS #', os.id, ' - ', c.nome) AS descricao, 
+      const osRevenueSql = pgQuery(`
+      SELECT
+        os.id,
+        os.data_saida AS data,
+        CONCAT('OS #', os.id, ' - ', c.nome) AS descricao,
         os.valor_total AS valor,
-        'OS Finalizada' AS tipo 
-      FROM ordens_servico os 
+        'OS Finalizada' AS tipo
+      FROM ordens_servico os
       JOIN clientes c ON os.id_cliente = c.id
-      WHERE os.status IN ('Finalizado', 'Entregue') 
-        AND os.data_saida IS NOT NULL 
-        AND os.data_saida >= ? AND os.data_saida <= ?`;
-      const [osRevenues] = await dbPool.query(osRevenueSql, [
+      WHERE os.status IN ('Finalizado', 'Entregue')
+        AND os.data_saida IS NOT NULL
+        AND os.data_saida >= ? AND os.data_saida <= ?`);
+      const { rows: osRevenues } = await dbPool.query(osRevenueSql, [
         formattedStartDate,
         formattedEndDate,
       ]);
 
       // 2. Busca detalhes das Receitas Avulsas no período
-      const miscRevenueSql = `
-      SELECT 
-        id, 
-        data, 
-        descricao, 
+      const miscRevenueSql = pgQuery(`
+      SELECT
+        id,
+        data,
+        descricao,
         valor,
         'Receita Avulsa' AS tipo
-      FROM receitas_avulsas 
-      WHERE data BETWEEN ? AND ?`;
-      const [miscRevenues] = await dbPool.query(miscRevenueSql, [
+      FROM receitas_avulsas
+      WHERE data BETWEEN ? AND ?`);
+      const { rows: miscRevenues } = await dbPool.query(miscRevenueSql, [
         dateOnlyStart,
         dateOnlyEnd,
       ]);
