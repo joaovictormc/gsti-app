@@ -156,7 +156,7 @@ function ProductServiceGrid() {
           Adicionar Novo
         </Button>
       </Box>
-      <Box sx={{ height: 500, width: "100%", backgroundColor: "white" }}>
+      <Box sx={{ height: 500, width: "100%" }}>
         <DataGrid
           rows={products}
           columns={columns}

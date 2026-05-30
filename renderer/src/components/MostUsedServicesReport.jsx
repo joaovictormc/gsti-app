@@ -164,7 +164,7 @@ function MostUsedServicesReport() {
       </Paper>
 
       {/* Tabela de Resultados */}
-      <Box sx={{ height: 500, width: "100%", backgroundColor: "white" }}>
+      <Box sx={{ height: 500, width: "100%" }}>
         <DataGrid
           rows={reportData}
           columns={columns}

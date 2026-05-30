@@ -1,15 +1,17 @@
-import React from "react"; // Import React if not already implicitly available
+import React from "react";
 import {
   Paper,
   Typography,
   Stack,
   TextField,
   Button,
+  Box,
   CircularProgress,
   Alert,
 } from "@mui/material";
+import DateRangeIcon from "@mui/icons-material/DateRange";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
-// Define as props que o componente receberá
 function PeriodSelector({
   startDate,
   endDate,
@@ -19,97 +21,79 @@ function PeriodSelector({
   onSetPeriodLastMonth,
   onSetPeriodThisYear,
   onExportExcel,
-  isExporting, // Renomeado de 'exporting' para evitar conflito
+  isExporting,
   exportMessage,
-  onClearExportMessage, // Função para limpar a mensagem
+  onClearExportMessage,
 }) {
   return (
-    <Paper sx={{ p: 2, mb: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Selecionar Período e Exportar
-      </Typography>
-      {/* Seletores de Data */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        alignItems="center"
-        mb={2}
-      >
+    <Paper sx={{ p: 3, mb: 3 }}>
+      <Stack direction="row" alignItems="center" spacing={1} mb={2.5}>
+        <DateRangeIcon color="primary" />
+        <Typography variant="h6" fontWeight={600}>
+          Período de Análise
+        </Typography>
+      </Stack>
+
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" mb={2}>
         <TextField
           label="Data Início"
           type="date"
           value={startDate}
-          onChange={(e) => onStartDateChange(e.target.value)} // Chama a função passada via prop
+          onChange={(e) => onStartDateChange(e.target.value)}
           InputLabelProps={{ shrink: true }}
           sx={{ minWidth: 180 }}
-          disabled={isExporting} // Desabilita durante exportação
+          disabled={isExporting}
         />
+        <Typography color="text.secondary" sx={{ display: { xs: "none", sm: "block" } }}>
+          até
+        </Typography>
         <TextField
           label="Data Fim"
           type="date"
           value={endDate}
-          onChange={(e) => onEndDateChange(e.target.value)} // Chama a função passada via prop
+          onChange={(e) => onEndDateChange(e.target.value)}
           InputLabelProps={{ shrink: true }}
           sx={{ minWidth: 180 }}
-          disabled={isExporting} // Desabilita durante exportação
+          disabled={isExporting}
         />
       </Stack>
-      {/* Botões de Período Rápido e Exportação */}
-      <Stack
-        direction="row"
-        spacing={1}
-        justifyContent="flex-start"
-        flexWrap="wrap"
-        alignItems="center"
-      >
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onSetPeriodThisMonth}
-          disabled={isExporting}
-        >
+
+      <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+        <Button size="small" variant="outlined" onClick={onSetPeriodThisMonth} disabled={isExporting}>
           Este Mês
         </Button>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onSetPeriodLastMonth}
-          disabled={isExporting}
-        >
+        <Button size="small" variant="outlined" onClick={onSetPeriodLastMonth} disabled={isExporting}>
           Mês Passado
         </Button>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onSetPeriodThisYear}
-          disabled={isExporting}
-        >
+        <Button size="small" variant="outlined" onClick={onSetPeriodThisYear} disabled={isExporting}>
           Este Ano
         </Button>
-        <Button
-          size="small"
-          variant="contained"
-          color="success"
-          onClick={onExportExcel} // Chama a função passada via prop
-          disabled={isExporting || !startDate || !endDate}
-          sx={{ ml: "auto" }} // Joga para a direita
-        >
-          {isExporting ? (
-            <CircularProgress size={18} color="inherit" />
-          ) : (
-            "Exportar Excel"
-          )}
-        </Button>
+
+        <Box sx={{ ml: "auto" }}>
+          <Button
+            size="small"
+            variant="contained"
+            color="success"
+            onClick={onExportExcel}
+            disabled={isExporting || !startDate || !endDate}
+            startIcon={
+              isExporting ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <FileDownloadIcon />
+              )
+            }
+          >
+            {isExporting ? "Exportando..." : "Exportar Excel"}
+          </Button>
+        </Box>
       </Stack>
-      {/* Feedback da Exportação */}
-      {exportMessage && exportMessage.text && (
+
+      {exportMessage?.text && (
         <Alert
           severity={exportMessage.type || "info"}
           sx={{ mt: 2 }}
-          // Chama a função para limpar a mensagem ao fechar (se onClearExportMessage for fornecida)
-          onClose={
-            onClearExportMessage ? () => onClearExportMessage() : undefined
-          }
+          onClose={onClearExportMessage ? () => onClearExportMessage() : undefined}
         >
           {exportMessage.text}
         </Alert>

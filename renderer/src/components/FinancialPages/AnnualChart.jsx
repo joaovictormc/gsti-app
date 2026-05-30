@@ -1,9 +1,7 @@
-// EM: renderer/src/components/AnnualChart.jsx
-
 import React from "react";
 import { Paper, Typography, Box, CircularProgress } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { Line } from "react-chartjs-2";
-// Importa ChartJS e elementos necessários (assumindo registro global)
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,89 +11,112 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
 
-// Função formatCurrency (pode vir de utils)
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value || 0);
-};
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-// Define as props que o componente receberá
-function AnnualChart({
-  annualData, // Array com dados anuais (do backend)
-  loadingAnnualChart, // Boolean indicando se está carregando
-}) {
-  // Configuração do Gráfico (opções e dados dependem das props)
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
+
+function AnnualChart({ annualData, loadingAnnualChart }) {
+  const theme = useTheme();
+  const textColor = theme.palette.text.primary;
+  const subTextColor = theme.palette.text.secondary;
+  const gridColor = theme.palette.divider;
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: "top" },
-      title: {
-        display: true,
-        text: `Resumo Anual (Últimos ${annualData.length} Anos)`,
+      legend: {
+        position: "top",
+        labels: { color: textColor, padding: 16, usePointStyle: true, pointStyleWidth: 10 },
       },
+      title: { display: false },
       tooltip: {
         callbacks: {
-          label: (context) =>
-            `${context.dataset.label || ""}: ${formatCurrency(
-              context.parsed.y
-            )}`,
+          label: (context) => `${context.dataset.label || ""}: ${formatCurrency(context.parsed.y)}`,
         },
       },
     },
-    scales: { y: { ticks: { callback: (value) => formatCurrency(value) } } },
+    scales: {
+      x: {
+        ticks: { color: subTextColor },
+        grid: { color: gridColor },
+        border: { color: gridColor },
+      },
+      y: {
+        ticks: { callback: (value) => formatCurrency(value), color: subTextColor },
+        grid: { color: gridColor },
+        border: { color: gridColor },
+      },
+    },
   };
 
   const chartData = {
-    labels: annualData.map((d) => d?.year || ""), // Labels são os anos
+    labels: annualData.map((d) => d?.year || ""),
     datasets: [
       {
         label: "Receita Total Anual",
         data: annualData.map((d) => d?.totalRevenue || 0),
-        borderColor: "rgb(75, 192, 192)",
-        backgroundColor: "rgba(75, 192, 192, 0.5)",
-        tension: 0.1,
+        borderColor: "#6366f1",
+        backgroundColor: "rgba(99,102,241,0.12)",
+        tension: 0.3,
+        fill: true,
+        pointBackgroundColor: "#6366f1",
+        pointRadius: 5,
+        pointHoverRadius: 7,
       },
       {
         label: "Despesa Total Anual",
         data: annualData.map((d) => d?.totalExpenses || 0),
-        borderColor: "rgb(255, 99, 132)",
-        backgroundColor: "rgba(255, 99, 132, 0.5)",
-        tension: 0.1,
+        borderColor: "#ef4444",
+        backgroundColor: "rgba(239,68,68,0.08)",
+        tension: 0.3,
+        fill: true,
+        pointBackgroundColor: "#ef4444",
+        pointRadius: 5,
+        pointHoverRadius: 7,
       },
     ],
   };
 
   return (
-    <Paper sx={{ p: 2, mb: 3 }}>
-      <Typography variant="h6" gutterBottom>
+    <Paper sx={{ p: 3, mb: 3 }}>
+      <Typography variant="h6" fontWeight={600} mb={2.5}>
         Comparativo Anual
       </Typography>
-      <Box sx={{ height: 350, position: "relative" }}>
+      <Box sx={{ height: 340, position: "relative" }}>
         {loadingAnnualChart && (
           <Box
             sx={{
               position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <CircularProgress />
           </Box>
         )}
-        {/* Renderiza condicionalmente baseado em loading e dados */}
         {!loadingAnnualChart && annualData.length > 0 && (
-          <Line options={chartOptions} data={chartData} /> // Usa o componente Line
+          <Line options={chartOptions} data={chartData} />
         )}
         {!loadingAnnualChart && annualData.length === 0 && (
-          <Typography sx={{ textAlign: "center", mt: 4 }}>
-            Nenhum dado anual encontrado.
-          </Typography>
+          <Box
+            sx={{
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Typography color="text.secondary">
+              Nenhum dado anual encontrado.
+            </Typography>
+          </Box>
         )}
       </Box>
     </Paper>

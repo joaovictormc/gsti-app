@@ -168,7 +168,7 @@ function CustomerGrid() {
           Adicionar Novo Cliente
         </Button>
       </Box>
-      <Box sx={{ height: 500, width: "100%", backgroundColor: "white" }}>
+      <Box sx={{ height: 500, width: "100%" }}>
         <DataGrid
           rows={customers}
           columns={columns}

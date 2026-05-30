@@ -134,7 +134,7 @@ function MiscRevenueGrid() {
         </Typography>
         <Button variant="contained" onClick={handleOpenAddModal}>Adicionar Nova Receita</Button>
       </Box>
-      <Box sx={{ height: 500, width: "100%", backgroundColor: "white" }}>
+      <Box sx={{ height: 500, width: "100%" }}>
         <DataGrid
           rows={revenues} columns={columns} getRowId={(row) => row.id}
           loading={isLoading}
