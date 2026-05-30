@@ -6,8 +6,11 @@ const fs = require("fs");
 const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
 const bcrypt = require("bcrypt");
-const nodemailer = require("nodemailer"); // <-- Importa nodemailer
-const crypto = require("crypto"); // <-- Módulo Node.js para gerar tokens
+const nodemailer = require("nodemailer");
+const crypto = require("crypto");
+const { execFile, execSync } = require("child_process");
+const { promisify } = require("util");
+const execFileAsync = promisify(execFile);
 
 const isDev = process.env.NODE_ENV !== "production";
 const saltRounds = 10;
@@ -2534,6 +2537,91 @@ ipcMain.handle('get-warranty-panel', async () => {
   } catch (error) {
     console.error('[get-warranty-panel] Erro:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// --- Utilitário: localiza pg_dump / psql no sistema ---
+function findPgTool(toolName) {
+  try {
+    execSync(
+      process.platform === "win32" ? `where ${toolName}` : `which ${toolName}`,
+      { stdio: "ignore" }
+    );
+    return toolName; // encontrado no PATH
+  } catch {}
+  if (process.platform === "win32") {
+    for (const v of ["17", "16", "15", "14", "13", "12"]) {
+      const p = path.join("C:\\Program Files\\PostgreSQL", v, "bin", `${toolName}.exe`);
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  return null;
+}
+
+// Backup do banco via pg_dump
+ipcMain.handle("backup-database", async () => {
+  const db = appConfig?.database;
+  if (!db) return { success: false, error: "Banco não configurado." };
+
+  const pgDump = findPgTool("pg_dump");
+  if (!pgDump)
+    return {
+      success: false,
+      error: "pg_dump não encontrado. Verifique se o PostgreSQL está instalado e disponível no PATH.",
+    };
+
+  const defaultName = `gsti_backup_${new Date().toISOString().slice(0, 10)}.sql`;
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: "Salvar Backup do Banco",
+    defaultPath: path.join(app.getPath("documents"), defaultName),
+    filters: [{ name: "Arquivos SQL", extensions: ["sql"] }],
+  });
+  if (canceled || !filePath) return { success: false, canceled: true };
+
+  try {
+    await execFileAsync(
+      pgDump,
+      ["-h", db.host, "-p", String(db.port), "-U", db.user, "-d", db.database,
+       "--clean", "--if-exists", "-F", "p", "-f", filePath],
+      { env: { ...process.env, PGPASSWORD: db.password } }
+    );
+    return { success: true, path: filePath };
+  } catch (err) {
+    console.error("[backup-database] Erro:", err);
+    return { success: false, error: err.stderr || err.message };
+  }
+});
+
+// Restauração do banco via psql
+ipcMain.handle("restore-database", async () => {
+  const db = appConfig?.database;
+  if (!db) return { success: false, error: "Banco não configurado." };
+
+  const psql = findPgTool("psql");
+  if (!psql)
+    return {
+      success: false,
+      error: "psql não encontrado. Verifique se o PostgreSQL está instalado e disponível no PATH.",
+    };
+
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: "Selecionar Arquivo de Backup",
+    filters: [{ name: "Arquivos SQL", extensions: ["sql"] }],
+    properties: ["openFile"],
+  });
+  if (canceled || !filePaths?.length) return { success: false, canceled: true };
+
+  try {
+    await execFileAsync(
+      psql,
+      ["-h", db.host, "-p", String(db.port), "-U", db.user, "-d", db.database,
+       "-v", "ON_ERROR_STOP=1", "-f", filePaths[0]],
+      { env: { ...process.env, PGPASSWORD: db.password } }
+    );
+    return { success: true };
+  } catch (err) {
+    console.error("[restore-database] Erro:", err);
+    return { success: false, error: err.stderr || err.message };
   }
 });
 

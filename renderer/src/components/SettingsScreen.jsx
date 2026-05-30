@@ -11,7 +11,11 @@ import {
   FormControlLabel,
   Checkbox,
   Grid,
+  Divider,
 } from "@mui/material";
+import BackupIcon from "@mui/icons-material/Backup";
+import RestoreIcon from "@mui/icons-material/Restore";
+import StorageIcon from "@mui/icons-material/Storage";
 import { useAuth } from "../contexts/AuthContext"; // Para verificar se é admin
 
 function SettingsScreen() {
@@ -29,6 +33,9 @@ function SettingsScreen() {
     text: "",
   });
   const [saveStatus, setSaveStatus] = useState({ type: "", text: "" });
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [backupStatus, setBackupStatus] = useState({ type: "", text: "" });
 
   // Busca as configurações atuais ao carregar
   useEffect(() => {
@@ -153,6 +160,32 @@ function SettingsScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleBackup = async () => {
+    setIsBackingUp(true);
+    setBackupStatus({ type: "", text: "" });
+    const result = await window.api.backupDatabase();
+    setIsBackingUp(false);
+    if (result.canceled) return;
+    setBackupStatus(
+      result.success
+        ? { type: "success", text: `Backup salvo em: ${result.path}` }
+        : { type: "error", text: result.error || "Erro ao gerar backup." }
+    );
+  };
+
+  const handleRestore = async () => {
+    setIsRestoring(true);
+    setBackupStatus({ type: "", text: "" });
+    const result = await window.api.restoreDatabase();
+    setIsRestoring(false);
+    if (result.canceled) return;
+    setBackupStatus(
+      result.success
+        ? { type: "success", text: "Banco restaurado com sucesso! Reinicie o aplicativo para garantir consistência dos dados." }
+        : { type: "error", text: result.error || "Erro ao restaurar backup." }
+    );
   };
 
   // --- NOVA FUNÇÃO: Selecionar Logo ---
@@ -391,6 +424,69 @@ function SettingsScreen() {
         </Typography>
       </Paper>
       {/* --- FIM NOVA SEÇÃO --- */}
+
+      {/* --- Backup e Restauração --- */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          <StorageIcon color="primary" />
+          <Typography variant="h6">Backup e Restauração</Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Exporte o banco de dados para um arquivo <code>.sql</code> ou restaure
+          a partir de um backup anterior. A restauração{" "}
+          <strong>substituirá todos os dados atuais</strong>.
+        </Typography>
+
+        {backupStatus.text && (
+          <Alert
+            severity={backupStatus.type || "info"}
+            sx={{ mb: 2 }}
+            onClose={() => setBackupStatus({ type: "", text: "" })}
+          >
+            {backupStatus.text}
+          </Alert>
+        )}
+
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={
+              isBackingUp ? (
+                <CircularProgress size={18} color="inherit" />
+              ) : (
+                <BackupIcon />
+              )
+            }
+            onClick={handleBackup}
+            disabled={isBackingUp || isRestoring}
+          >
+            {isBackingUp ? "Gerando backup..." : "Fazer Backup"}
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="warning"
+            startIcon={
+              isRestoring ? (
+                <CircularProgress size={18} color="inherit" />
+              ) : (
+                <RestoreIcon />
+              )
+            }
+            onClick={handleRestore}
+            disabled={isBackingUp || isRestoring}
+          >
+            {isRestoring ? "Restaurando..." : "Restaurar Backup"}
+          </Button>
+        </Stack>
+
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+          Requer <code>pg_dump</code> e <code>psql</code> instalados — encontrados
+          automaticamente no PATH ou na instalação padrão do PostgreSQL.
+        </Typography>
+      </Paper>
+      {/* --- Fim Backup e Restauração --- */}
 
       {/* --- Botão Salvar Geral --- */}
       {saveStatus.text && (
