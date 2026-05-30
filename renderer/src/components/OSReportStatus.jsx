@@ -5,7 +5,7 @@ import {
 import { DataGrid } from "@mui/x-data-grid";
 
 // Define os status possíveis (idealmente, deveriam vir do backend ou de uma constante compartilhada)
-const OS_STATUS_OPTIONS = ['Orçamento', 'Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado'];
+const OS_STATUS_OPTIONS = ['Orçamento', 'Aguardando Autorização', 'Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado'];
 
 function OSReportStatus() {
   const [selectedStatus, setSelectedStatus] = useState(''); // Status selecionado no Select

@@ -5,7 +5,7 @@
 
 -- Tipos ENUM (devem ser criados antes das tabelas que os referenciam)
 CREATE TYPE tipo_pessoa_enum   AS ENUM ('Física', 'Jurídica');
-CREATE TYPE os_status_enum     AS ENUM ('Orçamento', 'Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado');
+CREATE TYPE os_status_enum     AS ENUM ('Orçamento', 'Aguardando Autorização', 'Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado');
 CREATE TYPE tipo_despesa_enum  AS ENUM ('Fixa', 'Variável');
 CREATE TYPE user_role_enum     AS ENUM ('Admin', 'Funcionario');
 

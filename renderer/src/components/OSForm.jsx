@@ -255,6 +255,7 @@ function OSForm({ initialData, onSave, onClose }) {
             onChange={handleInputChange}
           >
             <MenuItem value="Orçamento">Orçamento</MenuItem>{" "}
+            <MenuItem value="Aguardando Autorização">Aguardando Autorização</MenuItem>{" "}
             <MenuItem value="Em Aberto">Em Aberto</MenuItem>{" "}
             <MenuItem value="Aguardando Peça">Aguardando Peça</MenuItem>{" "}
             <MenuItem value="Em Andamento">Em Andamento</MenuItem>

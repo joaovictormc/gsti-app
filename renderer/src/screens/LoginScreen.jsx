@@ -108,23 +108,44 @@ function LoginScreen({ onLoginSuccess }) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        height: "100vh", // Ocupa a tela inteira
-        backgroundColor: "#f5f5f5", // Um fundo suave
+        height: "100vh",
+        background: "linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)",
       }}
     >
       <Paper
-        elevation={3}
+        elevation={8}
         sx={{
           padding: 4,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           width: "100%",
-          maxWidth: "400px", // Limita a largura do formulário
+          maxWidth: "420px",
+          borderRadius: 3,
+          bgcolor: "background.paper",
         }}
       >
-        <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
-          Login - GSTI App
+        <Box
+          sx={{
+            width: 56,
+            height: 56,
+            borderRadius: 2,
+            bgcolor: "primary.main",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            mb: 2,
+          }}
+        >
+          <Typography variant="h5" sx={{ color: "white", fontWeight: 700 }}>
+            G
+          </Typography>
+        </Box>
+        <Typography component="h1" variant="h5" sx={{ mb: 0.5, fontWeight: 700 }}>
+          GSTI App
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Faça login para continuar
         </Typography>
 
         {error && (

@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
+  Avatar,
   Box,
+  Collapse,
   CssBaseline,
   ThemeProvider,
   createTheme,
@@ -13,8 +15,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Divider,
-  Collapse,
   CircularProgress,
 } from "@mui/material";
 import {
@@ -91,9 +91,21 @@ const componentMap = {
   ),
 };
 
+const SIDEBAR_BG = '#1e1b4b';
+const SIDEBAR_TEXT = 'rgba(255,255,255,0.85)';
+const SIDEBAR_SUBTEXT = 'rgba(255,255,255,0.55)';
+const SIDEBAR_DIVIDER = 'rgba(255,255,255,0.1)';
+const SIDEBAR_HOVER = 'rgba(255,255,255,0.08)';
+
+const getInitials = (name) => {
+  if (!name) return '?';
+  return name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+};
+
 // Componente Sidebar usando MUI Drawer
 function AppSidebar({
   onNavigate,
+  currentView,
   userRole,
   currentThemeMode,
   toggleTheme,
@@ -101,41 +113,16 @@ function AppSidebar({
   logoData,
 }) {
   const { logout, currentUser } = useAuth();
-  const [reportsOpen, setReportsOpen] = useState(false); // Estado para submenu Relatórios
-
-  const handleReportsClick = () => {
-    setReportsOpen(!reportsOpen);
-  };
+  const [reportsOpen, setReportsOpen] = useState(false);
 
   const menuItems = [
     { label: "Início", component: "HomeScreen", icon: <HomeIcon /> },
     { label: "Clientes", component: "CustomerGrid", icon: <PeopleIcon /> },
-    {
-      label: "Produtos/Serviços",
-      component: "ProductServiceGrid",
-      icon: <InventoryIcon />,
-    },
-    {
-      label: "Ordens de Serviço",
-      component: "OSGrid",
-      icon: <AssignmentIcon />,
-    },
-    {
-      label: "Despesas",
-      component: "ExpensesGrid",
-      icon: <AttachMoneyIcon sx={{ color: "red" }} />,
-    }, // Exemplo cor
-    {
-      label: "Receitas Avulsas",
-      component: "MiscRevenueGrid",
-      icon: <AttachMoneyIcon sx={{ color: "green" }} />,
-    }, // Exemplo cor
-    {
-      label: "Resumo Financeiro",
-      component: "FinancialDashboard",
-      icon: <BarChartIcon />,
-    },
-    // Item de Menu para Relatórios (com submenu)
+    { label: "Produtos/Serviços", component: "ProductServiceGrid", icon: <InventoryIcon /> },
+    { label: "Ordens de Serviço", component: "OSGrid", icon: <AssignmentIcon /> },
+    { label: "Despesas", component: "ExpensesGrid", icon: <AttachMoneyIcon sx={{ color: "#f87171" }} /> },
+    { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <AttachMoneyIcon sx={{ color: "#4ade80" }} /> },
+    { label: "Resumo Financeiro", component: "FinancialDashboard", icon: <BarChartIcon /> },
     {
       label: "Relatórios",
       icon: <AssessmentIcon />,
@@ -147,70 +134,79 @@ function AppSidebar({
         { label: "Receitas Detalhadas", component: "DetailedRevenueReport" },
       ],
     },
-    // Item visível apenas para Admin
     ...(userRole === "Admin"
       ? [
-          {
-            label: "Gerenciar Usuários",
-            component: "UserManagement",
-            icon: <SettingsIcon />,
-          },
-          {
-            label: "Configurações",
-            component: "SettingsScreen",
-            icon: <SettingsIcon />,
-          },
+          { label: "Gerenciar Usuários", component: "UserManagement", icon: <SettingsIcon /> },
+          { label: "Configurações", component: "SettingsScreen", icon: <SettingsIcon /> },
         ]
       : []),
   ];
+
+  const activeItemSx = (component) => ({
+    mx: 1,
+    borderRadius: 2,
+    color: SIDEBAR_TEXT,
+    mb: 0.25,
+    '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 36 },
+    '&:hover': { bgcolor: SIDEBAR_HOVER },
+    ...(currentView === component && {
+      bgcolor: 'primary.main',
+      color: 'white',
+      '&:hover': { bgcolor: 'primary.dark' },
+    }),
+  });
+
   return (
     <Drawer
       variant="permanent"
       sx={{
         width: drawerWidth,
         flexShrink: 0,
-        [`& .MuiDrawer-paper`]: { width: drawerWidth, boxSizing: "border-box" },
+        [`& .MuiDrawer-paper`]: {
+          width: drawerWidth,
+          boxSizing: 'border-box',
+          bgcolor: SIDEBAR_BG,
+          borderRight: 'none',
+          boxShadow: '2px 0 12px rgba(0,0,0,0.4)',
+        },
       }}
     >
-      <Box
-        sx={{
-          overflow: "auto",
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-        }}
-      >
-        {/* --- Exibe Logo e Nome da Empresa --- */}
-        <Box sx={{ textAlign: "center", my: 2, px: 1 }}>
+      <Box sx={{ overflow: 'auto', display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Header: Logo + Nome */}
+        <Box sx={{ py: 3, px: 2, textAlign: 'center', borderBottom: `1px solid ${SIDEBAR_DIVIDER}` }}>
           {logoData && (
             <img
-              src={logoData} // Usa a string Base64
-              alt={`${companyName || "Logo"} Logo`}
-              style={{
-                maxHeight: "40px",
-                maxWidth: "80%",
-                marginBottom: "8px",
-              }}
+              src={logoData}
+              alt={`${companyName || 'Logo'}`}
+              style={{ maxHeight: 48, maxWidth: '80%', marginBottom: 8, objectFit: 'contain' }}
             />
           )}
-          <Typography variant="h6" noWrap>
-            {companyName || "GSTI App"} {/* Usa o nome da config ou o padrão */}
+          <Typography variant="h6" noWrap sx={{ color: 'white', fontWeight: 700, letterSpacing: 0.5 }}>
+            {companyName || 'GSTI App'}
           </Typography>
         </Box>
-        <Divider />
-        <List sx={{ flexGrow: 1 }}>
+
+        {/* Navegação */}
+        <List sx={{ flexGrow: 1, pt: 1, px: 0 }}>
           {menuItems.map((item) => {
-            // Se o item tiver subItems, renderiza o botão com Collapse
             if (item.subItems) {
-              // Verifica se é o item de Relatórios (poderia ser mais genérico se houvesse mais submenus)
-              const isOpen = item.label === "Relatórios" ? reportsOpen : false;
-              const handleClick =
-                item.label === "Relatórios" ? handleReportsClick : () => {};
+              const isOpen = item.label === 'Relatórios' ? reportsOpen : false;
+              const handleClick = item.label === 'Relatórios' ? () => setReportsOpen((r) => !r) : () => {};
+              const anySubActive = item.subItems.some((s) => s.component === currentView);
 
               return (
-                // Usa React.Fragment para agrupar sem adicionar nó extra no DOM
                 <React.Fragment key={item.label}>
-                  <ListItemButton onClick={handleClick}>
+                  <ListItemButton
+                    onClick={handleClick}
+                    sx={{
+                      mx: 1,
+                      borderRadius: 2,
+                      mb: 0.25,
+                      color: anySubActive ? 'white' : SIDEBAR_TEXT,
+                      '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 36 },
+                      '&:hover': { bgcolor: SIDEBAR_HOVER },
+                    }}
+                  >
                     <ListItemIcon>{item.icon}</ListItemIcon>
                     <ListItemText primary={item.label} />
                     {isOpen ? <ExpandLess /> : <ExpandMore />}
@@ -220,15 +216,28 @@ function AppSidebar({
                       {item.subItems.map((subItem) => (
                         <ListItemButton
                           key={subItem.label}
-                          sx={{ pl: 4 }}
                           onClick={() => onNavigate(subItem.component)}
+                          sx={{
+                            pl: 5,
+                            mx: 1,
+                            borderRadius: 2,
+                            mb: 0.25,
+                            color: SIDEBAR_SUBTEXT,
+                            '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 28 },
+                            '&:hover': { bgcolor: SIDEBAR_HOVER, color: SIDEBAR_TEXT },
+                            ...(currentView === subItem.component && {
+                              bgcolor: 'primary.main',
+                              color: 'white',
+                              '&:hover': { bgcolor: 'primary.dark' },
+                            }),
+                          }}
                         >
                           <ListItemIcon>
-                            {subItem.icon || <Box sx={{ width: 24 }} />}
+                            {subItem.icon || <Box sx={{ width: 20 }} />}
                           </ListItemIcon>
                           <ListItemText
                             primary={subItem.label}
-                            primaryTypographyProps={{ fontSize: "0.9rem" }}
+                            primaryTypographyProps={{ fontSize: '0.875rem' }}
                           />
                         </ListItemButton>
                       ))}
@@ -237,58 +246,54 @@ function AppSidebar({
                 </React.Fragment>
               );
             }
-            // Se não tiver subItems, renderiza um item de navegação simples
-            else {
-              return (
-                <ListItem key={item.label} disablePadding>
-                  <ListItemButton onClick={() => onNavigate(item.component)}>
-                    <ListItemIcon>
-                      {item.icon || <Box sx={{ width: 24 }} />}
-                    </ListItemIcon>
-                    <ListItemText primary={item.label} />
-                  </ListItemButton>
-                </ListItem>
-              );
-            }
+
+            return (
+              <ListItem key={item.label} disablePadding>
+                <ListItemButton onClick={() => onNavigate(item.component)} sx={activeItemSx(item.component)}>
+                  <ListItemIcon>{item.icon}</ListItemIcon>
+                  <ListItemText primary={item.label} />
+                </ListItemButton>
+              </ListItem>
+            );
           })}
         </List>
-        {/* --- FIM DA SEÇÃO CORRIGIDA --- */}
-        <Divider />
-        {/* Controles na parte inferior */}
-        <Box
-          sx={{
-            p: 1,
-            mt: "auto",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Box>
-            <Typography variant="caption">{currentUser?.nome}</Typography>
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={logout}
+
+        {/* Footer: usuário + tema + logout */}
+        <Box sx={{ p: 2, borderTop: `1px solid ${SIDEBAR_DIVIDER}` }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.75rem' }}>
+              {getInitials(currentUser?.nome)}
+            </Avatar>
+            <Typography variant="caption" noWrap sx={{ color: SIDEBAR_TEXT, flex: 1 }}>
+              {currentUser?.nome}
+            </Typography>
+            <IconButton
+              onClick={toggleTheme}
               size="small"
-              startIcon={<LogoutIcon />}
-              sx={{ display: "block", mt: 0.5 }}
+              sx={{ color: SIDEBAR_SUBTEXT }}
+              title={currentThemeMode === 'dark' ? 'Tema claro' : 'Tema escuro'}
             >
-              {" "}
-              Logout{" "}
-            </Button>
+              {currentThemeMode === 'dark' ? (
+                <Brightness7Icon fontSize="small" />
+              ) : (
+                <Brightness4Icon fontSize="small" />
+              )}
+            </IconButton>
           </Box>
-          <IconButton
-            onClick={toggleTheme}
-            color="inherit"
-            title={currentThemeMode === "dark" ? "Tema claro" : "Tema escuro"}
+          <Button
+            variant="outlined"
+            onClick={logout}
+            size="small"
+            startIcon={<LogoutIcon />}
+            fullWidth
+            sx={{
+              borderColor: 'rgba(239,68,68,0.4)',
+              color: '#f87171',
+              '&:hover': { borderColor: '#f87171', bgcolor: 'rgba(239,68,68,0.1)' },
+            }}
           >
-            {currentThemeMode === "dark" ? (
-              <Brightness7Icon />
-            ) : (
-              <Brightness4Icon />
-            )}
-          </IconButton>
+            Logout
+          </Button>
         </Box>
       </Box>
     </Drawer>
@@ -394,7 +399,29 @@ function App() {
   };
 
   const theme = useMemo(
-    () => createTheme({ palette: { mode: themeMode } }),
+    () =>
+      createTheme({
+        palette: {
+          mode: themeMode,
+          primary: { main: '#6366f1' },
+          secondary: { main: '#06b6d4' },
+          background: {
+            default: themeMode === 'light' ? '#f1f5f9' : '#0f172a',
+            paper: themeMode === 'light' ? '#ffffff' : '#1e293b',
+          },
+        },
+        typography: {
+          fontFamily: '"Inter", "Roboto", sans-serif',
+          h4: { fontWeight: 700 },
+          h6: { fontWeight: 600 },
+        },
+        shape: { borderRadius: 12 },
+        components: {
+          MuiButton: { styleOverrides: { root: { textTransform: 'none', borderRadius: 8 } } },
+          MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
+          MuiDataGrid: { styleOverrides: { root: { borderRadius: 12, border: 'none' } } },
+        },
+      }),
     [themeMode]
   );
 
@@ -465,6 +492,7 @@ function App() {
         <Box sx={{ display: "flex" }}>
           <AppSidebar
             onNavigate={setActiveComponent}
+            currentView={activeComponent}
             userRole={currentUser.role}
             currentThemeMode={themeMode}
             toggleTheme={toggleThemeMode}

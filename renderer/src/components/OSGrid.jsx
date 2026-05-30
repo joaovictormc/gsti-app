@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Box,
   Button,
+  Chip,
   Typography,
   Modal,
   TextField,
@@ -16,6 +17,17 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import PrintIcon from "@mui/icons-material/Print";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ConfirmDialog from "./ConfirmDialog";
+
+const STATUS_COLORS = {
+  'Orçamento': 'default',
+  'Em Aberto': 'warning',
+  'Aguardando Autorização': 'secondary',
+  'Aguardando Peça': 'warning',
+  'Em Andamento': 'primary',
+  'Finalizado': 'success',
+  'Entregue': 'success',
+  'Cancelado': 'error',
+};
 
 const modalStyle = {
   position: "absolute",
@@ -171,7 +183,19 @@ function OSGrid() {
         });
       },
     },
-    { field: "status", headerName: "Status", width: 150 },
+    {
+      field: "status",
+      headerName: "Status",
+      width: 190,
+      renderCell: (params) => (
+        <Chip
+          label={params.value}
+          color={STATUS_COLORS[params.value] ?? 'default'}
+          size="small"
+          variant="outlined"
+        />
+      ),
+    },
     {
       field: "valor_total",
       headerName: "Valor Total",
