@@ -47,6 +47,8 @@ const defaultConfig = {
     from: "",
   },
   branding: { companyName: "GSTI App", logoPath: null },
+  emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
+  permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
   setupComplete: false,
 };
 
@@ -95,11 +97,13 @@ function initializeDbPool() {
         max: 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
+        options: "-c statement_timeout=30000",
       });
       console.log("[DB] Pool de conexão inicializado com sucesso.");
       // Migrações automáticas de schema
       [
         "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP NULL",
+        "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS estoque_baixado BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_atual INT NOT NULL DEFAULT 0",
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_minimo INT NOT NULL DEFAULT 0",
       ].forEach((sql) =>
@@ -160,6 +164,103 @@ function initializeMailTransporter() {
     );
     mailTransporter = null;
   }
+}
+
+// --- NOTIFICAÇÕES POR E-MAIL ---
+
+async function notifyOSCreated(osId, osData) {
+  if (!mailTransporter || !appConfig.emailNotifications?.notifyOnCreate) return;
+  const techEmail = appConfig.emailNotifications?.technicianEmail;
+  if (!techEmail) return;
+
+  const companyName = appConfig.branding?.companyName || "GSTI App";
+  const from = appConfig.email?.from || appConfig.email?.user;
+  let customerName = "Cliente";
+  if (dbPool && osData.id_cliente) {
+    try {
+      const { rows } = await dbPool.query(
+        pgQuery("SELECT nome FROM clientes WHERE id = ?"),
+        [osData.id_cliente]
+      );
+      if (rows[0]) customerName = rows[0].nome;
+    } catch (_) {}
+  }
+
+  const equipment = [osData.tipo_equipamento, osData.marca, osData.modelo]
+    .filter(Boolean)
+    .join(" - ");
+
+  await mailTransporter.sendMail({
+    from: `"${companyName}" <${from}>`,
+    to: techEmail,
+    subject: `Nova OS #${osId} - ${customerName}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <h2 style="color:#3949ab;margin-bottom:4px">Nova Ordem de Serviço</h2>
+        <p style="color:#757575;margin-top:0">${companyName}</p>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:6px 0;color:#555;width:140px"><strong>OS Nº</strong></td><td style="padding:6px 0">${osId}</td></tr>
+          <tr><td style="padding:6px 0;color:#555"><strong>Cliente</strong></td><td style="padding:6px 0">${customerName}</td></tr>
+          <tr><td style="padding:6px 0;color:#555"><strong>Equipamento</strong></td><td style="padding:6px 0">${equipment || "Não informado"}</td></tr>
+          ${osData.numero_serie ? `<tr><td style="padding:6px 0;color:#555"><strong>Nº de Série</strong></td><td style="padding:6px 0">${osData.numero_serie}</td></tr>` : ""}
+          ${osData.defeito_relatado ? `<tr><td style="padding:6px 0;color:#555"><strong>Defeito</strong></td><td style="padding:6px 0">${osData.defeito_relatado}</td></tr>` : ""}
+        </table>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+        <p style="color:#9e9e9e;font-size:12px">Enviado automaticamente pelo ${companyName}</p>
+      </div>`,
+  });
+  console.log(`[Email] Nova OS #${osId} notificada para ${techEmail}`);
+}
+
+async function notifyOSFinalized(osId, osData, total) {
+  if (!mailTransporter || !appConfig.emailNotifications?.notifyOnFinalize) return;
+  if (!dbPool) return;
+
+  const { rows } = await dbPool.query(
+    pgQuery(
+      "SELECT c.nome, c.email FROM clientes c JOIN ordens_servico os ON os.id_cliente = c.id WHERE os.id = ?"
+    ),
+    [osId]
+  );
+  const customer = rows[0];
+  if (!customer?.email) return;
+
+  const companyName = appConfig.branding?.companyName || "GSTI App";
+  const from = appConfig.email?.from || appConfig.email?.user;
+  const equipment = [osData.tipo_equipamento, osData.marca, osData.modelo]
+    .filter(Boolean)
+    .join(" ");
+  const valueFormatted = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(total || 0);
+
+  await mailTransporter.sendMail({
+    from: `"${companyName}" <${from}>`,
+    to: customer.email,
+    subject: `Equipamento pronto para retirada! - OS #${osId}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <h2 style="color:#3949ab;margin-bottom:4px">Equipamento pronto!</h2>
+        <p style="color:#757575;margin-top:0">${companyName}</p>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+        <p>Olá, <strong>${customer.nome}</strong>!</p>
+        <p>Sua ordem de serviço foi concluída e o equipamento já está pronto para retirada.</p>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:6px 0;color:#555;width:140px"><strong>OS Nº</strong></td><td style="padding:6px 0">${osId}</td></tr>
+          <tr><td style="padding:6px 0;color:#555"><strong>Equipamento</strong></td><td style="padding:6px 0">${equipment || "Não informado"}</td></tr>
+          ${osData.solucao_aplicada ? `<tr><td style="padding:6px 0;color:#555"><strong>Solução</strong></td><td style="padding:6px 0">${osData.solucao_aplicada}</td></tr>` : ""}
+          <tr><td style="padding:6px 0;color:#555"><strong>Valor Total</strong></td><td style="padding:6px 0">${valueFormatted}</td></tr>
+          ${osData.garantia_dias > 0 ? `<tr><td style="padding:6px 0;color:#555"><strong>Garantia</strong></td><td style="padding:6px 0">${osData.garantia_dias} dias a partir da retirada</td></tr>` : ""}
+        </table>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+        <p>Entre em contato conosco para combinar a retirada.</p>
+        <p style="color:#9e9e9e;font-size:12px">Enviado automaticamente pelo ${companyName}</p>
+      </div>`,
+  });
+  console.log(`[Email] OS finalizada #${osId} notificada para ${customer.email}`);
 }
 
 // --- CARREGA A CONFIGURAÇÃO AO INICIAR ---
@@ -387,11 +488,18 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
     const currentSetupStatus = appConfig.setupComplete;
 
     appConfig = {
-      ...appConfig, // Mantém a base
-      email: { ...appConfig.email, ...newSettings.email }, // Atualiza email
-      branding: { ...appConfig.branding, ...newSettings.branding }, // Atualiza branding
-      database: currentDbConfig, // Mantém config do DB
-      setupComplete: currentSetupStatus, // Mantém status do setup
+      ...appConfig,
+      email: { ...appConfig.email, ...newSettings.email },
+      branding: { ...appConfig.branding, ...newSettings.branding },
+      emailNotifications: { ...appConfig.emailNotifications, ...(newSettings.emailNotifications || {}) },
+      permissions: {
+        funcionario: {
+          ...appConfig.permissions?.funcionario,
+          ...(newSettings.permissions?.funcionario || {}),
+        },
+      },
+      database: currentDbConfig,
+      setupComplete: currentSetupStatus,
     };
 
     // Salva no arquivo
@@ -966,7 +1074,9 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
       defeito_relatado, observacoes_entrada, status, data_entrada,
       total, garantia_dias, data_prevista || null,
     ]);
-    return { success: true, osId: rows[0].id };
+    const osId = rows[0].id;
+    notifyOSCreated(osId, osData).catch((e) => console.error("[Email] notifyOSCreated:", e));
+    return { success: true, osId };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -982,12 +1092,12 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
   } = osData;
   try {
     const { rows } = await dbPool.query(
-      pgQuery("SELECT status, data_saida, garantia_dias FROM ordens_servico WHERE id = ?"),
+      pgQuery("SELECT status, data_saida, garantia_dias, estoque_baixado FROM ordens_servico WHERE id = ?"),
       [id]
     );
     const osAtual = rows[0];
 
-    // --- VERIFICAÇÃO GARANTIA (sem alterações) ---
+    // --- VERIFICAÇÃO GARANTIA ---
     if (osAtual.status === "Entregue" && osAtual.data_saida) {
       const dataSaida = new Date(osAtual.data_saida);
       const dataExpiracaoGarantia = new Date(
@@ -1001,11 +1111,14 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       }
     }
 
-    // Define data_saida se status for Finalizado/Entregue e data_saida for NULL
+    const baixarEstoque = status === "Finalizado" && !osAtual.estoque_baixado;
+
     let setDataSaidaSql = "";
     if (["Finalizado", "Entregue"].includes(status) && !osAtual.data_saida) {
       setDataSaidaSql = ", data_saida = NOW()";
     }
+
+    const setEstoqueBaixadoSql = baixarEstoque ? ", estoque_baixado = TRUE" : "";
 
     const sql = pgQuery(`
       UPDATE ordens_servico SET
@@ -1013,7 +1126,7 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       numero_serie = ?, defeito_relatado = ?, observacoes_entrada = ?,
       laudo_tecnico = ?, solucao_aplicada = ?, status = ?,
       data_entrada = ?, valor_total = ?, garantia_dias = ?, data_prevista = ?
-      ${setDataSaidaSql}
+      ${setDataSaidaSql}${setEstoqueBaixadoSql}
       WHERE id = ?`);
 
     await dbPool.query(sql, [
@@ -1021,6 +1134,35 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       defeito_relatado, observacoes_entrada, laudo_tecnico, solucao_aplicada,
       status, data_entrada, total, garantia_dias, data_prevista || null, id,
     ]);
+
+    if (baixarEstoque) {
+      try {
+        const { rows: itemRows } = await dbPool.query(
+          pgQuery(`SELECT oi.id_produto_servico, oi.quantidade
+                   FROM os_itens oi
+                   JOIN produtos_servicos ps ON ps.id = oi.id_produto_servico
+                   WHERE oi.id_os = ? AND ps.tipo = 'Produto'`),
+          [id]
+        );
+        for (const item of itemRows) {
+          await dbPool.query(
+            `UPDATE produtos_servicos
+             SET estoque_atual = GREATEST(0, estoque_atual - $1)
+             WHERE id = $2`,
+            [item.quantidade, item.id_produto_servico]
+          );
+        }
+        console.log(`[Stock] Baixa automática OS #${id}: ${itemRows.length} produto(s) deduzido(s)`);
+      } catch (stockErr) {
+        console.error(`[Stock] Erro na baixa automática OS #${id}:`, stockErr.message);
+      }
+    }
+
+    if (status === "Finalizado" && osAtual.status !== "Finalizado") {
+      notifyOSFinalized(id, osData, total).catch((e) =>
+        console.error("[Email] notifyOSFinalized:", e)
+      );
+    }
 
     return { success: true };
   } catch (error) {

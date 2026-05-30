@@ -16,14 +16,18 @@ import {
 import BackupIcon from "@mui/icons-material/Backup";
 import RestoreIcon from "@mui/icons-material/Restore";
 import StorageIcon from "@mui/icons-material/Storage";
+import NotificationsIcon from "@mui/icons-material/Notifications";
+import LockPersonIcon from "@mui/icons-material/LockPerson";
+import Switch from "@mui/material/Switch";
 import { useAuth } from "../contexts/AuthContext"; // Para verificar se é admin
 
 function SettingsScreen() {
   const { currentUser } = useAuth();
   const [settings, setSettings] = useState({
-    // Estado para guardar todas as configurações
     email: { host: "", port: 587, secure: false, user: "", pass: "", from: "" },
     branding: { companyName: "", logoPath: null },
+    emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
+    permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,20 +51,16 @@ function SettingsScreen() {
         const result = await window.api.getAppSettings();
         if (result.success && result.settings) {
           // Mescla com um objeto padrão para garantir que todos os campos existam
-          const defaultEmail = {
-            host: "",
-            port: 587,
-            secure: false,
-            user: "",
-            pass: "",
-            from: "",
-          };
-          const defaultBranding = { companyName: "GSTI App", logoPath: null }; // Default name aqui também
+          const defaultEmail = { host: "", port: 587, secure: false, user: "", pass: "", from: "" };
+          const defaultBranding = { companyName: "GSTI App", logoPath: null };
+          const defaultNotifications = { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" };
+          const defaultPerms = { canSeeFinancial: false, canSeeReports: false };
           setSettings({
             email: { ...defaultEmail, ...(result.settings.email || {}) },
-            branding: {
-              ...defaultBranding,
-              ...(result.settings.branding || {}),
+            branding: { ...defaultBranding, ...(result.settings.branding || {}) },
+            emailNotifications: { ...defaultNotifications, ...(result.settings.emailNotifications || {}) },
+            permissions: {
+              funcionario: { ...defaultPerms, ...(result.settings.permissions?.funcionario || {}) },
             },
           });
         } else {
@@ -130,6 +130,17 @@ function SettingsScreen() {
     }
   };
 
+  const handlePermChange = useCallback((role, field, value) => {
+    setSettings((prev) => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [role]: { ...prev.permissions[role], [field]: value },
+      },
+    }));
+    setSaveStatus({ type: "", text: "" });
+  }, []);
+
   // Função para salvar todas as configurações
   const handleSaveSettings = async () => {
     setSaving(true);
@@ -139,6 +150,8 @@ function SettingsScreen() {
       const settingsToSave = {
         email: settings.email,
         branding: settings.branding,
+        emailNotifications: settings.emailNotifications,
+        permissions: settings.permissions,
       };
       const result = await window.api.saveAppSettings(settingsToSave);
       if (result.success) {
@@ -250,7 +263,7 @@ function SettingsScreen() {
         </Typography>
         <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
           Configure um servidor SMTP (Ex: Brevo, Gmail com Senha de App) para
-          enviar e-mails de recuperação de senha.
+          enviar e-mails de recuperação de senha e notificações de OS.
         </Typography>
 
         {testEmailStatus.text && (
@@ -424,6 +437,99 @@ function SettingsScreen() {
         </Typography>
       </Paper>
       {/* --- FIM NOVA SEÇÃO --- */}
+
+      {/* --- Permissões de Funcionário --- */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          <LockPersonIcon color="primary" />
+          <Typography variant="h6">Permissões de Funcionário</Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Controle quais módulos são visíveis para usuários com perfil Funcionário.
+          Administradores sempre têm acesso completo.
+        </Typography>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={settings.permissions.funcionario.canSeeFinancial}
+              onChange={(e) =>
+                handlePermChange("funcionario", "canSeeFinancial", e.target.checked)
+              }
+              disabled={saving}
+            />
+          }
+          label="Pode visualizar Módulo Financeiro (Despesas, Receitas, Dashboard)"
+        />
+        <FormControlLabel
+          sx={{ display: "block", mt: 0.5 }}
+          control={
+            <Switch
+              checked={settings.permissions.funcionario.canSeeReports}
+              onChange={(e) =>
+                handlePermChange("funcionario", "canSeeReports", e.target.checked)
+              }
+              disabled={saving}
+            />
+          }
+          label="Pode visualizar Relatórios"
+        />
+      </Paper>
+      {/* --- Fim Permissões --- */}
+
+      {/* --- Notificações por E-mail --- */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          <NotificationsIcon color="primary" />
+          <Typography variant="h6">Notificações por E-mail</Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Requer a configuração SMTP preenchida e salva acima.
+        </Typography>
+
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={settings.emailNotifications.notifyOnCreate}
+              onChange={(e) =>
+                handleInputChange("emailNotifications", "notifyOnCreate", e.target.checked)
+              }
+              disabled={saving}
+            />
+          }
+          label="Notificar técnico quando uma nova OS for criada"
+        />
+
+        {settings.emailNotifications.notifyOnCreate && (
+          <TextField
+            label="E-mail do Técnico"
+            type="email"
+            value={settings.emailNotifications.technicianEmail}
+            onChange={(e) =>
+              handleInputChange("emailNotifications", "technicianEmail", e.target.value)
+            }
+            fullWidth
+            size="small"
+            margin="dense"
+            sx={{ ml: 4, width: "calc(100% - 32px)" }}
+            disabled={saving}
+          />
+        )}
+
+        <FormControlLabel
+          sx={{ mt: 1, display: "block" }}
+          control={
+            <Checkbox
+              checked={settings.emailNotifications.notifyOnFinalize}
+              onChange={(e) =>
+                handleInputChange("emailNotifications", "notifyOnFinalize", e.target.checked)
+              }
+              disabled={saving}
+            />
+          }
+          label="Notificar cliente quando a OS for finalizada (requer e-mail cadastrado no cliente)"
+        />
+      </Paper>
+      {/* --- Fim Notificações --- */}
 
       {/* --- Backup e Restauração --- */}
       <Paper sx={{ p: 3, mb: 3 }}>

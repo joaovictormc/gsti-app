@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import {
+  Alert,
   Box,
   Button,
   TextField,
@@ -53,7 +54,8 @@ function OSForm({ initialData, onSave, onClose }) {
   const [activeData, setActiveData] = useState({ customers: [], products: [] });
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedCustomerValue, setSelectedCustomerValue] = useState(null); // Mantém o objeto do cliente
+  const [selectedCustomerValue, setSelectedCustomerValue] = useState(null);
+  const [validationError, setValidationError] = useState(null);
 
   const isEditing = initialData && initialData.os && initialData.os.id;
 
@@ -120,18 +122,14 @@ function OSForm({ initialData, onSave, onClose }) {
 
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
-    setOsData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setOsData((prev) => ({ ...prev, [name]: value }));
+    setValidationError(null);
   }, []);
 
   const handleCustomerChange = useCallback((event, newValue) => {
     setSelectedCustomerValue(newValue);
-    setOsData((prev) => ({
-      ...prev,
-      id_cliente: newValue ? newValue.id : null,
-    }));
+    setOsData((prev) => ({ ...prev, id_cliente: newValue ? newValue.id : null }));
+    setValidationError(null);
   }, []);
 
   const handleAddItem = () => {
@@ -177,12 +175,11 @@ function OSForm({ initialData, onSave, onClose }) {
   // --- CORREÇÃO: Validação ajustada ---
   const handleSubmit = () => {
     if (!osData.id_cliente) {
-      alert("O campo Cliente é obrigatório.");
+      setValidationError("O campo Cliente é obrigatório.");
       return;
     }
-    // Verifica se pelo menos um dos campos de equipamento está preenchido
     if (!osData.tipo_equipamento && !osData.marca && !osData.modelo) {
-      alert("Preencha pelo menos o Tipo, Marca ou Modelo do equipamento.");
+      setValidationError("Preencha pelo menos o Tipo, Marca ou Modelo do equipamento.");
       return;
     }
     const total = calculateTotal();
@@ -450,7 +447,12 @@ function OSForm({ initialData, onSave, onClose }) {
         </Table>
       </Paper>
 
-      <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
+      {validationError && (
+        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setValidationError(null)}>
+          {validationError}
+        </Alert>
+      )}
+      <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
         <Button onClick={onClose} sx={{ mr: 1 }}>
           Cancelar
         </Button>

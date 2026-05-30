@@ -1,7 +1,7 @@
 # Avaliação Técnica — GSTI App
 
 > Documento gerado na sprint de otimização — Maio/2026  
-> Última atualização: Maio/2026 (após Sprint 5)
+> Última atualização: Maio/2026 (após Sprint 6)
 
 ---
 
@@ -90,6 +90,13 @@ Todas as correções foram aplicadas:
 - ✅ **Controle de Estoque** — `estoque_atual` + `estoque_minimo` em produtos, entrada/saída/ajuste de mínimo, alertas visuais
 - ✅ **Lucratividade por Serviço** — cross com `os_itens`, gráfico Top 5, DataGrid com receita destacada
 
+### Sprint 6 ✅ — Notificações, automações e robustez
+- ✅ **Notificações por E-mail** — SMTP configurável; e-mail para técnico ao criar OS e para cliente ao finalizar (HTML responsivo, fire-and-forget)
+- ✅ **Saída Automática de Estoque** — deduz `estoque_atual` dos produtos ao mudar OS para Finalizado; campo `estoque_baixado` evita dedução dupla
+- ✅ **Permissões por Perfil** — Admin configura quais módulos (Financeiro, Relatórios) são visíveis para Funcionários; guard no menu e no render
+- ✅ **Timeout no PostgreSQL** — `statement_timeout=30000` via `options` no Pool; queries travadas canceladas após 30s
+- ✅ **Validações OSForm** — `alert()` substituído por `<Alert>` MUI inline com dismiss e limpeza automática
+
 ---
 
 ## 5. Roadmap Atualizado
@@ -100,7 +107,7 @@ Sprint 2  ✅  Home Dashboard + Painel de Garantias
 Sprint 3  ✅  Backup/Restauração + CEP Auto-fill + PDF com Logo
 Sprint 4  ✅  Timeline do Cliente + Agenda de OS
 Sprint 5  ✅  Sidebar Colapsável + Controle de Estoque + Lucratividade
-Sprint 6  🔲  Notificações por E-mail + melhorias pontuais (a definir)
+Sprint 6  ✅  Notificações E-mail + Baixa Estoque + Permissões + Timeout PG + Validações
 ```
 
 ---
@@ -109,14 +116,14 @@ Sprint 6  🔲  Notificações por E-mail + melhorias pontuais (a definir)
 
 | Item | Tipo | Prioridade | Status |
 |------|------|-----------|--------|
-| Notificações por e-mail ao finalizar OS | Feature | Média | 🔲 Pendente |
-| Saída automática de estoque ao fechar OS | Feature | Média | 🔲 Pendente |
+| Notificações por e-mail ao finalizar OS | Feature | Média | ✅ Implementado (Sprint 6) |
+| Saída automática de estoque ao fechar OS | Feature | Média | ✅ Implementado (Sprint 6) |
 | Drag-and-drop na Agenda de OS | UX | Baixa | 🔲 Pendente |
-| Sem timeout em queries PostgreSQL | Robustez | Média | 🔲 Pendente |
+| Sem timeout em queries PostgreSQL | Robustez | Média | ✅ Implementado (Sprint 6) |
 | Geração de PDF síncrona (bloqueia main process) | Performance | Média | 🔲 Pendente |
 | Sem testes automatizados | Qualidade | Alta | 🔲 Pendente |
 | Bundle JS > 1.3MB (sem code splitting) | Performance | Baixa | 🔲 Pendente |
-| `alert()` ainda presente em OSForm (validações) | UX | Baixa | 🔲 Pendente |
+| `alert()` ainda presente em OSForm (validações) | UX | Baixa | ✅ Implementado (Sprint 6) |
 | Sidebar fixa (não colapsa) | UX | —— | ✅ Resolvido |
 
 ---

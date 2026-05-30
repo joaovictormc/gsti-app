@@ -120,6 +120,7 @@ function AppSidebar({
   logoData,
   isOpen,
   onToggle,
+  funcionarioPerms,
 }) {
   const { logout, currentUser } = useAuth();
   const [reportsOpen, setReportsOpen] = useState(false);
@@ -128,35 +129,41 @@ function AppSidebar({
   // Fecha o submenu ao recolher
   React.useEffect(() => { if (!isOpen) setReportsOpen(false); }, [isOpen]);
 
+  const isAdmin = userRole === "Admin";
+  const canSeeFinancial = isAdmin || funcionarioPerms?.canSeeFinancial;
+  const canSeeReports = isAdmin || funcionarioPerms?.canSeeReports;
+
   const menuItems = [
     { label: "Início", component: "HomeScreen", icon: <HomeIcon /> },
     { label: "Clientes", component: "CustomerGrid", icon: <PeopleIcon /> },
     { label: "Produtos/Serviços", component: "ProductServiceGrid", icon: <InventoryIcon /> },
     { label: "Ordens de Serviço", component: "OSGrid", icon: <AssignmentIcon /> },
-    { label: "Despesas", component: "ExpensesGrid", icon: <AttachMoneyIcon sx={{ color: st.expenseIcon }} /> },
-    { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <AttachMoneyIcon sx={{ color: st.revenueIcon }} /> },
-    { label: "Resumo Financeiro", component: "FinancialDashboard", icon: <BarChartIcon /> },
+    ...(canSeeFinancial ? [
+      { label: "Despesas", component: "ExpensesGrid", icon: <AttachMoneyIcon sx={{ color: st.expenseIcon }} /> },
+      { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <AttachMoneyIcon sx={{ color: st.revenueIcon }} /> },
+      { label: "Resumo Financeiro", component: "FinancialDashboard", icon: <BarChartIcon /> },
+    ] : []),
     { label: "Garantias", component: "WarrantyPanel", icon: <VerifiedUserIcon /> },
     { label: "Agenda de OS", component: "OSAgenda", icon: <CalendarMonthIcon /> },
     { label: "Estoque", component: "StockControl", icon: <InventoryStockIcon /> },
-    {
-      label: "Relatórios",
-      icon: <AssessmentIcon />,
-      subItems: [
-        { label: "OS por Cliente", component: "OSReportClient" },
-        { label: "OS por Status", component: "OSReportStatus" },
-        { label: "Lucratividade", component: "ProfitabilityReport" },
-        { label: "Serviços Mais Usados", component: "MostUsedServicesReport" },
-        { label: "Histórico Equipamento", component: "EquipmentHistoryReport" },
-        { label: "Receitas Detalhadas", component: "DetailedRevenueReport" },
-      ],
-    },
-    ...(userRole === "Admin"
-      ? [
-          { label: "Gerenciar Usuários", component: "UserManagement", icon: <SettingsIcon /> },
-          { label: "Configurações", component: "SettingsScreen", icon: <SettingsIcon /> },
-        ]
-      : []),
+    ...(canSeeReports ? [
+      {
+        label: "Relatórios",
+        icon: <AssessmentIcon />,
+        subItems: [
+          { label: "OS por Cliente", component: "OSReportClient" },
+          { label: "OS por Status", component: "OSReportStatus" },
+          { label: "Lucratividade", component: "ProfitabilityReport" },
+          { label: "Serviços Mais Usados", component: "MostUsedServicesReport" },
+          { label: "Histórico Equipamento", component: "EquipmentHistoryReport" },
+          { label: "Receitas Detalhadas", component: "DetailedRevenueReport" },
+        ],
+      },
+    ] : []),
+    ...(isAdmin ? [
+      { label: "Gerenciar Usuários", component: "UserManagement", icon: <SettingsIcon /> },
+      { label: "Configurações", component: "SettingsScreen", icon: <SettingsIcon /> },
+    ] : []),
   ];
 
   const navItemSx = (component) => ({
@@ -350,6 +357,10 @@ function App() {
     companyName: "GSTI App",
     logoData: null,
   });
+  const [funcionarioPerms, setFuncionarioPerms] = useState({
+    canSeeFinancial: false,
+    canSeeReports: false,
+  });
   const [loadingBranding, setLoadingBranding] = useState(false);
   // --- EFEITO PARA VERIFICAR SETUP INICIAL (Roda 1x) ---
   useEffect(() => {
@@ -383,6 +394,15 @@ function App() {
 
         try {
           const result = await window.api.getAppSettings();
+          if (result.success && result.settings) {
+            const perms = result.settings.permissions?.funcionario;
+            if (perms) {
+              setFuncionarioPerms({
+                canSeeFinancial: perms.canSeeFinancial ?? false,
+                canSeeReports: perms.canSeeReports ?? false,
+              });
+            }
+          }
           if (result.success && result.settings?.branding) {
             currentCompanyName =
               result.settings.branding.companyName || "GSTI App";
@@ -551,11 +571,26 @@ function App() {
 
   // 4. Se não precisa de setup E está logado, mostra interface principal
   if (needsSetup === false && currentUser) {
-    const ComponentToRender =
-      componentMap[activeComponent] ||
-      (() => (
-        <Typography>Componente '{activeComponent}' não encontrado.</Typography>
-      ));
+    const isAdmin = currentUser.role === "Admin";
+    const financialComponents = ["ExpensesGrid", "MiscRevenueGrid", "FinancialDashboard"];
+    const reportComponents = ["OSReportClient", "OSReportStatus", "ProfitabilityReport", "MostUsedServicesReport", "EquipmentHistoryReport", "DetailedRevenueReport"];
+    const isAccessDenied =
+      !isAdmin &&
+      ((financialComponents.includes(activeComponent) && !funcionarioPerms.canSeeFinancial) ||
+       (reportComponents.includes(activeComponent) && !funcionarioPerms.canSeeReports));
+
+    const ComponentToRender = isAccessDenied
+      ? () => (
+          <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
+            <Typography color="error">
+              Acesso restrito. Solicite ao administrador.
+            </Typography>
+          </Box>
+        )
+      : componentMap[activeComponent] ||
+        (() => (
+          <Typography>Componente '{activeComponent}' não encontrado.</Typography>
+        ));
     return (
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -581,6 +616,7 @@ function App() {
             logoData={brandingConfig.logoData}
             isOpen={sidebarOpen}
             onToggle={toggleSidebar}
+            funcionarioPerms={funcionarioPerms}
           />
           <Box
             component="main"
