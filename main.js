@@ -736,6 +736,22 @@ ipcMain.handle("add-customer", async (event, customerData) => {
   }
 });
 
+// Busca de CEP via ViaCEP
+ipcMain.handle("search-cep", async (event, cep) => {
+  const clean = String(cep).replace(/\D/g, "");
+  if (clean.length !== 8) return { success: false, error: "CEP inválido." };
+  try {
+    const { data } = await axios.get(`https://viacep.com.br/ws/${clean}/json/`, { timeout: 6000 });
+    if (data.erro) return { success: false, error: "CEP não encontrado." };
+    return { success: true, data };
+  } catch (err) {
+    const msg = err.code === "ECONNABORTED"
+      ? "Tempo de resposta esgotado."
+      : "Erro ao buscar CEP. Verifique a conexão com a internet.";
+    return { success: false, error: msg };
+  }
+});
+
 // Listener para validar APENAS CNPJ
 ipcMain.handle("validate-cnpj", async (event, cnpj) => {
   const docNumber = cnpj.replace(/\D/g, "");

@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
 
 
   // Clientes
+  searchCep: (cep) => ipcRenderer.invoke('search-cep', cep),
   getCustomers: () => ipcRenderer.invoke('get-customers'),
   addCustomer: (customerData) => ipcRenderer.invoke('add-customer', customerData),
   updateCustomer: (customerData) => ipcRenderer.invoke('update-customer', customerData),
