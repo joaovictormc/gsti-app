@@ -36,6 +36,7 @@ import {
 import { useAuth } from "./contexts/AuthContext";
 
 import LoginScreen from "./screens/LoginScreen";
+import HomeScreen from "./screens/HomeScreen";
 import CustomerGrid from "./components/CustomerGrid";
 import ProductServiceGrid from "./components/ProductServiceGrid";
 import OSGrid from "./components/OSGrid";
@@ -50,22 +51,6 @@ import DetailedRevenueReport from "./components/DetailedRevenueReport";
 import UserManagement from "./components/UserManagement";
 import InitialSetupScreen from "./screens/InitialSetupScreen";
 import SettingsScreen from "./components/SettingsScreen";
-
-// Componente HomeScreen Simples
-const HomeScreen = () => {
-  const { currentUser } = useAuth();
-  return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom>
-        Bem-vindo ao GSTI, {currentUser?.nome || "Usuário"}!
-      </Typography>
-      <Typography variant="body1">
-        Utilize o menu à esquerda para navegar pelas funcionalidades do sistema.
-      </Typography>
-      {/* Adicionar mais informações ou links rápidos aqui se desejar */}
-    </Box>
-  );
-};
 
 const drawerWidth = 240; // Largura da Sidebar
 
@@ -84,12 +69,7 @@ const componentMap = {
   DetailedRevenueReport,
   UserManagement,
   SettingsScreen,
-  // Adicione uma tela inicial se desejar
-  HomeScreen: () => (
-    <Typography variant="h5" sx={{ textAlign: "center", mt: 4 }}>
-      Bem-vindo ao GSTI!
-    </Typography>
-  ),
+  HomeScreen,
 };
 
 const getSidebarTheme = (mode) => {

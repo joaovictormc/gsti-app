@@ -65,6 +65,9 @@ contextBridge.exposeInMainWorld('api', {
   updateMiscRevenue: (revenueData) => ipcRenderer.invoke('update-misc-revenue', revenueData),
   deleteMiscRevenue: (revenueId) => ipcRenderer.invoke('delete-misc-revenue', revenueId),
 
+  // Dashboard
+  getDashboardStats: () => ipcRenderer.invoke('get-dashboard-stats'),
+
   // Funções Financeiras (getFinancialSummary já existe)
   getFinancialSummary: (period) => ipcRenderer.invoke('get-financial-summary', period),
   getMonthlySummary: (year) => ipcRenderer.invoke('get-monthly-summary', year),

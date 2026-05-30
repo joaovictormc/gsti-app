@@ -1691,6 +1691,80 @@ ipcMain.handle("delete-expense", async (event, expenseId) => {
   }
 });
 
+ipcMain.handle('get-dashboard-stats', async () => {
+  if (!dbPool) return { success: false, error: 'Banco de dados não configurado.' };
+  try {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+
+    const { rows: countRows } = await dbPool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status IN ('Orçamento','Em Aberto','Aguardando Autorização','Aguardando Peça'))::int AS abertas,
+        COUNT(*) FILTER (WHERE status = 'Em Andamento')::int AS em_andamento,
+        COUNT(*) FILTER (WHERE status IN ('Finalizado','Entregue') AND data_saida IS NOT NULL
+          AND EXTRACT(MONTH FROM data_saida)::int = $1 AND EXTRACT(YEAR FROM data_saida)::int = $2)::int AS finalizadas_mes
+      FROM ordens_servico
+    `, [month, year]);
+
+    const { rows: osRevRows } = await dbPool.query(`
+      SELECT COALESCE(SUM(valor_total),0) AS val FROM ordens_servico
+      WHERE status IN ('Finalizado','Entregue') AND data_saida IS NOT NULL
+        AND EXTRACT(MONTH FROM data_saida)::int=$1 AND EXTRACT(YEAR FROM data_saida)::int=$2
+    `, [month, year]);
+
+    const { rows: miscRevRows } = await dbPool.query(`
+      SELECT COALESCE(SUM(valor),0) AS val FROM receitas_avulsas
+      WHERE EXTRACT(MONTH FROM data)::int=$1 AND EXTRACT(YEAR FROM data)::int=$2
+    `, [month, year]);
+
+    const { rows: expRows } = await dbPool.query(`
+      SELECT COALESCE(SUM(valor),0) AS val FROM despesas
+      WHERE EXTRACT(MONTH FROM data)::int=$1 AND EXTRACT(YEAR FROM data)::int=$2
+    `, [month, year]);
+
+    const { rows: garantiaRows } = await dbPool.query(`
+      SELECT o.id, c.nome AS nome_cliente,
+        TRIM(CONCAT(o.tipo_equipamento,' ',COALESCE(o.marca,''),' ',COALESCE(o.modelo,''))) AS equipamento,
+        o.data_saida, o.garantia_dias,
+        (o.data_saida + (o.garantia_dias||' days')::INTERVAL)::DATE AS data_garantia,
+        ((o.data_saida + (o.garantia_dias||' days')::INTERVAL)::DATE - CURRENT_DATE)::int AS dias_restantes
+      FROM ordens_servico o JOIN clientes c ON c.id=o.id_cliente
+      WHERE o.status='Entregue' AND o.data_saida IS NOT NULL AND o.garantia_dias > 0
+        AND (o.data_saida + (o.garantia_dias||' days')::INTERVAL)::DATE
+            BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+      ORDER BY data_garantia ASC LIMIT 10
+    `);
+
+    const { rows: recentRows } = await dbPool.query(`
+      SELECT o.id, c.nome AS nome_cliente,
+        TRIM(CONCAT(o.tipo_equipamento,' ',COALESCE(o.marca,''),' ',COALESCE(o.modelo,''))) AS equipamento,
+        o.status, o.data_entrada, o.defeito_relatado
+      FROM ordens_servico o JOIN clientes c ON c.id=o.id_cliente
+      WHERE o.status IN ('Orçamento','Em Aberto','Aguardando Autorização','Aguardando Peça','Em Andamento')
+      ORDER BY o.data_entrada DESC LIMIT 5
+    `);
+
+    const receita = Number(osRevRows[0].val) + Number(miscRevRows[0].val);
+    const despesas = Number(expRows[0].val);
+
+    return {
+      success: true,
+      counts: {
+        abertas: countRows[0].abertas,
+        em_andamento: countRows[0].em_andamento,
+        finalizadas_mes: countRows[0].finalizadas_mes,
+      },
+      financeiro: { receita_mes: receita, despesas_mes: despesas, lucro_mes: receita - despesas },
+      garantias: garantiaRows,
+      recentOS: recentRows,
+    };
+  } catch (error) {
+    console.error('[get-dashboard-stats] Erro:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle(
   "get-financial-summary",
   async (event, { startDate, endDate }) => {
