@@ -6,6 +6,7 @@ import {
   CssBaseline,
   GlobalStyles,
   ThemeProvider,
+  Tooltip,
   createTheme,
   IconButton,
   Typography,
@@ -34,6 +35,10 @@ import {
   Settings as SettingsIcon,
   VerifiedUser as VerifiedUserIcon,
   CalendarMonth as CalendarMonthIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Inventory as InventoryStockIcon,
+  TrendingUp as TrendingUpReportIcon,
 } from "@mui/icons-material";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -41,6 +46,8 @@ import LoginScreen from "./screens/LoginScreen";
 import HomeScreen from "./screens/HomeScreen";
 import WarrantyPanel from "./screens/WarrantyPanel";
 import OSAgenda from "./screens/OSAgenda";
+import StockControl from "./screens/StockControl";
+import ProfitabilityReport from "./screens/ProfitabilityReport";
 import CustomerGrid from "./components/CustomerGrid";
 import ProductServiceGrid from "./components/ProductServiceGrid";
 import OSGrid from "./components/OSGrid";
@@ -76,6 +83,8 @@ const componentMap = {
   HomeScreen,
   WarrantyPanel,
   OSAgenda,
+  StockControl,
+  ProfitabilityReport,
 };
 
 const getSidebarTheme = (mode) => {
@@ -98,6 +107,8 @@ const getInitials = (name) => {
   return name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
 };
 
+const COLLAPSED_WIDTH = 60;
+
 // Componente Sidebar usando MUI Drawer
 function AppSidebar({
   onNavigate,
@@ -107,10 +118,15 @@ function AppSidebar({
   toggleTheme,
   companyName,
   logoData,
+  isOpen,
+  onToggle,
 }) {
   const { logout, currentUser } = useAuth();
   const [reportsOpen, setReportsOpen] = useState(false);
   const st = getSidebarTheme(currentThemeMode);
+
+  // Fecha o submenu ao recolher
+  React.useEffect(() => { if (!isOpen) setReportsOpen(false); }, [isOpen]);
 
   const menuItems = [
     { label: "Início", component: "HomeScreen", icon: <HomeIcon /> },
@@ -122,12 +138,14 @@ function AppSidebar({
     { label: "Resumo Financeiro", component: "FinancialDashboard", icon: <BarChartIcon /> },
     { label: "Garantias", component: "WarrantyPanel", icon: <VerifiedUserIcon /> },
     { label: "Agenda de OS", component: "OSAgenda", icon: <CalendarMonthIcon /> },
+    { label: "Estoque", component: "StockControl", icon: <InventoryStockIcon /> },
     {
       label: "Relatórios",
       icon: <AssessmentIcon />,
       subItems: [
         { label: "OS por Cliente", component: "OSReportClient" },
         { label: "OS por Status", component: "OSReportStatus" },
+        { label: "Lucratividade", component: "ProfitabilityReport" },
         { label: "Serviços Mais Usados", component: "MostUsedServicesReport" },
         { label: "Histórico Equipamento", component: "EquipmentHistoryReport" },
         { label: "Receitas Detalhadas", component: "DetailedRevenueReport" },
@@ -141,104 +159,120 @@ function AppSidebar({
       : []),
   ];
 
-  const activeItemSx = (component) => ({
+  const navItemSx = (component) => ({
     mx: 1,
     borderRadius: 2,
     color: st.text,
     mb: 0.25,
-    '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 36 },
+    justifyContent: isOpen ? 'flex-start' : 'center',
+    px: isOpen ? undefined : 1,
+    '& .MuiListItemIcon-root': { color: 'inherit', minWidth: isOpen ? 36 : 'auto' },
     '&:hover': { bgcolor: st.hover },
     ...(currentView === component && {
       bgcolor: 'primary.main',
       color: 'white',
-      '& .MuiListItemIcon-root': { color: 'white', minWidth: 36 },
+      '& .MuiListItemIcon-root': { color: 'white', minWidth: isOpen ? 36 : 'auto' },
       '&:hover': { bgcolor: 'primary.dark' },
     }),
   });
+
+  const withTip = (label, el) =>
+    isOpen ? el : <Tooltip title={label} placement="right" arrow>{el}</Tooltip>;
+
+  const currentWidth = isOpen ? drawerWidth : COLLAPSED_WIDTH;
 
   return (
     <Drawer
       variant="permanent"
       sx={{
-        width: drawerWidth,
+        width: currentWidth,
         flexShrink: 0,
+        transition: 'width 0.25s ease',
         [`& .MuiDrawer-paper`]: {
-          width: drawerWidth,
+          width: currentWidth,
           boxSizing: 'border-box',
           bgcolor: st.bg,
           borderRight: st.border,
           boxShadow: st.shadow,
+          overflowX: 'hidden',
+          transition: 'width 0.25s ease',
         },
       }}
     >
-      <Box sx={{ overflow: 'auto', display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Header: Logo + Nome */}
-        <Box sx={{ py: 3, px: 2, textAlign: 'center', borderBottom: `1px solid ${st.divider}` }}>
-          {logoData && (
-            <img
-              src={logoData}
-              alt={`${companyName || 'Logo'}`}
-              style={{ maxHeight: 48, maxWidth: '80%', marginBottom: 8, objectFit: 'contain' }}
-            />
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Header */}
+        <Box sx={{
+          py: isOpen ? 2.5 : 1.5, px: isOpen ? 2 : 0,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          borderBottom: `1px solid ${st.divider}`,
+        }}>
+          {isOpen ? (
+            <>
+              {logoData && (
+                <img src={logoData} alt="" style={{ maxHeight: 44, maxWidth: '80%', marginBottom: 6, objectFit: 'contain' }} />
+              )}
+              <Typography variant="h6" noWrap sx={{ color: st.text, fontWeight: 700, letterSpacing: 0.5 }}>
+                {companyName || 'GSTI App'}
+              </Typography>
+            </>
+          ) : (
+            <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Typography sx={{ color: 'white', fontWeight: 700, fontSize: '1rem' }}>
+                {(companyName || 'G')[0].toUpperCase()}
+              </Typography>
+            </Box>
           )}
-          <Typography variant="h6" noWrap sx={{ color: st.text, fontWeight: 700, letterSpacing: 0.5 }}>
-            {companyName || 'GSTI App'}
-          </Typography>
+          <Tooltip title={isOpen ? 'Recolher menu' : 'Expandir menu'} placement="right">
+            <IconButton onClick={onToggle} size="small" sx={{ color: st.subtext, mt: 1, '&:hover': { bgcolor: st.hover } }}>
+              {isOpen ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
         </Box>
 
         {/* Navegação */}
-        <List sx={{ flexGrow: 1, pt: 1, px: 0 }}>
+        <List sx={{ flexGrow: 1, pt: 1, px: 0, overflowY: 'auto', overflowX: 'hidden' }}>
           {menuItems.map((item) => {
             if (item.subItems) {
-              const isOpen = item.label === 'Relatórios' ? reportsOpen : false;
-              const handleClick = item.label === 'Relatórios' ? () => setReportsOpen((r) => !r) : () => {};
               const anySubActive = item.subItems.some((s) => s.component === currentView);
 
+              // Colapsado: ícone único que navega para o primeiro sub-item
+              if (!isOpen) {
+                return (
+                  <ListItem key={item.label} disablePadding>
+                    {withTip(item.label,
+                      <ListItemButton
+                        onClick={() => onNavigate(item.subItems[0].component)}
+                        sx={{ ...navItemSx(anySubActive ? currentView : '__none__'), justifyContent: 'center' }}
+                      >
+                        <ListItemIcon sx={{ color: anySubActive ? 'primary.main' : st.text, minWidth: 'auto' }}>
+                          {item.icon}
+                        </ListItemIcon>
+                      </ListItemButton>
+                    )}
+                  </ListItem>
+                );
+              }
+
+              // Expandido: submenu normal
+              const isSubOpen = item.label === 'Relatórios' ? reportsOpen : false;
+              const handleSubClick = item.label === 'Relatórios' ? () => setReportsOpen((r) => !r) : () => {};
               return (
                 <React.Fragment key={item.label}>
-                  <ListItemButton
-                    onClick={handleClick}
-                    sx={{
-                      mx: 1,
-                      borderRadius: 2,
-                      mb: 0.25,
-                      color: anySubActive ? 'primary.main' : st.text,
-                      '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 36 },
-                      '&:hover': { bgcolor: st.hover },
-                    }}
-                  >
+                  <ListItemButton onClick={handleSubClick} sx={{ mx:1, borderRadius:2, mb:0.25, color: anySubActive ? 'primary.main' : st.text, '& .MuiListItemIcon-root':{ color:'inherit', minWidth:36 }, '&:hover':{ bgcolor: st.hover } }}>
                     <ListItemIcon>{item.icon}</ListItemIcon>
                     <ListItemText primary={item.label} />
-                    {isOpen ? <ExpandLess /> : <ExpandMore />}
+                    {isSubOpen ? <ExpandLess /> : <ExpandMore />}
                   </ListItemButton>
-                  <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                  <Collapse in={isSubOpen} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>
-                      {item.subItems.map((subItem) => (
-                        <ListItemButton
-                          key={subItem.label}
-                          onClick={() => onNavigate(subItem.component)}
-                          sx={{
-                            pl: 5,
-                            mx: 1,
-                            borderRadius: 2,
-                            mb: 0.25,
-                            color: st.subtext,
-                            '& .MuiListItemIcon-root': { color: 'inherit', minWidth: 28 },
-                            '&:hover': { bgcolor: st.hover, color: st.text },
-                            ...(currentView === subItem.component && {
-                              bgcolor: 'primary.main',
-                              color: 'white',
-                              '&:hover': { bgcolor: 'primary.dark' },
-                            }),
-                          }}
-                        >
-                          <ListItemIcon>
-                            {subItem.icon || <Box sx={{ width: 20 }} />}
-                          </ListItemIcon>
-                          <ListItemText
-                            primary={subItem.label}
-                            primaryTypographyProps={{ fontSize: '0.875rem' }}
-                          />
+                      {item.subItems.map((sub) => (
+                        <ListItemButton key={sub.label} onClick={() => onNavigate(sub.component)}
+                          sx={{ pl:5, mx:1, borderRadius:2, mb:0.25, color: st.subtext,
+                            '& .MuiListItemIcon-root':{ color:'inherit', minWidth:28 },
+                            '&:hover':{ bgcolor: st.hover, color: st.text },
+                            ...(currentView === sub.component && { bgcolor:'primary.main', color:'white', '&:hover':{ bgcolor:'primary.dark' } }) }}>
+                          <ListItemIcon>{sub.icon || <Box sx={{ width:20 }} />}</ListItemIcon>
+                          <ListItemText primary={sub.label} primaryTypographyProps={{ fontSize:'0.875rem' }} />
                         </ListItemButton>
                       ))}
                     </List>
@@ -249,47 +283,46 @@ function AppSidebar({
 
             return (
               <ListItem key={item.label} disablePadding>
-                <ListItemButton onClick={() => onNavigate(item.component)} sx={activeItemSx(item.component)}>
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.label} />
-                </ListItemButton>
+                {withTip(item.label,
+                  <ListItemButton onClick={() => onNavigate(item.component)} sx={navItemSx(item.component)}>
+                    <ListItemIcon>{item.icon}</ListItemIcon>
+                    {isOpen && <ListItemText primary={item.label} />}
+                  </ListItemButton>
+                )}
               </ListItem>
             );
           })}
         </List>
 
-        {/* Footer: usuário + tema + logout */}
-        <Box sx={{ p: 2, borderTop: `1px solid ${st.divider}` }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 32, height: 32, fontSize: '0.75rem' }}>
-              {getInitials(currentUser?.nome)}
-            </Avatar>
-            <Typography variant="caption" noWrap sx={{ color: st.text, flex: 1 }}>
-              {currentUser?.nome}
-            </Typography>
-            <IconButton
-              onClick={toggleTheme}
-              size="small"
-              sx={{ color: st.subtext }}
-              title={currentThemeMode === 'dark' ? 'Tema claro' : 'Tema escuro'}
-            >
-              {currentThemeMode === 'dark' ? (
-                <Brightness7Icon fontSize="small" />
-              ) : (
-                <Brightness4Icon fontSize="small" />
-              )}
-            </IconButton>
+        {/* Footer */}
+        <Box sx={{ p: isOpen ? 2 : 1, borderTop: `1px solid ${st.divider}`, display:'flex', flexDirection:'column', alignItems: isOpen ? 'stretch' : 'center', gap: 1 }}>
+          <Box sx={{ display:'flex', alignItems:'center', gap: isOpen ? 1 : 0, justifyContent: isOpen ? 'flex-start' : 'center', mb: isOpen ? 0.5 : 0 }}>
+            <Tooltip title={currentUser?.nome || ''} placement="right" disableHoverListener={isOpen}>
+              <Avatar sx={{ bgcolor:'primary.main', width:32, height:32, fontSize:'0.75rem', flexShrink:0 }}>
+                {getInitials(currentUser?.nome)}
+              </Avatar>
+            </Tooltip>
+            {isOpen && <Typography variant="caption" noWrap sx={{ color: st.text, flex:1 }}>{currentUser?.nome}</Typography>}
+            {isOpen && (
+              <IconButton onClick={toggleTheme} size="small" sx={{ color: st.subtext }} title={currentThemeMode === 'dark' ? 'Tema claro' : 'Tema escuro'}>
+                {currentThemeMode === 'dark' ? <Brightness7Icon fontSize="small" /> : <Brightness4Icon fontSize="small" />}
+              </IconButton>
+            )}
           </Box>
-          <Button
-            variant="outlined"
-            color="error"
-            onClick={logout}
-            size="small"
-            startIcon={<LogoutIcon />}
-            fullWidth
-          >
-            Logout
-          </Button>
+          {!isOpen && (
+            <Tooltip title="Alternar tema" placement="right">
+              <IconButton onClick={toggleTheme} size="small" sx={{ color: st.subtext }}>
+                {currentThemeMode === 'dark' ? <Brightness7Icon fontSize="small" /> : <Brightness4Icon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          )}
+          {isOpen ? (
+            <Button variant="outlined" color="error" onClick={logout} size="small" startIcon={<LogoutIcon />} fullWidth>Logout</Button>
+          ) : (
+            <Tooltip title="Logout" placement="right">
+              <IconButton onClick={logout} size="small" sx={{ color:'#f87171' }}><LogoutIcon fontSize="small" /></IconButton>
+            </Tooltip>
+          )}
         </Box>
       </Box>
     </Drawer>
@@ -302,6 +335,14 @@ function App() {
   const [themeMode, setThemeMode] = useState(
     () => localStorage.getItem("themeMode") || "light"
   );
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => localStorage.getItem("sidebarOpen") !== "false"
+  );
+  const toggleSidebar = () =>
+    setSidebarOpen((prev) => {
+      localStorage.setItem("sidebarOpen", String(!prev));
+      return !prev;
+    });
   const [needsSetup, setNeedsSetup] = useState(null); // null = verificando, true = precisa, false = não precisa
   const [checkingSetup, setCheckingSetup] = useState(true); // Para mostrar loading inicial
 
@@ -538,6 +579,8 @@ function App() {
             toggleTheme={toggleThemeMode}
             companyName={brandingConfig.companyName}
             logoData={brandingConfig.logoData}
+            isOpen={sidebarOpen}
+            onToggle={toggleSidebar}
           />
           <Box
             component="main"

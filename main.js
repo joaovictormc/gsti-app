@@ -97,10 +97,16 @@ function initializeDbPool() {
         connectionTimeoutMillis: 10000,
       });
       console.log("[DB] Pool de conexão inicializado com sucesso.");
-      // Migração automática de schema
-      dbPool.query("ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP NULL")
-        .then(() => console.log("[Migration] data_prevista: OK"))
-        .catch((e) => console.warn("[Migration] data_prevista:", e.message));
+      // Migrações automáticas de schema
+      [
+        "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP NULL",
+        "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_atual INT NOT NULL DEFAULT 0",
+        "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_minimo INT NOT NULL DEFAULT 0",
+      ].forEach((sql) =>
+        dbPool.query(sql)
+          .then(() => console.log("[Migration] OK:", sql.slice(0, 60)))
+          .catch((e) => console.warn("[Migration]:", e.message))
+      );
       // Teste de conexão opcional aqui
     } catch (error) {
       console.error("[DB] Erro ao inicializar pool de conexão:", error);
@@ -2520,6 +2526,64 @@ ipcMain.handle("get-os-by-client", async (event, clientId) => {
     console.error(`Erro ao buscar OS para cliente ${id}:`, error);
     return { success: false, error: error.message };
   }
+});
+
+// Controle de Estoque
+ipcMain.handle('get-stock', async () => {
+  if (!dbPool) return { success: false, error: 'Banco não configurado.' };
+  try {
+    const { rows } = await dbPool.query(`
+      SELECT id, descricao, tipo, valor, estoque_atual, estoque_minimo
+      FROM produtos_servicos ORDER BY descricao ASC
+    `);
+    return { success: true, data: rows };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('adjust-stock', async (event, { productId, quantity, operation }) => {
+  if (!dbPool) return { success: false, error: 'Banco não configurado.' };
+  try {
+    const delta = operation === 'entry' ? Math.abs(quantity) : -Math.abs(quantity);
+    const { rows } = await dbPool.query(`
+      UPDATE produtos_servicos
+      SET estoque_atual = GREATEST(0, estoque_atual + $1)
+      WHERE id = $2
+      RETURNING estoque_atual
+    `, [delta, productId]);
+    if (!rows.length) return { success: false, error: 'Produto não encontrado.' };
+    return { success: true, newStock: rows[0].estoque_atual };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+ipcMain.handle('update-stock-min', async (event, { productId, estoque_minimo }) => {
+  if (!dbPool) return { success: false, error: 'Banco não configurado.' };
+  try {
+    await dbPool.query('UPDATE produtos_servicos SET estoque_minimo=$1 WHERE id=$2', [estoque_minimo, productId]);
+    return { success: true };
+  } catch (err) { return { success: false, error: err.message }; }
+});
+
+// Relatório de Lucratividade por Serviço
+ipcMain.handle('get-profitability-report', async () => {
+  if (!dbPool) return { success: false, error: 'Banco não configurado.' };
+  try {
+    const { rows } = await dbPool.query(`
+      SELECT
+        ps.id, ps.descricao, ps.tipo,
+        ps.valor AS preco_tabela,
+        COUNT(oi.id)::int AS total_vendas,
+        COALESCE(SUM(oi.quantidade),0)::int AS total_quantidade,
+        COALESCE(SUM(oi.quantidade * oi.valor_unitario),0) AS receita_total,
+        COALESCE(AVG(oi.valor_unitario),0) AS preco_medio
+      FROM produtos_servicos ps
+      LEFT JOIN os_itens oi ON oi.id_produto_servico = ps.id
+      LEFT JOIN ordens_servico os ON os.id = oi.id_os
+        AND os.status IN ('Finalizado','Entregue')
+      GROUP BY ps.id, ps.descricao, ps.tipo, ps.valor
+      ORDER BY receita_total DESC
+    `);
+    return { success: true, data: rows };
+  } catch (err) { return { success: false, error: err.message }; }
 });
 
 // Timeline de OS por cliente

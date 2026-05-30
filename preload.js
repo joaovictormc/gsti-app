@@ -70,6 +70,14 @@ contextBridge.exposeInMainWorld('api', {
   getDashboardStats: () => ipcRenderer.invoke('get-dashboard-stats'),
   getCustomerTimeline: (clientId) => ipcRenderer.invoke('get-customer-timeline', clientId),
   getOSAgenda: (params) => ipcRenderer.invoke('get-os-agenda', params),
+
+  // Estoque
+  getStock: () => ipcRenderer.invoke('get-stock'),
+  adjustStock: (data) => ipcRenderer.invoke('adjust-stock', data),
+  updateStockMin: (data) => ipcRenderer.invoke('update-stock-min', data),
+
+  // Lucratividade
+  getProfitabilityReport: () => ipcRenderer.invoke('get-profitability-report'),
   getWarrantyPanel: () => ipcRenderer.invoke('get-warranty-panel'),
 
   // Backup e Restauração

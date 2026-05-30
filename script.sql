@@ -46,9 +46,11 @@ CREATE TABLE IF NOT EXISTS equipamentos (
 -- Tabela de Produtos e Serviços
 CREATE TABLE IF NOT EXISTS produtos_servicos (
     id       SERIAL PRIMARY KEY,
-    descricao TEXT NOT NULL,
-    valor    DECIMAL(10, 2) NOT NULL,
-    tipo     VARCHAR(50) NOT NULL
+    descricao       TEXT NOT NULL,
+    valor           DECIMAL(10, 2) NOT NULL,
+    tipo            VARCHAR(50) NOT NULL,
+    estoque_atual   INT NOT NULL DEFAULT 0,
+    estoque_minimo  INT NOT NULL DEFAULT 0
 );
 
 -- Tabela Principal das Ordens de Serviço
