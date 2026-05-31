@@ -24,6 +24,8 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
+  ToggleButtonGroup,
+  ToggleButton,
 } from "@mui/material";
 import BackupIcon from "@mui/icons-material/Backup";
 import RestoreIcon from "@mui/icons-material/Restore";
@@ -43,7 +45,7 @@ function SettingsScreen() {
     branding: { companyName: "", logoPath: null },
     emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
     permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
-    autoBackup: { enabled: false, intervalHours: 24, destinationPath: "" },
+    autoBackup: { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 },
   });
   const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -72,7 +74,7 @@ function SettingsScreen() {
           const defaultBranding = { companyName: "GSTI App", logoPath: null };
           const defaultNotifications = { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" };
           const defaultPerms = { canSeeFinancial: false, canSeeReports: false };
-          const defaultAutoBackup = { enabled: false, intervalHours: 24, destinationPath: "" };
+          const defaultAutoBackup = { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 };
           setSettings({
             email: { ...defaultEmail, ...(result.settings.email || {}) },
             branding: { ...defaultBranding, ...(result.settings.branding || {}) },
@@ -643,29 +645,52 @@ function SettingsScreen() {
           label="Ativar backup automático agendado"
         />
         {settings.autoBackup.enabled && (
-          <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
-            <MuiFormControl size="small" sx={{ maxWidth: 200 }}>
-              <InputLabel>Intervalo</InputLabel>
-              <Select
-                value={settings.autoBackup.intervalHours}
-                label="Intervalo"
-                onChange={(e) => handleAutoBackupChange("intervalHours", e.target.value)}
+          <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 2 }}>
+
+            {/* Dias da semana */}
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.75 }}>
+                Dias da semana
+              </Typography>
+              <ToggleButtonGroup
+                size="small"
+                value={settings.autoBackup.scheduledDays}
+                onChange={(_, newDays) => {
+                  if (newDays.length > 0) handleAutoBackupChange("scheduledDays", newDays);
+                }}
                 disabled={saving}
               >
-                <MenuItem value={6}>A cada 6 horas</MenuItem>
-                <MenuItem value={12}>A cada 12 horas</MenuItem>
-                <MenuItem value={24}>A cada 24 horas</MenuItem>
-                <MenuItem value={48}>A cada 48 horas</MenuItem>
-                <MenuItem value={72}>A cada 72 horas</MenuItem>
+                {[["Dom",0],["Seg",1],["Ter",2],["Qua",3],["Qui",4],["Sex",5],["Sáb",6]].map(([label, val]) => (
+                  <ToggleButton key={val} value={val} sx={{ px: 1.5, py: 0.5, fontSize: "0.75rem" }}>
+                    {label}
+                  </ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+            </Box>
+
+            {/* Horário */}
+            <MuiFormControl size="small" sx={{ maxWidth: 180 }}>
+              <InputLabel>Horário</InputLabel>
+              <Select
+                value={settings.autoBackup.scheduledHour}
+                label="Horário"
+                onChange={(e) => handleAutoBackupChange("scheduledHour", e.target.value)}
+                disabled={saving}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <MenuItem key={i} value={i}>
+                    {String(i).padStart(2, "0")}:00
+                  </MenuItem>
+                ))}
               </Select>
             </MuiFormControl>
 
+            {/* Pasta de destino */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <TextField
                 size="small"
                 label="Pasta de destino"
                 value={settings.autoBackup.destinationPath}
-                onChange={(e) => handleAutoBackupChange("destinationPath", e.target.value)}
                 fullWidth
                 disabled={saving}
                 placeholder="Selecione uma pasta..."
@@ -682,6 +707,26 @@ function SettingsScreen() {
                 Selecionar
               </Button>
             </Box>
+
+            {/* Política de retenção */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+                Manter backups dos últimos
+              </Typography>
+              <TextField
+                size="small"
+                type="number"
+                value={settings.autoBackup.retentionDays}
+                onChange={(e) => handleAutoBackupChange("retentionDays", Math.max(0, Number(e.target.value)))}
+                disabled={saving}
+                inputProps={{ min: 0 }}
+                sx={{ width: 80 }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                dias <Typography component="span" variant="caption">(0 = manter todos)</Typography>
+              </Typography>
+            </Box>
+
             <Typography variant="caption" color="text.secondary">
               Para backup na nuvem, selecione uma pasta sincronizada pelo Google Drive, OneDrive ou Dropbox.
             </Typography>

@@ -51,7 +51,13 @@ const defaultConfig = {
   branding: { companyName: "GSTI App", logoPath: null },
   emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
   permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
-  autoBackup: { enabled: false, intervalHours: 24, destinationPath: "" },
+  autoBackup: {
+    enabled: false,
+    scheduledDays: [1, 2, 3, 4, 5],
+    scheduledHour: 2,
+    destinationPath: "",
+    retentionDays: 30,
+  },
   setupComplete: false,
 };
 
@@ -275,6 +281,27 @@ async function notifyOSFinalized(osId, osData, total) {
 // --- BACKUP AUTOMÁTICO ---
 
 let autoBackupTimer = null;
+let lastBackupDate = null; // "YYYY-MM-DD" — evita executar mais de uma vez no mesmo dia
+
+function applyRetentionPolicy(destinationPath, retentionDays) {
+  if (!retentionDays || retentionDays <= 0) return;
+  try {
+    const cutoff = Date.now() - retentionDays * 86400000;
+    fs.readdirSync(destinationPath)
+      .filter((f) => f.startsWith("gsti_backup_") && f.endsWith(".zip"))
+      .forEach((f) => {
+        const fPath = path.join(destinationPath, f);
+        try {
+          if (fs.statSync(fPath).mtimeMs < cutoff) {
+            fs.unlinkSync(fPath);
+            console.log(`[Retention] Removido: ${f}`);
+          }
+        } catch (_) {}
+      });
+  } catch (err) {
+    console.error("[Retention] Erro:", err.message);
+  }
+}
 
 async function runAutoBackup() {
   const config = appConfig?.autoBackup;
@@ -290,6 +317,7 @@ async function runAutoBackup() {
   const tempSqlPath = path.join(app.getPath("temp"), sqlName);
   const destZipPath = path.join(config.destinationPath, zipName);
 
+  lastBackupDate = dateStr;
   try {
     await execFileAsync(pgDump,
       ["-h", db.host, "-p", String(db.port), "-U", db.user, "-d", db.database,
@@ -307,19 +335,40 @@ async function runAutoBackup() {
     });
     try { fs.unlinkSync(tempSqlPath); } catch (_) {}
     console.log(`[AutoBackup] Salvo: ${destZipPath}`);
+    applyRetentionPolicy(config.destinationPath, config.retentionDays);
   } catch (err) {
     try { fs.unlinkSync(tempSqlPath); } catch (_) {}
     console.error("[AutoBackup] Erro:", err.message);
+    lastBackupDate = null; // permite tentar novamente
   }
+}
+
+async function checkAndRunBackup() {
+  const config = appConfig?.autoBackup;
+  if (!config?.enabled || !config?.destinationPath) return;
+
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentDay = now.getDay();
+  const todayStr = now.toISOString().slice(0, 10);
+
+  const scheduledDays = config.scheduledDays ?? [1, 2, 3, 4, 5];
+  const scheduledHour = config.scheduledHour ?? 2;
+
+  if (currentHour !== scheduledHour) return;
+  if (!scheduledDays.includes(currentDay)) return;
+  if (lastBackupDate === todayStr) return;
+
+  await runAutoBackup();
 }
 
 function scheduleAutoBackup() {
   if (autoBackupTimer) { clearInterval(autoBackupTimer); autoBackupTimer = null; }
   const config = appConfig?.autoBackup;
-  if (!config?.enabled || !config?.destinationPath || !config?.intervalHours) return;
-  const intervalMs = config.intervalHours * 3600 * 1000;
-  autoBackupTimer = setInterval(runAutoBackup, intervalMs);
-  console.log(`[AutoBackup] Agendado a cada ${config.intervalHours}h → ${config.destinationPath}`);
+  if (!config?.enabled || !config?.destinationPath) return;
+  // Verifica a cada 30 minutos se chegou a hora agendada
+  autoBackupTimer = setInterval(checkAndRunBackup, 30 * 60 * 1000);
+  console.log(`[AutoBackup] Scheduler ativo — ${(config.scheduledDays ?? []).join(",")} dias, hora ${config.scheduledHour ?? 2}:00 → ${config.destinationPath}`);
 }
 
 // --- CARREGA A CONFIGURAÇÃO AO INICIAR ---
@@ -1952,7 +2001,9 @@ ipcMain.handle('get-dashboard-stats', async () => {
       ORDER BY o.data_entrada DESC LIMIT 5
     `);
 
-    const receita = Number(osRevRows[0].val) + Number(miscRevRows[0].val);
+    const receita_os = Number(osRevRows[0].val);
+    const receita_avulsa = Number(miscRevRows[0].val);
+    const receita = receita_os + receita_avulsa;
     const despesas = Number(expRows[0].val);
 
     return {
@@ -1962,7 +2013,13 @@ ipcMain.handle('get-dashboard-stats', async () => {
         em_andamento: countRows[0].em_andamento,
         finalizadas_mes: countRows[0].finalizadas_mes,
       },
-      financeiro: { receita_mes: receita, despesas_mes: despesas, lucro_mes: receita - despesas },
+      financeiro: {
+        receita_os,
+        receita_avulsa,
+        receita_mes: receita,
+        despesas_mes: despesas,
+        lucro_mes: receita - despesas,
+      },
       garantias: garantiaRows,
       recentOS: recentRows,
     };
