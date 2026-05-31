@@ -33,23 +33,23 @@ function buildEntryPDF({ osData, filePath, companyName, logoPath }) {
 
     const CONDITIONS =
       'LEIA COM ATENÇÃO! O prazo para orçamento é de até 7 (sete) dias úteis a partir da data de entrada, de acordo com a demanda de serviços. ' +
-      'O orçamento é apresentado ao cliente para aprovação prévia — nenhum serviço é executado sem autorização expressa. ' +
+      'O orçamento é apresentado ao cliente para aprovação prévia - nenhum serviço é executado sem autorização expressa. ' +
       'Ao realizar diagnóstico em equipamentos eletrônicos, podem ser identificados defeitos adicionais além do informado, podendo inviabilizar o conserto total ou parcial. ' +
       'Por isso, informe qualquer defeito pré-existente; somente o defeito descrito nesta ordem será considerado. ' +
       'Não cobramos taxa de orçamento. Serviços em placa-mãe possuem taxa de bancada, independentemente do resultado. ' +
-      'O cliente é o único responsável pelo backup de seus dados — a empresa não se responsabiliza por perda de informações durante o serviço. ' +
-      'O equipamento deve ser retirado em até 90 (noventa) dias após conclusão ou recusa do serviço; após esse prazo, poderão ser aplicadas taxas de armazenamento conforme legislação vigente (Lei 8.078/90 – CDC).';
+      'O cliente é o único responsável pelo backup de seus dados - a empresa não se responsabiliza por perda de informações durante o serviço. ' +
+      'O equipamento deve ser retirado em até 90 (noventa) dias após conclusão ou recusa do serviço; após esse prazo, poderão ser aplicadas taxas de armazenamento conforme legislação vigente (Lei 8.078/90 - CDC).';
 
-    const labeledBox = (label, value, x, y, w, h = 22) => {
+    const labeledBox = (label, value, x, y, w, h = 26) => {
       doc.rect(x, y, w, h).lineWidth(0.4).strokeColor('#888').stroke();
-      doc.font('Helvetica').fontSize(6.5).fillColor('#555')
-         .text(label, x + 2, y + 2, { width: w - 4, lineBreak: false });
-      doc.font('Helvetica').fontSize(8.5).fillColor('#000')
-         .text(String(value || ''), x + 2, y + 10, { width: w - 4, lineBreak: false, ellipsis: true });
+      doc.font('Helvetica').fontSize(7).fillColor('#555')
+         .text(label, x + 3, y + 3, { width: w - 6, lineBreak: false });
+      doc.font('Helvetica').fontSize(10).fillColor('#000')
+         .text(String(value || ''), x + 3, y + 13, { width: w - 6, lineBreak: false, ellipsis: true });
     };
 
     const secTitle = (text, y) =>
-      doc.font('Helvetica-Bold').fontSize(7.5).fillColor('#333').text(text, M, y, { width: CW });
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text(text, M, y, { width: CW });
 
     const drawVia = (isClientCopy) => {
       const via = isClientCopy ? 'Via do Cliente' : 'Via da Empresa';
@@ -76,71 +76,73 @@ function buildEntryPDF({ osData, filePath, companyName, logoPath }) {
       labeledBox('OS Nº', String(osData.id).padStart(6, '0'), M, y, CW * 0.18);
       labeledBox('Data de Entrada', dateStr, M + CW * 0.18, y, CW * 0.32);
       labeledBox('Hora', timeStr, M + CW * 0.50, y, CW * 0.50);
-      y += 22;
+      y += 26;
       labeledBox('Cliente', osData.nome_cliente, M, y, CW);
-      y += 22;
+      y += 26;
       labeledBox('CPF/CNPJ', formatDocument(osData.cpf_cnpj), M, y, CW * 0.5);
       labeledBox('Telefone / Contato', formatPhone(osData.telefone_cliente), M + CW * 0.5, y, CW * 0.5);
-      y += 22;
+      y += 26;
       const rua = osData.logradouro || osData.endereco_cliente || '';
       labeledBox('Endereço / Logradouro', rua, M, y, CW * 0.75);
       labeledBox('Número', osData.num_end || '', M + CW * 0.75, y, CW * 0.25);
-      y += 22;
+      y += 26;
       labeledBox('Bairro', osData.bairro || '', M, y, CW * 0.28);
       labeledBox('Cidade', osData.cidade || '', M + CW * 0.28, y, CW * 0.35);
       labeledBox('UF', osData.estado || '', M + CW * 0.63, y, CW * 0.10);
       labeledBox('CEP', osData.cep || '', M + CW * 0.73, y, CW * 0.27);
-      y += 22 + 7;
+      y += 26 + 10;
 
       // Equipamento
-      secTitle('▶  DADOS DO EQUIPAMENTO', y); y += 11;
+      secTitle('DADOS DO EQUIPAMENTO', y); y += 16;
       labeledBox('Tipo / Equipamento', osData.tipo_equipamento, M, y, CW * 0.35);
       labeledBox('Marca', osData.marca, M + CW * 0.35, y, CW * 0.30);
       labeledBox('Modelo', osData.modelo, M + CW * 0.65, y, CW * 0.35);
-      y += 22;
+      y += 26;
       labeledBox('Nº de Série', osData.numero_serie, M, y, CW * 0.40);
       labeledBox('Acessórios / Itens Entregues', osData.observacoes_entrada, M + CW * 0.40, y, CW * 0.60);
-      y += 22 + 7;
+      y += 26 + 10;
 
       // Defeito
-      secTitle('▶  DEFEITO / PROBLEMA RELATADO:', y); y += 11;
-      const probH = 52;
+      secTitle('DEFEITO / PROBLEMA RELATADO', y); y += 16;
+      const probH = 60;
       doc.rect(M, y, CW, probH).lineWidth(0.4).strokeColor('#888').stroke();
-      doc.font('Helvetica').fontSize(9).fillColor('#000')
-         .text(osData.defeito_relatado || '', M + 4, y + 4, { width: CW - 8, height: probH - 8 });
-      y += probH + 7;
+      doc.font('Helvetica').fontSize(10).fillColor('#000')
+         .text(osData.defeito_relatado || '', M + 5, y + 5, { width: CW - 10, height: probH - 10 });
+      y += probH + 10;
 
       // Condições
-      secTitle('▶  CONDIÇÕES DE SERVIÇO:', y); y += 11;
-      const condH = 112;
+      secTitle('CONDIÇÕES DE SERVIÇO', y); y += 16;
+      const condH = 120;
       doc.rect(M, y, CW, condH).lineWidth(0.4).strokeColor('#888').stroke();
-      doc.font('Helvetica').fontSize(7.5).fillColor('#000')
-         .text(CONDITIONS, M + 4, y + 4, { width: CW - 8, height: condH - 8, align: 'justify' });
-      y += condH + 7;
+      doc.font('Helvetica').fontSize(9).fillColor('#000')
+         .text(CONDITIONS, M + 5, y + 5, { width: CW - 10, height: condH - 10, align: 'justify' });
+      y += condH + 12;
 
-      // Rodapé / assinaturas
-      doc.font('Helvetica').fontSize(8.5).fillColor('#000')
+      // Rodapé
+      doc.font('Helvetica').fontSize(9.5).fillColor('#000')
          .text(`Data Entrega/Entrada: ${dateStr}     Hora: ${timeStr}`, M, y);
-      y += 13;
-      const atendente = osData.nome_atendente ? `Técnico: ${osData.nome_atendente}` : 'Técnico Responsável: _______________________';
-      doc.font('Helvetica').fontSize(8.5).text('Situação da Ordem: _________________________________', M, y);
-      doc.text(atendente, M, y, { width: CW, align: 'right' });
       y += 16;
+      const atendente = osData.nome_atendente ? `Técnico: ${osData.nome_atendente}` : 'Técnico Responsável: _______________________';
+      doc.font('Helvetica').fontSize(9.5).text('Situação da Ordem: _________________________________', M, y);
+      doc.text(atendente, M, y, { width: CW, align: 'right' });
+      y += 20;
 
-      const bs = 8;
+      // Vias (checkboxes)
+      const bs = 9;
       doc.rect(M, y, bs, bs).lineWidth(0.5).stroke();
-      if (isClientCopy) doc.font('Helvetica-Bold').fontSize(8).text('X', M + 1.5, y + 0.5);
-      doc.font('Helvetica').fontSize(8.5).fillColor('#000').text('Via do Cliente', M + bs + 3, y + 0.5);
-      doc.rect(M + 115, y, bs, bs).lineWidth(0.5).stroke();
-      if (!isClientCopy) doc.font('Helvetica-Bold').fontSize(8).text('X', M + 116.5, y + 0.5);
-      doc.font('Helvetica').fontSize(8.5).text('Via da Empresa', M + 115 + bs + 3, y + 0.5);
-      y += 18;
+      if (isClientCopy) doc.font('Helvetica-Bold').fontSize(9).text('X', M + 1.8, y + 0.5);
+      doc.font('Helvetica').fontSize(9.5).fillColor('#000').text('Via do Cliente', M + bs + 4, y + 0.5);
+      doc.rect(M + 125, y, bs, bs).lineWidth(0.5).stroke();
+      if (!isClientCopy) doc.font('Helvetica-Bold').fontSize(9).text('X', M + 126.8, y + 0.5);
+      doc.font('Helvetica').fontSize(9.5).text('Via da Empresa', M + 125 + bs + 4, y + 0.5);
 
+      // Assinaturas — área ampla para assinar à mão
+      y += 58;
       const lw = CW * 0.44, l2x = M + CW - lw;
-      doc.moveTo(M, y).lineTo(M + lw, y).lineWidth(0.5).strokeColor('#555').stroke();
-      doc.font('Helvetica').fontSize(7).fillColor('#555').text('Visto / Assinatura do Cliente', M, y + 2, { width: lw, align: 'center' });
-      doc.moveTo(l2x, y).lineTo(l2x + lw, y).lineWidth(0.5).strokeColor('#555').stroke();
-      doc.font('Helvetica').fontSize(7).fillColor('#555').text('Visto / Assinatura da Empresa', l2x, y + 2, { width: lw, align: 'center' });
+      doc.moveTo(M, y).lineTo(M + lw, y).lineWidth(0.6).strokeColor('#333').stroke();
+      doc.font('Helvetica').fontSize(8.5).fillColor('#333').text('Visto / Assinatura do Cliente', M, y + 4, { width: lw, align: 'center' });
+      doc.moveTo(l2x, y).lineTo(l2x + lw, y).lineWidth(0.6).strokeColor('#333').stroke();
+      doc.font('Helvetica').fontSize(8.5).fillColor('#333').text('Visto / Assinatura da Empresa', l2x, y + 4, { width: lw, align: 'center' });
     };
 
     drawVia(false);
