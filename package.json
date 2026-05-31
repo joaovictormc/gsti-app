@@ -41,9 +41,11 @@
       "output": "dist_electron",
       "buildResources": "build_resources"
     },
+    "asar": false,
     "files": [
       "main.js",
       "preload.js",
+      "pdf-worker.js",
       "package.json",
       "!node_modules/@types/",
       "!node_modules/.bin/",

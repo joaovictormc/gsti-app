@@ -3,16 +3,32 @@ const path = require("path");
 const { Pool } = require("pg");
 const axios = require("axios");
 const fs = require("fs");
-const PDFDocument = require("pdfkit");
 const ExcelJS = require("exceljs");
 const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const { execFile, execSync } = require("child_process");
+const { Worker } = require("worker_threads");
 const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 const archiver = require("archiver");
 const unzipper = require("unzipper");
+
+// Gera PDF em thread separada para não bloquear o processo principal.
+// Em produção empacotada (ASAR), adicionar "asarUnpack": ["pdf-worker.js"] no electron-builder.
+function runPdfWorker(data) {
+  return new Promise((resolve, reject) => {
+    const workerPath = path
+      .join(__dirname, "pdf-worker.js")
+      .replace("app.asar" + path.sep, "app.asar.unpacked" + path.sep);
+    const worker = new Worker(workerPath, { workerData: data });
+    worker.on("message", resolve);
+    worker.on("error", reject);
+    worker.on("exit", (code) => {
+      if (code !== 0) reject(new Error(`PDF worker encerrou com código ${code}`));
+    });
+  });
+}
 
 const isDev = process.env.NODE_ENV !== "production";
 const saltRounds = 10;
@@ -1328,46 +1344,7 @@ ipcMain.handle("delete-os", async (event, osId) => {
   }
 });
 
-// --- Cabeçalho de Branding para PDFs ---
-function drawPdfHeader(doc, docTitle, osId) {
-  const companyName = appConfig?.branding?.companyName || 'GSTI App';
-  const logoPath = appConfig?.branding?.logoPath;
-  const margin = doc.page.margins.left;
-  const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const startY = doc.y;
-  let logoDrawn = false;
-
-  if (logoPath && fs.existsSync(logoPath)) {
-    try {
-      doc.image(logoPath, margin, startY, { height: 50, fit: [90, 50] });
-      logoDrawn = true;
-    } catch (e) {
-      console.warn('[PDF] Logo não carregada:', e.message);
-    }
-  }
-
-  const textX = logoDrawn ? margin + 100 : margin;
-  const textWidth = logoDrawn ? contentWidth - 100 : contentWidth;
-  const align = logoDrawn ? 'left' : 'center';
-
-  doc.font('Helvetica-Bold').fontSize(logoDrawn ? 15 : 18)
-     .text(companyName, textX, startY, { width: textWidth, align });
-  doc.font('Helvetica').fontSize(logoDrawn ? 12 : 14)
-     .text(docTitle, textX, doc.y, { width: textWidth, align });
-  doc.fontSize(10)
-     .text(`OS Nº: ${osId}  ·  ${new Date().toLocaleDateString('pt-BR')}`, textX, doc.y, { width: textWidth, align });
-
-  if (logoDrawn) doc.y = Math.max(doc.y, startY + 58);
-
-  doc.moveDown(0.5);
-  doc.moveTo(margin, doc.y).lineTo(margin + contentWidth, doc.y)
-     .strokeColor('#aaaaaa').lineWidth(0.75).stroke();
-  doc.strokeColor('black').lineWidth(1);
-  doc.font('Helvetica').fontSize(10);
-  doc.moveDown(1);
-}
-
-// --- PDF COMPROVANTE DE ENTRADA (layout estruturado em caixas, duas vias) ---
+// --- PDF COMPROVANTE DE ENTRADA (assíncrono via worker thread) ---
 ipcMain.handle("generate-entry-receipt", async (event, osId) => {
   if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
 
@@ -1402,490 +1379,75 @@ ipcMain.handle("generate-entry-receipt", async (event, osId) => {
   if (!filePath) return { success: false, error: "Cancelado." };
 
   try {
-    const doc = new PDFDocument({ size: "A4", margin: 0, autoFirstPage: true });
-    const stream = fs.createWriteStream(filePath);
-    doc.pipe(stream);
-
-    const M  = 38;                           // margem lateral
-    const PW = doc.page.width;              // 595.28
-    const CW = PW - M * 2;                  // largura útil ≈ 519
-
-    const companyName = appConfig?.branding?.companyName || "GSTI App";
-    const logoPath    = appConfig?.branding?.logoPath;
-
-    // ---- helpers ----
-    const labeledBox = (label, value, x, y, w, h = 22) => {
-      doc.rect(x, y, w, h).lineWidth(0.4).strokeColor("#888").stroke();
-      doc.font("Helvetica").fontSize(6.5).fillColor("#555")
-         .text(label, x + 2, y + 2, { width: w - 4, lineBreak: false });
-      doc.font("Helvetica").fontSize(8.5).fillColor("#000")
-         .text(String(value || ""), x + 2, y + 10, { width: w - 4, lineBreak: false, ellipsis: true });
-    };
-
-    const sectionTitle = (text, x, y) => {
-      doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#333").text(text, x, y, { width: CW });
-    };
-
-    const CONDITIONS =
-      "LEIA COM ATENÇÃO! O prazo para orçamento é de até 7 (sete) dias úteis a partir da data de entrada, de acordo com a demanda de serviços. O orçamento é apresentado ao cliente para aprovação prévia — nenhum serviço é executado sem autorização expressa. " +
-      "Ao realizar diagnóstico em equipamentos eletrônicos, podem ser identificados defeitos adicionais além do informado, podendo inviabilizar o conserto total ou parcial. Por isso, informe qualquer defeito pré-existente; somente o defeito descrito nesta ordem será considerado. " +
-      "Não cobramos taxa de orçamento. Serviços em placa-mãe possuem taxa de bancada, independentemente do resultado. " +
-      "O cliente é o único responsável pelo backup de seus dados — a empresa não se responsabiliza por perda de informações durante o serviço. " +
-      "O equipamento deve ser retirado em até 90 (noventa) dias após conclusão ou recusa do serviço; após esse prazo, poderão ser aplicadas taxas de armazenamento conforme legislação vigente (Lei 8.078/90 – CDC).";
-
-    const drawVia = (isClientCopy) => {
-      const via = isClientCopy ? "Via do Cliente" : "Via da Empresa";
-      const dataEntrada = new Date(osData.data_entrada);
-      const dateStr = dataEntrada.toLocaleDateString("pt-BR");
-      const timeStr = dataEntrada.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-
-      let y = M;
-
-      // ── CABEÇALHO ──────────────────────────────────────────────
-      let logoW = 0;
-      if (logoPath && fs.existsSync(logoPath)) {
-        try {
-          doc.image(logoPath, M, y, { height: 44, fit: [70, 44] });
-          logoW = 78;
-        } catch (_) {}
-      }
-
-      const hTx = M + logoW;
-      const hTw = CW - logoW;
-      doc.font("Helvetica-Bold").fontSize(13).fillColor("#000")
-         .text(companyName, hTx, y, { width: hTw, align: "center" });
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#222")
-         .text("COMPROVANTE DE ENTRADA INTERNO", hTx, y + 17, { width: hTw, align: "center" });
-
-      // OS e via no canto direito
-      doc.font("Helvetica-Bold").fontSize(10).fillColor("#000")
-         .text(`OS Nº ${String(osData.id).padStart(6, "0")}`, M, y, { width: CW, align: "right" });
-      doc.font("Helvetica").fontSize(8).fillColor("#444")
-         .text(via, M, y + 14, { width: CW, align: "right" });
-
-      y += 44;
-      doc.moveTo(M, y).lineTo(M + CW, y).lineWidth(1.5).strokeColor("#000").stroke();
-      y += 6;
-
-      // ── DADOS DO CLIENTE ───────────────────────────────────────
-      // Linha 1: OS Nº | Data | Hora
-      labeledBox("OS Nº", String(osData.id).padStart(6, "0"), M,            y, CW * 0.18);
-      labeledBox("Data de Entrada", dateStr,                   M + CW*0.18, y, CW * 0.32);
-      labeledBox("Hora",            timeStr,                   M + CW*0.50, y, CW * 0.50);
-      y += 22;
-
-      // Linha 2: Cliente
-      labeledBox("Cliente", osData.nome_cliente, M, y, CW);
-      y += 22;
-
-      // Linha 3: CPF/CNPJ | Telefone
-      labeledBox("CPF/CNPJ", formatDocument(osData.cpf_cnpj), M,           y, CW * 0.5);
-      labeledBox("Telefone / Contato", formatPhone(osData.telefone_cliente), M + CW*0.5, y, CW * 0.5);
-      y += 22;
-
-      // Linha 4: Endereço | Número
-      const rua = osData.logradouro || osData.endereco_cliente || "";
-      labeledBox("Endereço / Logradouro", rua,           M,            y, CW * 0.75);
-      labeledBox("Número",  osData.num_end || "",         M + CW*0.75, y, CW * 0.25);
-      y += 22;
-
-      // Linha 5: Bairro | Cidade | UF | CEP
-      labeledBox("Bairro",  osData.bairro  || "",  M,            y, CW * 0.28);
-      labeledBox("Cidade",  osData.cidade  || "",  M + CW*0.28, y, CW * 0.35);
-      labeledBox("UF",      osData.estado  || "",  M + CW*0.63, y, CW * 0.10);
-      labeledBox("CEP",     osData.cep     || "",  M + CW*0.73, y, CW * 0.27);
-      y += 22 + 7;
-
-      // ── DADOS DO EQUIPAMENTO ───────────────────────────────────
-      sectionTitle("▶  DADOS DO EQUIPAMENTO", M, y);
-      y += 11;
-
-      labeledBox("Tipo / Equipamento", osData.tipo_equipamento, M,            y, CW * 0.35);
-      labeledBox("Marca",              osData.marca,             M + CW*0.35, y, CW * 0.30);
-      labeledBox("Modelo",             osData.modelo,            M + CW*0.65, y, CW * 0.35);
-      y += 22;
-
-      labeledBox("Nº de Série",                  osData.numero_serie,        M,            y, CW * 0.40);
-      labeledBox("Acessórios / Itens Entregues", osData.observacoes_entrada,  M + CW*0.40, y, CW * 0.60);
-      y += 22 + 7;
-
-      // ── DEFEITO RELATADO ───────────────────────────────────────
-      sectionTitle("▶  DEFEITO / PROBLEMA RELATADO:", M, y);
-      y += 11;
-      const probH = 52;
-      doc.rect(M, y, CW, probH).lineWidth(0.4).strokeColor("#888").stroke();
-      doc.font("Helvetica").fontSize(9).fillColor("#000")
-         .text(osData.defeito_relatado || "", M + 4, y + 4, { width: CW - 8, height: probH - 8 });
-      y += probH + 7;
-
-      // ── CONDIÇÕES DE SERVIÇO ───────────────────────────────────
-      sectionTitle("▶  CONDIÇÕES DE SERVIÇO:", M, y);
-      y += 11;
-      const condH = 112;
-      doc.rect(M, y, CW, condH).lineWidth(0.4).strokeColor("#888").stroke();
-      doc.font("Helvetica").fontSize(7.5).fillColor("#000")
-         .text(CONDITIONS, M + 4, y + 4, { width: CW - 8, height: condH - 8, align: "justify" });
-      y += condH + 7;
-
-      // ── RODAPÉ / ASSINATURAS ───────────────────────────────────
-      doc.font("Helvetica").fontSize(8.5).fillColor("#000")
-         .text(`Data Entrega/Entrada: ${dateStr}     Hora: ${timeStr}`, M, y);
-      y += 13;
-
-      const atendenteTexto = osData.nome_atendente
-        ? `Técnico: ${osData.nome_atendente}`
-        : "Técnico Responsável: _______________________";
-      doc.font("Helvetica").fontSize(8.5)
-         .text("Situação da Ordem: _________________________________", M, y);
-      doc.text(atendenteTexto, M, y, { width: CW, align: "right" });
-      y += 16;
-
-      // Checkboxes Via
-      const bs = 8;
-      doc.rect(M, y, bs, bs).lineWidth(0.5).stroke();
-      if (isClientCopy) doc.font("Helvetica-Bold").fontSize(8).text("X", M + 1.5, y + 0.5);
-      doc.font("Helvetica").fontSize(8.5).fillColor("#000").text("Via do Cliente", M + bs + 3, y + 0.5);
-
-      doc.rect(M + 115, y, bs, bs).lineWidth(0.5).stroke();
-      if (!isClientCopy) doc.font("Helvetica-Bold").fontSize(8).text("X", M + 116.5, y + 0.5);
-      doc.font("Helvetica").fontSize(8.5).text("Via da Empresa", M + 115 + bs + 3, y + 0.5);
-      y += 18;
-
-      // Linhas de assinatura
-      const lw = CW * 0.44;
-      const l2x = M + CW - lw;
-      doc.moveTo(M, y).lineTo(M + lw, y).lineWidth(0.5).strokeColor("#555").stroke();
-      doc.font("Helvetica").fontSize(7).fillColor("#555")
-         .text("Visto / Assinatura do Cliente", M, y + 2, { width: lw, align: "center" });
-      doc.moveTo(l2x, y).lineTo(l2x + lw, y).lineWidth(0.5).strokeColor("#555").stroke();
-      doc.font("Helvetica").fontSize(7).fillColor("#555")
-         .text("Visto / Assinatura da Empresa", l2x, y + 2, { width: lw, align: "center" });
-    };
-
-    // Via da Empresa (página 1)
-    drawVia(false);
-
-    // Via do Cliente (página 2)
-    doc.addPage();
-    drawVia(true);
-
-    doc.end();
-    stream.on("finish", () => shell.openPath(filePath));
+    const result = await runPdfWorker({
+      type: "entry",
+      osData,
+      filePath,
+      companyName: appConfig?.branding?.companyName || "GSTI App",
+      logoPath: appConfig?.branding?.logoPath || null,
+    });
+    if (!result.success) return result;
+    shell.openPath(filePath);
     return { success: true, path: filePath };
   } catch (err) {
     return { success: false, error: err.message };
   }
 });
 
-// --- NOVA FUNÇÃO: GERAR PDF DE SAÍDA/GARANTIA ---
+// --- PDF RECIBO DE SAÍDA / GARANTIA (assíncrono via worker thread) ---
 ipcMain.handle("generate-exit-receipt", async (event, osId) => {
-  if (!dbPool)
-    return { success: false, error: "Banco de dados não configurado." };
-  // 1. Buscar dados da OS, Cliente e Itens
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+
   let osData, itemsData;
   try {
     const osSql = pgQuery(`
       SELECT os.*, c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj,
-             c.email AS email_cliente, c.endereco AS endereco_cliente
-      FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id
+             c.email AS email_cliente, c.endereco AS endereco_cliente,
+             COALESCE(c.logradouro, '') AS logradouro, COALESCE(c.numero, '') AS num_end,
+             COALESCE(c.bairro, '') AS bairro, COALESCE(c.cidade, '') AS cidade,
+             COALESCE(c.estado, '') AS estado
+      FROM ordens_servico os JOIN clientes c ON c.id = os.id_cliente
       WHERE os.id = ?`);
     const { rows: osRows } = await dbPool.query(osSql, [osId]);
-    if (osRows.length === 0) throw new Error("OS não encontrada.");
+    if (!osRows.length) throw new Error("OS não encontrada.");
     osData = osRows[0];
 
-    // Verifica se a OS tem data de saída (necessária para garantia)
     if (!osData.data_saida) {
-      await dbPool.query(
-        pgQuery("UPDATE ordens_servico SET data_saida = NOW() WHERE id = ?"),
-        [osId]
-      );
-      const { rows: updatedOsRows } = await dbPool.query(osSql, [osId]);
-      osData = updatedOsRows[0];
+      await dbPool.query(pgQuery("UPDATE ordens_servico SET data_saida = NOW() WHERE id = ?"), [osId]);
+      const { rows: updated } = await dbPool.query(osSql, [osId]);
+      osData = updated[0];
     }
 
-    const itemsSql = pgQuery(`
+    const { rows: itemRows } = await dbPool.query(pgQuery(`
       SELECT ps.descricao, oi.quantidade, oi.valor_unitario
       FROM os_itens oi JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id
-      WHERE oi.id_os = ?`);
-    const { rows: itemRows } = await dbPool.query(itemsSql, [osId]);
+      WHERE oi.id_os = ?`), [osId]);
     itemsData = itemRows;
-  } catch (error) {
-    return { success: false, error: `Erro ao buscar dados: ${error.message}` };
+  } catch (err) {
+    return { success: false, error: `Erro ao buscar dados: ${err.message}` };
   }
 
-  // 2. Perguntar onde salvar
   const { filePath } = await dialog.showSaveDialog({
     title: "Salvar Recibo de Saída e Garantia",
     defaultPath: `os_saida_garantia_${osId}.pdf`,
     filters: [{ name: "Arquivos PDF", extensions: ["pdf"] }],
   });
+  if (!filePath) return { success: false, error: "Cancelado." };
 
-  if (!filePath) return { success: false, error: "Usuário cancelou." };
-
-  // 3. Gerar o PDF
   try {
-    const doc = new PDFDocument({ size: "A4", margin: 50, bufferPages: true });
-    const stream = fs.createWriteStream(filePath);
-    doc.pipe(stream);
-
-    // --- Constantes de Layout ---
-    const pageTopMargin = 50;
-    const pageBottomMargin = 50;
-    const contentWidth =
-      doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    const leftMargin = doc.page.margins.left;
-
-    // --- Função para adicionar nova página se necessário ---
-    const checkAddPage = (currentY, neededHeight) => {
-      if (currentY + neededHeight > doc.page.height - pageBottomMargin) {
-        doc.addPage();
-        return pageTopMargin; // Retorna a nova posição Y inicial
-      }
-      return currentY; // Mantém a posição Y atual
-    };
-
-    // --- Cabeçalho ---
-    drawPdfHeader(doc, "Recibo de Entrega e Termo de Garantia", osData.id);
-    const dataSaida = new Date(osData.data_saida);
-    doc.fontSize(10).text(
-      `Data de Entrega: ${dataSaida.toLocaleDateString("pt-BR")}`,
-      { align: "right" }
-    );
-    doc.moveDown(1);
-    let currentY = doc.y;
-
-    // --- Dados do Cliente ---
-    currentY = checkAddPage(currentY, 60); // Estima altura necessária
-    doc.fontSize(14).text("Cliente", leftMargin, currentY, { underline: true });
-    currentY += 20;
-    doc.fontSize(10);
-    doc.text(`Nome: ${osData.nome_cliente}`, leftMargin, currentY);
-    currentY += 15;
-    doc.text(
-      `CPF/CNPJ: ${formatDocument(osData.cpf_cnpj) || "Não informado"}`,
-      leftMargin,
-      currentY
-    );
-    currentY += 15;
-    doc.text(
-      `Telefone: ${formatPhone(osData.telefone_cliente) || "Não informado"}`,
-      leftMargin,
-      currentY
-    );
-    currentY += 15;
-    doc.text(
-      `Email: ${osData.email_cliente || "Não informado"}`,
-      leftMargin,
-      currentY
-    );
-    currentY += 15;
-    doc.text(
-      `Endereço: ${osData.endereco_cliente || "Não informado"}`,
-      leftMargin,
-      currentY
-    );
-    currentY += 25; // Mais espaço após
-    doc.y = currentY; // Atualiza cursor do PDFKit
-
-    // --- Dados do Equipamento ---
-    currentY = checkAddPage(currentY, 50);
-    doc
-      .fontSize(14)
-      .text("Equipamento", leftMargin, currentY, { underline: true });
-    currentY += 20;
-    doc
-      .fontSize(10)
-      .text(
-        `Tipo: ${osData.tipo_equipamento || ""} ${osData.marca || ""} ${
-          osData.modelo || ""
-        }`,
-        leftMargin,
-        currentY
-      );
-    currentY += 15;
-    doc.text(
-      `Nº de Série: ${osData.numero_serie || "Não informado"}`,
-      leftMargin,
-      currentY
-    );
-    currentY += 25;
-    doc.y = currentY;
-
-    // --- Detalhes do Serviço ---
-    currentY = checkAddPage(currentY, 80); // Estima altura
-    doc
-      .fontSize(14)
-      .text("Serviço Realizado", leftMargin, currentY, { underline: true });
-    currentY += 20;
-    doc.fontSize(10);
-    doc
-      .text("Defeito Relatado:", leftMargin, currentY, { continued: true })
-      .text(osData.defeito_relatado || "Não informado.");
-    currentY = doc.y + 5; // Pega Y após texto
-    doc
-      .text("Laudo Técnico:", leftMargin, currentY, { continued: true })
-      .text(osData.laudo_tecnico || "Não informado.");
-    currentY = doc.y + 5;
-    doc
-      .text("Solução Aplicada:", leftMargin, currentY, { continued: true })
-      .text(osData.solucao_aplicada || "Não informada.");
-    currentY = doc.y + 15;
-    doc.y = currentY;
-
-    // --- Itens e Custos (Layout Controlado) ---
-    currentY = checkAddPage(currentY, 40); // Espaço para título e cabeçalho da tabela
-    doc
-      .fontSize(14)
-      .text("Itens e Custos", leftMargin, currentY, { underline: true });
-    currentY += 20;
-    const tableTopY = currentY;
-    const descX = leftMargin;
-    const qtyX = 370;
-    const unitX = 420;
-    const subtotalX = 480;
-    const endX = doc.page.width - leftMargin;
-    const rowHeight = 15;
-
-    doc.fontSize(9).font("Helvetica-Bold");
-    doc.text("Descrição", descX, tableTopY);
-    doc.text("Qtd.", qtyX, tableTopY, { width: 40, align: "right" });
-    doc.text("Vlr. Unit.", unitX, tableTopY, { width: 60, align: "right" });
-    doc.text("Subtotal", subtotalX, tableTopY, { width: 70, align: "right" });
-    doc.font("Helvetica");
-    currentY += 15; // Pula linha do cabeçalho
-    doc.moveTo(descX, currentY).lineTo(endX, currentY).stroke(); // Linha abaixo
-    currentY += 5;
-    doc.y = currentY;
-
-    itemsData.forEach((item) => {
-      const subtotal = item.quantidade * item.valor_unitario;
-      const descHeight = doc.heightOfString(item.descricao, {
-        width: qtyX - descX - 10,
-      });
-      const actualRowHeight = Math.max(rowHeight, descHeight) + 4; // Altura + margem
-
-      currentY = checkAddPage(currentY, actualRowHeight); // Verifica se cabe na página ANTES
-
-      doc.fontSize(9);
-      doc.text(item.descricao, descX, currentY, {
-        width: qtyX - descX - 10,
-        align: "left",
-      });
-      // Salva a posição Y antes de desenhar os itens alinhados à direita
-      const rightItemsY = currentY;
-      doc.text(item.quantidade, qtyX, rightItemsY, {
-        width: 40,
-        align: "right",
-      });
-      doc.text(
-        Number(item.valor_unitario).toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        }),
-        unitX,
-        rightItemsY,
-        { width: 60, align: "right" }
-      );
-      doc.text(
-        subtotal.toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        }),
-        subtotalX,
-        rightItemsY,
-        { width: 70, align: "right" }
-      );
-
-      currentY += actualRowHeight; // Atualiza Y para próxima linha
-      doc.y = currentY;
+    const result = await runPdfWorker({
+      type: "exit",
+      osData,
+      itemsData,
+      filePath,
+      companyName: appConfig?.branding?.companyName || "GSTI App",
+      logoPath: appConfig?.branding?.logoPath || null,
     });
-
-    currentY = checkAddPage(currentY, 30); // Espaço para linha e total
-    doc.moveTo(descX, currentY).lineTo(endX, currentY).stroke(); // Linha abaixo dos itens
-    currentY += 10;
-
-    // --- Valor Total (Posição Controlada) ---
-    doc.fontSize(12).text(
-      `Valor Total: ${Number(osData.valor_total).toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-      })}`,
-      leftMargin,
-      currentY,
-      { align: "right" }
-    );
-    currentY += 30; // Mais espaço após o total
-    doc.y = currentY;
-
-    // --- Garantia (Layout Controlado) ---
-    // Calcula a altura estimada do texto da garantia
-    const garantiaText = `Este serviço possui garantia de ${
-      osData.garantia_dias || 0
-    } dias... Consulte os Termos de Serviço completos para detalhes.`;
-    const garantiaHeight = doc.heightOfString(garantiaText, {
-      width: contentWidth,
-      align: "justify",
-    });
-    currentY = checkAddPage(currentY, garantiaHeight + 30); // Verifica espaço para título e texto
-
-    doc
-      .fontSize(14)
-      .text("Termo de Garantia", leftMargin, currentY, { underline: true });
-    currentY += 20;
-    doc.fontSize(9);
-    const garantiaDias = osData.garantia_dias || 0;
-    const dataExpiracao = new Date(dataSaida);
-    dataExpiracao.setDate(dataExpiracao.getDate() + garantiaDias);
-
-    doc.text(
-      `Este serviço possui garantia de ${garantiaDias} dias, válida a partir da data de entrega (${dataSaida.toLocaleDateString(
-        "pt-BR"
-      )}). A garantia expira em: ${dataExpiracao.toLocaleDateString("pt-BR")}.`,
-      leftMargin,
-      currentY,
-      { width: contentWidth, align: "justify" }
-    );
-    currentY = doc.y + 5; // Pega Y após o texto
-    doc.text(
-      'A garantia cobre defeitos de fabricação nas peças substituídas e/ou mão de obra referente ao serviço descrito em "Solução Aplicada". Não cobre mau uso, danos por software, acidentes ou defeitos não relacionados ao reparo original. Consulte os Termos de Serviço completos para detalhes.',
-      leftMargin,
-      currentY,
-      { width: contentWidth, align: "justify" }
-    );
-    currentY = doc.y + 30; // Mais espaço após garantia
-    doc.y = currentY;
-
-    // --- Assinatura (Posição Controlada) ---
-    currentY = checkAddPage(currentY, 60); // Espaço para assinatura
-    doc.fontSize(10);
-    doc.text(
-      "___________________________________________",
-      leftMargin,
-      currentY,
-      { align: "center" }
-    );
-    currentY += 15;
-    doc.text("Assinatura do Cliente", leftMargin, currentY, {
-      align: "center",
-    });
-    currentY += 15;
-    doc.text(
-      "Declaro ter recebido o equipamento descrito acima nas condições especificadas.",
-      leftMargin,
-      currentY,
-      { align: "center", width: 450 }
-    );
-
-    // --- Finaliza o PDF ---
-    // Não precisa mais mexer no buffer, o pdfkit lida com isso
-    doc.end();
-    stream.on("finish", () => {
-      shell.openPath(filePath);
-    });
+    if (!result.success) return result;
+    shell.openPath(filePath);
     return { success: true, path: filePath };
-  } catch (error) {
-    console.error("Erro detalhado ao gerar PDF:", error);
-    return { success: false, error: `Erro ao gerar PDF: ${error.message}` };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
 
