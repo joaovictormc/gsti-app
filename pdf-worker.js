@@ -83,13 +83,13 @@ function buildEntryPDF({ osData, filePath, companyName, logoPath }) {
       labeledBox('Telefone / Contato', formatPhone(osData.telefone_cliente), M + CW * 0.5, y, CW * 0.5);
       y += 26;
       const rua = osData.logradouro || osData.endereco_cliente || '';
-      labeledBox('Endereço / Logradouro', rua, M, y, CW * 0.75);
-      labeledBox('Número', osData.num_end || '', M + CW * 0.75, y, CW * 0.25);
+      labeledBox('CEP', osData.cep || '', M, y, CW * 0.25);
+      labeledBox('Endereço / Logradouro', rua, M + CW * 0.25, y, CW * 0.55);
+      labeledBox('Número', osData.num_end || '', M + CW * 0.80, y, CW * 0.20);
       y += 26;
-      labeledBox('Bairro', osData.bairro || '', M, y, CW * 0.28);
-      labeledBox('Cidade', osData.cidade || '', M + CW * 0.28, y, CW * 0.35);
-      labeledBox('UF', osData.estado || '', M + CW * 0.63, y, CW * 0.10);
-      labeledBox('CEP', osData.cep || '', M + CW * 0.73, y, CW * 0.27);
+      labeledBox('Bairro', osData.bairro || '', M, y, CW * 0.40);
+      labeledBox('Cidade', osData.cidade || '', M + CW * 0.40, y, CW * 0.40);
+      labeledBox('UF', osData.estado || '', M + CW * 0.80, y, CW * 0.20);
       y += 26 + 10;
 
       // Equipamento
