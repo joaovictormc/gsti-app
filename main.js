@@ -1367,134 +1367,213 @@ function drawPdfHeader(doc, docTitle, osId) {
   doc.moveDown(1);
 }
 
-// --- FUNÇÃO PDF ATUALIZADA ---
+// --- PDF COMPROVANTE DE ENTRADA (layout estruturado em caixas, duas vias) ---
 ipcMain.handle("generate-entry-receipt", async (event, osId) => {
-  if (!dbPool)
-    return { success: false, error: "Banco de dados não configurado." };
-  // 1. Buscar todos os dados necessários (SQL ATUALIZADO)
-  const sql = pgQuery(`SELECT os.*, c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj, c.email AS email_cliente, c.endereco AS endereco_cliente FROM ordens_servico os JOIN clientes c ON os.id_cliente = c.id WHERE os.id = ?`);
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+
   let osData;
   try {
-    const { rows } = await dbPool.query(sql, [osId]);
-    if (rows.length === 0) throw new Error("OS não encontrada.");
+    const { rows } = await dbPool.query(pgQuery(`
+      SELECT os.*,
+        c.nome AS nome_cliente, c.telefone AS telefone_cliente, c.cpf_cnpj,
+        c.email AS email_cliente, c.endereco AS endereco_cliente,
+        COALESCE(c.logradouro, '') AS logradouro,
+        COALESCE(c.numero, '')    AS num_end,
+        COALESCE(c.bairro, '')    AS bairro,
+        COALESCE(c.cidade, '')    AS cidade,
+        COALESCE(c.estado, '')    AS estado,
+        COALESCE(c.cep, '')       AS cep,
+        u.nome                    AS nome_atendente
+      FROM ordens_servico os
+      JOIN clientes c ON c.id = os.id_cliente
+      LEFT JOIN usuarios u ON u.id = os.id_atendente
+      WHERE os.id = ?`), [osId]);
+    if (!rows.length) throw new Error("OS não encontrada.");
     osData = rows[0];
-  } catch (error) {
-    return { success: false, error: error.message };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 
-  // 2. Perguntar onde salvar o arquivo
   const { filePath } = await dialog.showSaveDialog({
     title: "Salvar Comprovante de Entrada",
     defaultPath: `os_entrada_${osId}.pdf`,
     filters: [{ name: "Arquivos PDF", extensions: ["pdf"] }],
   });
+  if (!filePath) return { success: false, error: "Cancelado." };
 
-  if (!filePath) {
-    return { success: false, error: "Usuário cancelou a gravação." };
-  }
-
-  // 3. Gerar o PDF
   try {
-    const doc = new PDFDocument({ size: "A4", margin: 40 });
+    const doc = new PDFDocument({ size: "A4", margin: 0, autoFirstPage: true });
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
-    // Seus Termos de Serviço (do passo anterior)
-    const termosDeServico = `
-TERMOS PARA ORÇAMENTO E SERVIÇO (Baseado na Lei 8.078/90 - CDC)
-1. ORÇAMENTO PRÉVIO (Art. 40, CDC): O presente documento registra o recebimento do equipamento para análise. O fornecedor é obrigado a entregar ao CLIENTE um orçamento prévio discriminando o valor da mão-de-obra, materiais, condições de pagamento e prazo de execução.
-2. PRAZO DE ORÇAMENTO: O prazo para apresentação do orçamento é de até 5 (cinco) dias úteis. O orçamento apresentado terá validade de 10 (dez) dias, a contar do seu recebimento (aprovação) pelo CLIENTE.
-3. AUTORIZAÇÃO DE SERVIÇO (Art. 39, CDC): Nenhum serviço será executado sem a autorização expressa e prévia do CLIENTE. Serviços executados sem autorização são equiparados a amostras grátis, não gerando ônus ao consumidor.
-4. DADOS E SOFTWARE: O CLIENTE é o único responsável por realizar o backup prévio de seus dados (arquivos, fotos, etc.). A empresa não se responsabiliza por qualquer perda de dados.
-5. ABANDONO DE EQUIPAMENTO: O CLIENTE deve retirar o equipamento em até 90 (noventa) dias após ser notificado da conclusão do serviço (ou da recusa do orçamento). Após este prazo, o equipamento será considerado abandonado, podendo a empresa tomar as medidas legais cabíveis para cobrir custos de serviço e armazenamento.
-6. GARANTIA PÓS-SERVIÇO (Art. 26, CDC): Se o orçamento for aprovado e o serviço executado, a garantia legal para os serviços e peças é de 90 (noventa) dias a contar da data de efetiva entrega do equipamento. Esta garantia cobre exclusivamente o defeito solucionado e as peças substituídas, conforme descrito no laudo de saída.
-`;
+    const M  = 38;                           // margem lateral
+    const PW = doc.page.width;              // 595.28
+    const CW = PW - M * 2;                  // largura útil ≈ 519
 
-    // --- Função para desenhar o conteúdo (para as 2 vias) ---
-    const drawReceipt = (isCliente) => {
-      const via = isCliente ? "Via do Cliente" : "Via da Empresa";
-      drawPdfHeader(doc, "Comprovante de Entrada de Equipamento", osData.id);
-      doc.fontSize(10).text(via, { align: "right" });
-      doc.moveDown(0.5);
+    const companyName = appConfig?.branding?.companyName || "GSTI App";
+    const logoPath    = appConfig?.branding?.logoPath;
 
-      // --- Dados do Cliente (ATUALIZADO) ---
-      doc.fontSize(14).text("Dados do Cliente", { underline: true });
-      doc.fontSize(10).text(`Nome: ${osData.nome_cliente}`);
-      doc.text(
-        `CPF/CNPJ: ${formatDocument(osData.cpf_cnpj) || "Não informado"}`
-      );
-      doc.text(
-        `Telefone: ${formatPhone(osData.telefone_cliente) || "Não informado"}`
-      );
-      doc.text(`Email: ${osData.email_cliente || "Não informado"}`);
-      doc.text(`Endereço: ${osData.endereco_cliente || "Não informado"}`);
-      doc.moveDown(1);
-      // --- FIM DA ATUALIZAÇÃO ---
-
-      // Dados do Equipamento
-      doc.fontSize(14).text("Dados do Equipamento", { underline: true });
-      const dataEntrada = new Date(osData.data_entrada).toLocaleString(
-        "pt-BR",
-        {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }
-      );
-      doc.fontSize(10).text(`Data de Entrada: ${dataEntrada}`);
-      doc.text(`Tipo: ${osData.tipo_equipamento || "Não informado"}`);
-      doc.text(`Marca: ${osData.marca || "Não informado"}`);
-      doc.text(`Modelo: ${osData.modelo || "Não informado"}`);
-      doc.text(`Nº de Série: ${osData.numero_serie || "Não informado"}`);
-      doc.moveDown(0.5);
-      doc.text(`Defeito Relatado: ${osData.defeito_relatado || "Nenhum"}`);
-      doc.moveDown(0.5);
-      doc.text(`Observações: ${osData.observacoes_entrada || "Nenhuma"}`);
-      doc.moveDown(2);
-
-      // Termos de Serviço
-      doc
-        .fontSize(12)
-        .text("Termos de Serviço e Orçamento", { underline: true });
-      doc.fontSize(8).text(termosDeServico, { align: "justify" });
-      doc.moveDown(2);
-
-      // Assinatura
-      doc.fontSize(10);
-      doc.text("___________________________________________", {
-        align: "center",
-      });
-      doc.text("Assinatura do Cliente", { align: "center" });
-      doc.text(
-        "Declaro estar ciente e de acordo com os termos acima e das condições do equipamento descrito.",
-        { align: "center", width: 450 }
-      );
+    // ---- helpers ----
+    const labeledBox = (label, value, x, y, w, h = 22) => {
+      doc.rect(x, y, w, h).lineWidth(0.4).strokeColor("#888").stroke();
+      doc.font("Helvetica").fontSize(6.5).fillColor("#555")
+         .text(label, x + 2, y + 2, { width: w - 4, lineBreak: false });
+      doc.font("Helvetica").fontSize(8.5).fillColor("#000")
+         .text(String(value || ""), x + 2, y + 10, { width: w - 4, lineBreak: false, ellipsis: true });
     };
 
-    // --- Desenha as duas vias ---
-    drawReceipt(false); // Via da Empresa
-    doc
-      .addPage()
-      .fontSize(10)
-      .text(
-        "----------------------------------------------------------------------------------------------------------",
-        { align: "center" }
-      );
-    doc.moveDown(2);
-    drawReceipt(true); // Via do Cliente
+    const sectionTitle = (text, x, y) => {
+      doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#333").text(text, x, y, { width: CW });
+    };
+
+    const CONDITIONS =
+      "LEIA COM ATENÇÃO! O prazo para orçamento é de até 7 (sete) dias úteis a partir da data de entrada, de acordo com a demanda de serviços. O orçamento é apresentado ao cliente para aprovação prévia — nenhum serviço é executado sem autorização expressa. " +
+      "Ao realizar diagnóstico em equipamentos eletrônicos, podem ser identificados defeitos adicionais além do informado, podendo inviabilizar o conserto total ou parcial. Por isso, informe qualquer defeito pré-existente; somente o defeito descrito nesta ordem será considerado. " +
+      "Não cobramos taxa de orçamento. Serviços em placa-mãe possuem taxa de bancada, independentemente do resultado. " +
+      "O cliente é o único responsável pelo backup de seus dados — a empresa não se responsabiliza por perda de informações durante o serviço. " +
+      "O equipamento deve ser retirado em até 90 (noventa) dias após conclusão ou recusa do serviço; após esse prazo, poderão ser aplicadas taxas de armazenamento conforme legislação vigente (Lei 8.078/90 – CDC).";
+
+    const drawVia = (isClientCopy) => {
+      const via = isClientCopy ? "Via do Cliente" : "Via da Empresa";
+      const dataEntrada = new Date(osData.data_entrada);
+      const dateStr = dataEntrada.toLocaleDateString("pt-BR");
+      const timeStr = dataEntrada.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+      let y = M;
+
+      // ── CABEÇALHO ──────────────────────────────────────────────
+      let logoW = 0;
+      if (logoPath && fs.existsSync(logoPath)) {
+        try {
+          doc.image(logoPath, M, y, { height: 44, fit: [70, 44] });
+          logoW = 78;
+        } catch (_) {}
+      }
+
+      const hTx = M + logoW;
+      const hTw = CW - logoW;
+      doc.font("Helvetica-Bold").fontSize(13).fillColor("#000")
+         .text(companyName, hTx, y, { width: hTw, align: "center" });
+      doc.font("Helvetica-Bold").fontSize(10).fillColor("#222")
+         .text("COMPROVANTE DE ENTRADA INTERNO", hTx, y + 17, { width: hTw, align: "center" });
+
+      // OS e via no canto direito
+      doc.font("Helvetica-Bold").fontSize(10).fillColor("#000")
+         .text(`OS Nº ${String(osData.id).padStart(6, "0")}`, M, y, { width: CW, align: "right" });
+      doc.font("Helvetica").fontSize(8).fillColor("#444")
+         .text(via, M, y + 14, { width: CW, align: "right" });
+
+      y += 44;
+      doc.moveTo(M, y).lineTo(M + CW, y).lineWidth(1.5).strokeColor("#000").stroke();
+      y += 6;
+
+      // ── DADOS DO CLIENTE ───────────────────────────────────────
+      // Linha 1: OS Nº | Data | Hora
+      labeledBox("OS Nº", String(osData.id).padStart(6, "0"), M,            y, CW * 0.18);
+      labeledBox("Data de Entrada", dateStr,                   M + CW*0.18, y, CW * 0.32);
+      labeledBox("Hora",            timeStr,                   M + CW*0.50, y, CW * 0.50);
+      y += 22;
+
+      // Linha 2: Cliente
+      labeledBox("Cliente", osData.nome_cliente, M, y, CW);
+      y += 22;
+
+      // Linha 3: CPF/CNPJ | Telefone
+      labeledBox("CPF/CNPJ", formatDocument(osData.cpf_cnpj), M,           y, CW * 0.5);
+      labeledBox("Telefone / Contato", formatPhone(osData.telefone_cliente), M + CW*0.5, y, CW * 0.5);
+      y += 22;
+
+      // Linha 4: Endereço | Número
+      const rua = osData.logradouro || osData.endereco_cliente || "";
+      labeledBox("Endereço / Logradouro", rua,           M,            y, CW * 0.75);
+      labeledBox("Número",  osData.num_end || "",         M + CW*0.75, y, CW * 0.25);
+      y += 22;
+
+      // Linha 5: Bairro | Cidade | UF | CEP
+      labeledBox("Bairro",  osData.bairro  || "",  M,            y, CW * 0.28);
+      labeledBox("Cidade",  osData.cidade  || "",  M + CW*0.28, y, CW * 0.35);
+      labeledBox("UF",      osData.estado  || "",  M + CW*0.63, y, CW * 0.10);
+      labeledBox("CEP",     osData.cep     || "",  M + CW*0.73, y, CW * 0.27);
+      y += 22 + 7;
+
+      // ── DADOS DO EQUIPAMENTO ───────────────────────────────────
+      sectionTitle("▶  DADOS DO EQUIPAMENTO", M, y);
+      y += 11;
+
+      labeledBox("Tipo / Equipamento", osData.tipo_equipamento, M,            y, CW * 0.35);
+      labeledBox("Marca",              osData.marca,             M + CW*0.35, y, CW * 0.30);
+      labeledBox("Modelo",             osData.modelo,            M + CW*0.65, y, CW * 0.35);
+      y += 22;
+
+      labeledBox("Nº de Série",                  osData.numero_serie,        M,            y, CW * 0.40);
+      labeledBox("Acessórios / Itens Entregues", osData.observacoes_entrada,  M + CW*0.40, y, CW * 0.60);
+      y += 22 + 7;
+
+      // ── DEFEITO RELATADO ───────────────────────────────────────
+      sectionTitle("▶  DEFEITO / PROBLEMA RELATADO:", M, y);
+      y += 11;
+      const probH = 52;
+      doc.rect(M, y, CW, probH).lineWidth(0.4).strokeColor("#888").stroke();
+      doc.font("Helvetica").fontSize(9).fillColor("#000")
+         .text(osData.defeito_relatado || "", M + 4, y + 4, { width: CW - 8, height: probH - 8 });
+      y += probH + 7;
+
+      // ── CONDIÇÕES DE SERVIÇO ───────────────────────────────────
+      sectionTitle("▶  CONDIÇÕES DE SERVIÇO:", M, y);
+      y += 11;
+      const condH = 112;
+      doc.rect(M, y, CW, condH).lineWidth(0.4).strokeColor("#888").stroke();
+      doc.font("Helvetica").fontSize(7.5).fillColor("#000")
+         .text(CONDITIONS, M + 4, y + 4, { width: CW - 8, height: condH - 8, align: "justify" });
+      y += condH + 7;
+
+      // ── RODAPÉ / ASSINATURAS ───────────────────────────────────
+      doc.font("Helvetica").fontSize(8.5).fillColor("#000")
+         .text(`Data Entrega/Entrada: ${dateStr}     Hora: ${timeStr}`, M, y);
+      y += 13;
+
+      const atendenteTexto = osData.nome_atendente
+        ? `Técnico: ${osData.nome_atendente}`
+        : "Técnico Responsável: _______________________";
+      doc.font("Helvetica").fontSize(8.5)
+         .text("Situação da Ordem: _________________________________", M, y);
+      doc.text(atendenteTexto, M, y, { width: CW, align: "right" });
+      y += 16;
+
+      // Checkboxes Via
+      const bs = 8;
+      doc.rect(M, y, bs, bs).lineWidth(0.5).stroke();
+      if (isClientCopy) doc.font("Helvetica-Bold").fontSize(8).text("X", M + 1.5, y + 0.5);
+      doc.font("Helvetica").fontSize(8.5).fillColor("#000").text("Via do Cliente", M + bs + 3, y + 0.5);
+
+      doc.rect(M + 115, y, bs, bs).lineWidth(0.5).stroke();
+      if (!isClientCopy) doc.font("Helvetica-Bold").fontSize(8).text("X", M + 116.5, y + 0.5);
+      doc.font("Helvetica").fontSize(8.5).text("Via da Empresa", M + 115 + bs + 3, y + 0.5);
+      y += 18;
+
+      // Linhas de assinatura
+      const lw = CW * 0.44;
+      const l2x = M + CW - lw;
+      doc.moveTo(M, y).lineTo(M + lw, y).lineWidth(0.5).strokeColor("#555").stroke();
+      doc.font("Helvetica").fontSize(7).fillColor("#555")
+         .text("Visto / Assinatura do Cliente", M, y + 2, { width: lw, align: "center" });
+      doc.moveTo(l2x, y).lineTo(l2x + lw, y).lineWidth(0.5).strokeColor("#555").stroke();
+      doc.font("Helvetica").fontSize(7).fillColor("#555")
+         .text("Visto / Assinatura da Empresa", l2x, y + 2, { width: lw, align: "center" });
+    };
+
+    // Via da Empresa (página 1)
+    drawVia(false);
+
+    // Via do Cliente (página 2)
+    doc.addPage();
+    drawVia(true);
 
     doc.end();
-
-    // 4. Abrir o PDF após salvar
-    stream.on("finish", () => {
-      shell.openPath(filePath);
-    });
-
+    stream.on("finish", () => shell.openPath(filePath));
     return { success: true, path: filePath };
-  } catch (error) {
-    return { success: false, error: error.message };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 });
 
