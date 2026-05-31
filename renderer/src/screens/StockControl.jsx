@@ -50,7 +50,7 @@ export default function StockControl() {
   const fetchStock = async () => {
     setLoading(true);
     const result = await window.api.getStock();
-    if (result.success) setProducts(result.data);
+    if (result.success) setProducts(result.data.filter((p) => p.tipo === "Produto"));
     setLoading(false);
   };
 

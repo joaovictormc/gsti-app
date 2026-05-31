@@ -124,7 +124,8 @@ function SecaoEstoqueCritico() {
     (async () => {
       setLoading(true);
       const result = await window.api.getStock();
-      if (result.success) setData(result.data.filter((p) => p.estoque_atual <= p.estoque_minimo));
+      if (result.success)
+        setData(result.data.filter((p) => p.tipo === "Produto" && Number(p.estoque_atual) <= Number(p.estoque_minimo)));
       setLoading(false);
     })();
   }, []);
