@@ -97,6 +97,8 @@ contextBridge.exposeInMainWorld('api', {
   // Funções de Relatórios (Nova Seção)
   getOSByClient: (clientId) => ipcRenderer.invoke('get-os-by-client', clientId),
   getOSByStatus: (status) => ipcRenderer.invoke('get-os-by-status', status),
+  getOSByAttendant: (data) => ipcRenderer.invoke('get-os-by-attendant', data),
+  getDetailedCashflow: (period) => ipcRenderer.invoke('get-detailed-cashflow', period),
   getMostUsedServices: (period) => ipcRenderer.invoke('get-most-used-services', period),
   searchOSBySerial: (serialNumber) => ipcRenderer.invoke('search-os-by-serial', serialNumber),
   getDetailedRevenueReport: (period) => ipcRenderer.invoke('get-detailed-revenue-report', period),

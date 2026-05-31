@@ -155,6 +155,7 @@ function OSGrid() {
   const columns = [
     { field: "id", headerName: "OS Nº", width: 90 },
     { field: "nome_cliente", headerName: "Cliente", flex: 1, minWidth: 200 },
+    { field: "nome_atendente", headerName: "Atendente", width: 140, renderCell: (p) => p.value || "—" },
     // --- COLUNA ATUALIZADA ---
     {
       field: "equipamento", // Usa o campo CONCAT do backend

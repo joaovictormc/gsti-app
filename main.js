@@ -115,6 +115,7 @@ function initializeDbPool() {
         "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS estoque_baixado BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_atual INT NOT NULL DEFAULT 0",
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_minimo INT NOT NULL DEFAULT 0",
+        "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS id_atendente INT NULL REFERENCES usuarios(id) ON DELETE SET NULL",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cep VARCHAR(10)",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS logradouro TEXT",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS numero VARCHAR(50)",
@@ -1089,14 +1090,15 @@ ipcMain.handle("get-os-list", async () => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const sql = `
-    SELECT 
-      os.id, 
-      -- Concatena os novos campos para exibição no grid
-      CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento, 
+    SELECT
+      os.id,
+      CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento,
       os.status, os.data_entrada, os.valor_total,
-      c.nome AS nome_cliente 
+      c.nome AS nome_cliente,
+      u.nome AS nome_atendente
     FROM ordens_servico AS os
     JOIN clientes AS c ON os.id_cliente = c.id
+    LEFT JOIN usuarios u ON u.id = os.id_atendente
     ORDER BY os.id DESC`;
   try {
     const { rows } = await dbPool.query(sql);
@@ -1116,7 +1118,10 @@ ipcMain.handle("get-active-data", async () => {
     const { rows: products } = await dbPool.query(
       "SELECT id, descricao, valor, tipo FROM produtos_servicos ORDER BY descricao ASC"
     );
-    return { success: true, customers, products };
+    const { rows: users } = await dbPool.query(
+      "SELECT id, nome FROM usuarios ORDER BY nome ASC"
+    );
+    return { success: true, customers, products, users };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1156,16 +1161,16 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
   const {
     id_cliente, tipo_equipamento, marca, modelo, numero_serie,
     defeito_relatado, observacoes_entrada, status, data_entrada,
-    garantia_dias, data_prevista,
+    garantia_dias, data_prevista, id_atendente,
   } = osData;
   const sql = pgQuery(`INSERT INTO ordens_servico
-    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias, data_prevista)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
+    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias, data_prevista, id_atendente)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
   try {
     const { rows } = await dbPool.query(sql, [
       id_cliente, tipo_equipamento, marca, modelo, numero_serie,
       defeito_relatado, observacoes_entrada, status, data_entrada,
-      total, garantia_dias, data_prevista || null,
+      total, garantia_dias, data_prevista || null, id_atendente || null,
     ]);
     const osId = rows[0].id;
     notifyOSCreated(osId, osData).catch((e) => console.error("[Email] notifyOSCreated:", e));
@@ -1181,7 +1186,7 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
   const {
     id, id_cliente, tipo_equipamento, marca, modelo, numero_serie,
     defeito_relatado, observacoes_entrada, laudo_tecnico, solucao_aplicada,
-    status, data_entrada, garantia_dias, data_prevista,
+    status, data_entrada, garantia_dias, data_prevista, id_atendente,
   } = osData;
   try {
     const { rows } = await dbPool.query(
@@ -1218,14 +1223,16 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       id_cliente = ?, tipo_equipamento = ?, marca = ?, modelo = ?,
       numero_serie = ?, defeito_relatado = ?, observacoes_entrada = ?,
       laudo_tecnico = ?, solucao_aplicada = ?, status = ?,
-      data_entrada = ?, valor_total = ?, garantia_dias = ?, data_prevista = ?
+      data_entrada = ?, valor_total = ?, garantia_dias = ?, data_prevista = ?,
+      id_atendente = ?
       ${setDataSaidaSql}${setEstoqueBaixadoSql}
       WHERE id = ?`);
 
     await dbPool.query(sql, [
       id_cliente, tipo_equipamento, marca, modelo, numero_serie,
       defeito_relatado, observacoes_entrada, laudo_tecnico, solucao_aplicada,
-      status, data_entrada, total, garantia_dias, data_prevista || null, id,
+      status, data_entrada, total, garantia_dias, data_prevista || null,
+      id_atendente || null, id,
     ]);
 
     if (baixarEstoque) {
@@ -3074,6 +3081,70 @@ ipcMain.handle("select-backup-folder", async () => {
   });
   if (canceled || !filePaths?.length) return { success: false, canceled: true };
   return { success: true, folderPath: filePaths[0] };
+});
+
+// Relatório de OS por Atendente
+ipcMain.handle("get-os-by-attendant", async (event, { userId, startDate, endDate }) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  if (!userId) return { success: false, error: "Usuário não informado." };
+
+  let sql = `
+    SELECT
+      os.id,
+      TRIM(CONCAT(os.tipo_equipamento,' ',COALESCE(os.marca,''),' ',COALESCE(os.modelo,''))) AS equipamento,
+      os.status, os.data_entrada, os.data_saida, os.valor_total,
+      c.nome AS nome_cliente
+    FROM ordens_servico os
+    JOIN clientes c ON c.id = os.id_cliente
+    WHERE os.id_atendente = $1`;
+  const params = [userId];
+
+  if (startDate && endDate) {
+    sql += ` AND os.data_entrada >= $2 AND os.data_entrada <= $3`;
+    params.push(`${startDate} 00:00:00`, `${endDate} 23:59:59`);
+  }
+  sql += " ORDER BY os.id DESC";
+
+  try {
+    const { rows } = await dbPool.query(sql, params);
+    return { success: true, data: rows };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Fluxo de Caixa Detalhado (Receitas OS + Avulsas + Despesas cronológico)
+ipcMain.handle("get-detailed-cashflow", async (event, { startDate, endDate }) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+
+  const fStart = `${startDate} 00:00:00`;
+  const fEnd   = `${endDate} 23:59:59`;
+  try {
+    const { rows: osRev } = await dbPool.query(pgQuery(`
+      SELECT os.id, os.data_saida AS data, c.nome AS nome_cliente, os.valor_total AS valor
+      FROM ordens_servico os JOIN clientes c ON c.id = os.id_cliente
+      WHERE os.status IN ('Finalizado','Entregue') AND os.data_saida IS NOT NULL
+        AND os.data_saida >= ? AND os.data_saida <= ?`), [fStart, fEnd]);
+
+    const { rows: misc } = await dbPool.query(pgQuery(
+      `SELECT id, data, descricao, valor FROM receitas_avulsas WHERE data BETWEEN ? AND ?`
+    ), [startDate, endDate]);
+
+    const { rows: exp } = await dbPool.query(pgQuery(
+      `SELECT id, data, descricao, tipo_despesa, valor FROM despesas WHERE data BETWEEN ? AND ?`
+    ), [startDate, endDate]);
+
+    let seq = 0;
+    const items = [];
+    osRev.forEach((r) => items.push({ id: `os-${r.id}`, data: r.data, tipo: "Receita OS", descricao: `OS #${r.id} — ${r.nome_cliente}`, valor: Number(r.valor) || 0 }));
+    misc.forEach((r)  => items.push({ id: `av-${r.id}`, data: new Date(`${r.data.toISOString().slice(0,10)} 00:00:00`), tipo: "Receita Avulsa", descricao: r.descricao, valor: Number(r.valor) || 0 }));
+    exp.forEach((r)   => items.push({ id: `dp-${r.id}`, data: new Date(`${r.data.toISOString().slice(0,10)} 00:00:00`), tipo: `Despesa ${r.tipo_despesa}`, descricao: r.descricao, valor: -(Number(r.valor) || 0) }));
+    items.sort((a, b) => new Date(a.data) - new Date(b.data));
+
+    return { success: true, data: items };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
 
 // Listener para buscar OS por Status

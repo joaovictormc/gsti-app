@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Typography,
+  Typography, Box, Paper, Chip, CircularProgress,
 } from "@mui/material";
+import { DataGrid } from "@mui/x-data-grid";
 import { Bar, Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -133,6 +134,8 @@ function FinancialDashboard() {
   const [loadingChart, setLoadingChart] = useState(false);
   const [annualData, setAnnualData] = useState([]); // Dados anuais
   const [loadingAnnualChart, setLoadingAnnualChart] = useState(false); // Loading anual
+  const [cashflowData, setCashflowData] = useState([]);
+  const [loadingCashflow, setLoadingCashflow] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState({ type: "", text: "" });
   const [averageProfit, setAverageProfit] = useState(0);
@@ -183,6 +186,20 @@ function FinancialDashboard() {
       }
     };
     fetchSummary();
+  }, [startDate, endDate]);
+
+  // Fluxo de caixa detalhado
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    (async () => {
+      setLoadingCashflow(true);
+      try {
+        const result = await window.api.getDetailedCashflow({ startDate, endDate });
+        if (result.success) setCashflowData(result.data);
+        else setCashflowData([]);
+      } catch (_) { setCashflowData([]); }
+      finally { setLoadingCashflow(false); }
+    })();
   }, [startDate, endDate]);
 
   // --- EFEITO PARA BUSCAR DADOS MENSAIS PARA O GRÁFICO ---
@@ -414,6 +431,113 @@ function FinancialDashboard() {
         loadingAnnualChart={loadingAnnualChart}
       />
       {/* --- FIM DA RENDERIZAÇÃO DO GRÁFICO ANUAL --- */}
+
+      {/* --- FLUXO DE CAIXA DETALHADO --- */}
+      <Paper sx={{ p: 3, mt: 3 }}>
+        <Typography variant="h6" fontWeight={600} gutterBottom>
+          Fluxo de Caixa — Transações do Período
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Todas as entradas e saídas no período selecionado, em ordem cronológica.
+        </Typography>
+
+        {loadingCashflow ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <>
+            <Box sx={{ height: 420, width: "100%" }}>
+              <DataGrid
+                rows={cashflowData}
+                getRowId={(r) => r.id}
+                columns={[
+                  {
+                    field: "data",
+                    headerName: "Data",
+                    width: 120,
+                    renderCell: (p) =>
+                      p.value
+                        ? new Date(p.value).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+                        : "—",
+                  },
+                  {
+                    field: "tipo",
+                    headerName: "Tipo",
+                    width: 160,
+                    renderCell: (p) => {
+                      const isExpense = p.value?.startsWith("Despesa");
+                      return (
+                        <Chip
+                          label={p.value}
+                          color={isExpense ? "error" : "success"}
+                          size="small"
+                          variant="outlined"
+                        />
+                      );
+                    },
+                  },
+                  { field: "descricao", headerName: "Descrição", flex: 1, minWidth: 200 },
+                  {
+                    field: "valor",
+                    headerName: "Valor",
+                    width: 140,
+                    align: "right",
+                    headerAlign: "right",
+                    renderCell: (p) => (
+                      <Typography
+                        variant="body2"
+                        fontWeight={600}
+                        color={p.value >= 0 ? "success.main" : "error.main"}
+                      >
+                        {formatCurrency(Math.abs(p.value))}
+                      </Typography>
+                    ),
+                  },
+                ]}
+                localeText={{ noRowsLabel: "Nenhuma transação no período selecionado." }}
+                initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}
+                pageSizeOptions={[10, 25, 50]}
+                getRowClassName={(p) =>
+                  p.row.valor < 0 ? "row-expense" : "row-income"
+                }
+                sx={{
+                  "& .row-expense": { bgcolor: "error.main", opacity: 0.04 },
+                }}
+              />
+            </Box>
+            {/* Totalizadores */}
+            {cashflowData.length > 0 && (() => {
+              const receitas = cashflowData.filter((r) => r.valor > 0).reduce((s, r) => s + r.valor, 0);
+              const despesas = cashflowData.filter((r) => r.valor < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
+              const saldo = receitas - despesas;
+              return (
+                <Box sx={{ display: "flex", gap: 3, mt: 2, flexWrap: "wrap" }}>
+                  <Typography variant="body2">
+                    <strong>Total Receitas:</strong>{" "}
+                    <Typography component="span" color="success.main" fontWeight={600}>
+                      {formatCurrency(receitas)}
+                    </Typography>
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Total Despesas:</strong>{" "}
+                    <Typography component="span" color="error.main" fontWeight={600}>
+                      {formatCurrency(despesas)}
+                    </Typography>
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Saldo:</strong>{" "}
+                    <Typography component="span" color={saldo >= 0 ? "success.main" : "error.main"} fontWeight={700}>
+                      {formatCurrency(saldo)}
+                    </Typography>
+                  </Typography>
+                </Box>
+              );
+            })()}
+          </>
+        )}
+      </Paper>
+      {/* --- FIM FLUXO DE CAIXA --- */}
     </>
   );
 }

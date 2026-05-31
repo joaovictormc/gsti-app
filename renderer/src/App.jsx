@@ -57,6 +57,7 @@ import FinancialDashboard from "./components/FinancialPages/FinancialDashboard";
 import MiscRevenueGrid from "./components/MiscRevenueGrid";
 import OSReportClient from "./components/OSReportClient";
 import OSReportStatus from "./components/OSReportStatus";
+import OSReportAttendant from "./components/OSReportAttendant";
 import MostUsedServicesReport from "./components/MostUsedServicesReport";
 import EquipmentHistoryReport from "./components/EquipmentHistoryReport";
 import DetailedRevenueReport from "./components/DetailedRevenueReport";
@@ -76,6 +77,7 @@ const componentMap = {
   FinancialDashboard,
   OSReportClient,
   OSReportStatus,
+  OSReportAttendant,
   MostUsedServicesReport,
   EquipmentHistoryReport,
   DetailedRevenueReport,
@@ -154,6 +156,7 @@ function AppSidebar({
         subItems: [
           { label: "OS por Cliente", component: "OSReportClient" },
           { label: "OS por Status", component: "OSReportStatus" },
+          { label: "OS por Atendente", component: "OSReportAttendant" },
           { label: "Lucratividade", component: "ProfitabilityReport" },
           { label: "Serviços Mais Usados", component: "MostUsedServicesReport" },
           { label: "Histórico Equipamento", component: "EquipmentHistoryReport" },
@@ -574,7 +577,7 @@ function App() {
   if (needsSetup === false && currentUser) {
     const isAdmin = currentUser.role === "Admin";
     const financialComponents = ["ExpensesGrid", "MiscRevenueGrid", "FinancialDashboard"];
-    const reportComponents = ["OSReportClient", "OSReportStatus", "ProfitabilityReport", "MostUsedServicesReport", "EquipmentHistoryReport", "DetailedRevenueReport"];
+    const reportComponents = ["OSReportClient", "OSReportStatus", "OSReportAttendant", "ProfitabilityReport", "MostUsedServicesReport", "EquipmentHistoryReport", "DetailedRevenueReport"];
     const isAccessDenied =
       !isAdmin &&
       ((financialComponents.includes(activeComponent) && !funcionarioPerms.canSeeFinancial) ||

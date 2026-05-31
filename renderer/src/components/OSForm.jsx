@@ -32,6 +32,7 @@ const toLocalISOString = (date) => {
 // --- CORREÇÃO: Inicializa campos de texto com '' ---
 const BLANK_OS = {
   id_cliente: null,
+  id_atendente: null,
   tipo_equipamento: "Notebook",
   marca: "",
   modelo: "",
@@ -51,10 +52,11 @@ const nullToString = (value) =>
 
 function OSForm({ initialData, onSave, onClose }) {
   const [osData, setOsData] = useState(BLANK_OS);
-  const [activeData, setActiveData] = useState({ customers: [], products: [] });
+  const [activeData, setActiveData] = useState({ customers: [], products: [], users: [] });
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedCustomerValue, setSelectedCustomerValue] = useState(null);
+  const [selectedAtendente, setSelectedAtendente] = useState(null);
   const [validationError, setValidationError] = useState(null);
 
   const isEditing = initialData && initialData.os && initialData.os.id;
@@ -114,11 +116,19 @@ function OSForm({ initialData, onSave, onClose }) {
       } else {
         setOsData(BLANK_OS);
         setSelectedItems([]);
-        setSelectedCustomerValue(null); // Reseta Autocomplete
+        setSelectedCustomerValue(null);
+        setSelectedAtendente(null);
       }
     }
-    // Agora depende de activeData.customers para garantir que a lista exista antes de procurar
-  }, [initialData, isEditing, activeData.customers]);
+  }, [initialData, isEditing, activeData.customers, activeData.users]);
+
+  // Popula atendente no modo edição
+  useEffect(() => {
+    if (isEditing && activeData.users.length > 0 && osData.id_atendente) {
+      const found = activeData.users.find((u) => u.id === osData.id_atendente);
+      setSelectedAtendente(found || null);
+    }
+  }, [isEditing, activeData.users, osData.id_atendente]);
 
   const handleInputChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -208,6 +218,20 @@ function OSForm({ initialData, onSave, onClose }) {
         )}
         // ReadOnly se estiver editando, permite seleção ao criar
         readOnly={isEditing}
+      />
+
+      <Autocomplete
+        value={selectedAtendente}
+        options={activeData.users}
+        getOptionLabel={(option) => (option ? option.nome : "")}
+        isOptionEqualToValue={(option, value) => option?.id === value?.id}
+        onChange={(_, newValue) => {
+          setSelectedAtendente(newValue);
+          setOsData((prev) => ({ ...prev, id_atendente: newValue ? newValue.id : null }));
+        }}
+        renderInput={(params) => (
+          <TextField {...params} label="Atendente / Técnico Responsável" margin="normal" />
+        )}
       />
 
       {/* Campos de Equipamento */}
