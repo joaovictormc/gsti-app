@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Typography, Box, Paper, Chip, CircularProgress,
+  Typography, Box, Paper, Chip, CircularProgress, Grid,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
-import { Bar, Line } from "react-chartjs-2";
+import { Bar, Line, Doughnut } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,6 +14,7 @@ import {
   Legend,
   PointElement,
   LineElement,
+  ArcElement,
 } from "chart.js";
 import PeriodSelector from "./PeriodSelector";
 import SummaryCards from "./SummaryCards";
@@ -21,17 +22,18 @@ import InvestmentGoal from "./InvestmentGoal";
 import MonthlyChart from "./MonthlyChart";
 import AnnualChart from "./AnnualChart";
 
-// Registra os componentes necessários do Chart.js
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  PointElement,
-  LineElement
+  CategoryScale, LinearScale, BarElement,
+  Title, Tooltip, Legend,
+  PointElement, LineElement,
+  ArcElement
 );
+
+const DONUT_COLORS = [
+  "#6366f1", "#06b6d4", "#10b981", "#f59e0b",
+  "#ef4444", "#8b5cf6", "#f97316", "#84cc16",
+  "#ec4899", "#64748b",
+];
 
 // Função auxiliar para formatar data para YYYY-MM-DD (MAIS ROBUSTA)
 const toInputDateString = (date) => {
@@ -134,6 +136,8 @@ function FinancialDashboard() {
   const [loadingChart, setLoadingChart] = useState(false);
   const [annualData, setAnnualData] = useState([]); // Dados anuais
   const [loadingAnnualChart, setLoadingAnnualChart] = useState(false); // Loading anual
+  const [expensesByCategory, setExpensesByCategory] = useState([]);
+  const [loadingExpCat, setLoadingExpCat] = useState(false);
   const [cashflowData, setCashflowData] = useState([]);
   const [loadingCashflow, setLoadingCashflow] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -186,6 +190,19 @@ function FinancialDashboard() {
       }
     };
     fetchSummary();
+  }, [startDate, endDate]);
+
+  // Despesas por categoria
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    (async () => {
+      setLoadingExpCat(true);
+      try {
+        const result = await window.api.getExpensesByCategory({ startDate, endDate });
+        setExpensesByCategory(result.success ? result.data : []);
+      } catch (_) { setExpensesByCategory([]); }
+      finally { setLoadingExpCat(false); }
+    })();
   }, [startDate, endDate]);
 
   // Fluxo de caixa detalhado
@@ -405,6 +422,110 @@ function FinancialDashboard() {
         averageProfitMonths={averageProfitMonths}
       />
       {/* --- FIM DA RENDERIZAÇÃO DOS CARDS --- */}
+
+      {/* --- GRÁFICOS PIZZA --- */}
+      <Grid container spacing={3} sx={{ mt: 1, mb: 1 }}>
+        {/* Receitas por Fonte */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Receitas por Fonte
+            </Typography>
+            {loadingSummary ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+                <CircularProgress />
+              </Box>
+            ) : summary.totalOSRevenue + summary.totalMiscRevenue > 0 ? (
+              <Box sx={{ maxHeight: 260, display: "flex", justifyContent: "center" }}>
+                <Doughnut
+                  data={{
+                    labels: ["Receita de OS", "Receitas Avulsas"],
+                    datasets: [{
+                      data: [summary.totalOSRevenue, summary.totalMiscRevenue],
+                      backgroundColor: ["#6366f1", "#06b6d4"],
+                      borderColor: ["#fff", "#fff"],
+                      borderWidth: 2,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                      legend: { position: "right" },
+                      tooltip: {
+                        callbacks: {
+                          label: (ctx) =>
+                            ` ${formatCurrency(ctx.raw)}  (${
+                              ((ctx.raw / (summary.totalOSRevenue + summary.totalMiscRevenue)) * 100).toFixed(1)
+                            }%)`,
+                        },
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            ) : (
+              <Box sx={{ py: 5, textAlign: "center" }}>
+                <Typography color="text.secondary" variant="body2">
+                  Sem receitas no período selecionado.
+                </Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Despesas por Categoria */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              Despesas por Categoria
+            </Typography>
+            {loadingExpCat ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+                <CircularProgress />
+              </Box>
+            ) : expensesByCategory.length > 0 ? (
+              <Box sx={{ maxHeight: 260, display: "flex", justifyContent: "center" }}>
+                <Doughnut
+                  data={{
+                    labels: expensesByCategory.map((e) => e.categoria),
+                    datasets: [{
+                      data: expensesByCategory.map((e) => e.total),
+                      backgroundColor: DONUT_COLORS.slice(0, expensesByCategory.length),
+                      borderColor: "#fff",
+                      borderWidth: 2,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                      legend: { position: "right" },
+                      tooltip: {
+                        callbacks: {
+                          label: (ctx) => {
+                            const total = expensesByCategory.reduce((s, e) => s + e.total, 0);
+                            return ` ${formatCurrency(ctx.raw)}  (${
+                              total > 0 ? ((ctx.raw / total) * 100).toFixed(1) : 0
+                            }%)`;
+                          },
+                        },
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            ) : (
+              <Box sx={{ py: 5, textAlign: "center" }}>
+                <Typography color="text.secondary" variant="body2">
+                  Sem despesas no período selecionado.
+                </Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
+      {/* --- FIM GRÁFICOS PIZZA --- */}
 
       {/* --- RENDERIZA O NOVO COMPONENTE DE META --- */}
       <InvestmentGoal

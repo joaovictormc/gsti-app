@@ -2189,16 +2189,16 @@ ipcMain.handle(
         netProfit
       );
 
-      // --- CORREÇÃO: Retorna apenas os totais necessários e corretos ---
       return {
         success: true,
         summary: {
-          totalRevenue, // Agora é um número correto
+          totalRevenue,
           totalExpenses,
           netProfit,
           totalFixedExpenses,
           totalVariableExpenses,
-          // Removemos os subtotais daqui para evitar confusão no frontend
+          totalOSRevenue,
+          totalMiscRevenue,
         },
       };
     } catch (error) {
@@ -2207,6 +2207,23 @@ ipcMain.handle(
     }
   }
 );
+
+// Despesas agrupadas por categoria (para gráfico pizza)
+ipcMain.handle("get-expenses-by-category", async (event, { startDate, endDate }) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const { rows } = await dbPool.query(pgQuery(`
+      SELECT COALESCE(NULLIF(TRIM(categoria),''), 'Sem categoria') AS categoria,
+             SUM(valor)::float AS total
+      FROM despesas
+      WHERE data BETWEEN ? AND ?
+      GROUP BY COALESCE(NULLIF(TRIM(categoria),''), 'Sem categoria')
+      ORDER BY total DESC`), [startDate, endDate]);
+    return { success: true, data: rows.map(r => ({ categoria: r.categoria, total: Number(r.total) || 0 })) };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 
 // Listener para buscar dados mensais agregados para gráficos
 ipcMain.handle("get-monthly-summary", async (event, { year }) => {
