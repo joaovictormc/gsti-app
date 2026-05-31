@@ -1093,8 +1093,8 @@ ipcMain.handle("get-os-list", async () => {
     SELECT
       os.id,
       CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento,
-      os.status, os.data_entrada, os.valor_total,
-      c.nome AS nome_cliente,
+      os.numero_serie, os.status, os.data_entrada, os.valor_total,
+      c.nome AS nome_cliente, c.telefone AS telefone_cliente,
       u.nome AS nome_atendente
     FROM ordens_servico AS os
     JOIN clientes AS c ON os.id_cliente = c.id
