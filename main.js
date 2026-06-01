@@ -64,7 +64,7 @@ const defaultConfig = {
     pass: "",
     from: "",
   },
-  branding: { companyName: "GSTI App", logoPath: null },
+  branding: { companyName: "GSTI App", logoPath: null, backgroundPath: null },
   emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
   permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
   autoBackup: {
@@ -3164,6 +3164,80 @@ ipcMain.handle("load-logo-image", async (event, logoPath) => {
     return {
       success: false,
       error: `Erro ao ler o arquivo da logo: ${error.message}`,
+    };
+  }
+});
+
+// --- Handler para selecionar imagem de fundo da tela de login ---
+ipcMain.handle("select-background-file", async (event) => {
+  console.log("[Background Select] Abrindo diálogo para selecionar plano de fundo...");
+  try {
+    const result = await dialog.showOpenDialog({
+      title: "Selecionar Imagem de Fundo (Login)",
+      properties: ["openFile"],
+      filters: [
+        {
+          name: "Imagens",
+          extensions: ["png", "jpg", "jpeg", "webp"],
+        },
+      ],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      console.log("[Background Select] Usuário cancelou a seleção.");
+      return { success: true, filePath: null, error: "Seleção cancelada." };
+    }
+
+    const selectedPath = result.filePaths[0];
+    console.log("[Background Select] Arquivo selecionado:", selectedPath);
+    return { success: true, filePath: selectedPath };
+  } catch (error) {
+    console.error("[Background Select] Erro ao abrir diálogo:", error);
+    return {
+      success: false,
+      error: "Erro ao tentar abrir o seletor de arquivos.",
+    };
+  }
+});
+
+// --- Handler para carregar a imagem de fundo de forma segura (limite 5 MB) ---
+ipcMain.handle("load-background-image", async (event, bgPath) => {
+  if (!bgPath || typeof bgPath !== "string") {
+    return { success: false, error: "Caminho da imagem inválido." };
+  }
+
+  try {
+    if (!fs.existsSync(bgPath)) {
+      console.warn(`[Background Load] Arquivo não encontrado: ${bgPath}`);
+      return {
+        success: false,
+        error: "Arquivo de imagem não encontrado no caminho especificado.",
+      };
+    }
+
+    const stats = fs.statSync(bgPath);
+    if (stats.size / (1024 * 1024) > 5) {
+      return { success: false, error: "A imagem de fundo deve ter no máximo 5 MB." };
+    }
+
+    const imageBuffer = fs.readFileSync(bgPath);
+    const ext = path.extname(bgPath).toLowerCase();
+    let mimeType = "";
+    if (ext === ".png") mimeType = "image/png";
+    else if (ext === ".jpg" || ext === ".jpeg") mimeType = "image/jpeg";
+    else if (ext === ".webp") mimeType = "image/webp";
+    else {
+      console.warn(`[Background Load] Tipo de arquivo não suportado: ${ext}`);
+      return { success: false, error: "Formato de imagem não suportado." };
+    }
+
+    const base64Data = `data:${mimeType};base64,${imageBuffer.toString("base64")}`;
+    return { success: true, imageData: base64Data };
+  } catch (error) {
+    console.error(`[Background Load] Erro ao carregar/converter imagem: ${bgPath}`, error);
+    return {
+      success: false,
+      error: `Erro ao ler o arquivo de imagem: ${error.message}`,
     };
   }
 });

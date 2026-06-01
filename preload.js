@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('api', {
   testEmailSettings: (emailConfig) => ipcRenderer.invoke('test-email-settings', emailConfig),
   selectLogoFile: () => ipcRenderer.invoke('select-logo-file'),
   loadLogoImage: (logoPath) => ipcRenderer.invoke('load-logo-image', logoPath),
+  selectBackgroundFile: () => ipcRenderer.invoke('select-background-file'),
+  loadBackgroundImage: (bgPath) => ipcRenderer.invoke('load-background-image', bgPath),
 
 // Autenticação e Usuários
   login: (credentials) => ipcRenderer.invoke('handle-login', credentials),

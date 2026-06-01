@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -25,6 +25,30 @@ function LoginScreen({ onLoginSuccess }) {
   // --- NOVO ESTADO para controlar a tela ---
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   // --- FIM NOVO ESTADO ---
+
+  // --- Imagem de fundo configurável (whitelabel) ---
+  const [backgroundImage, setBackgroundImage] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadBackground = async () => {
+      try {
+        const result = await window.api.getAppSettings();
+        const bgPath = result?.settings?.branding?.backgroundPath;
+        if (!bgPath) return;
+        const img = await window.api.loadBackgroundImage(bgPath);
+        if (mounted && img?.success && img.imageData) {
+          setBackgroundImage(img.imageData);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar imagem de fundo do login:", err);
+      }
+    };
+    loadBackground();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleLogin = async () => {
     setError(""); // Limpa erros antigos
@@ -109,7 +133,16 @@ function LoginScreen({ onLoginSuccess }) {
         alignItems: "center",
         justifyContent: "center",
         height: "100vh",
-        background: "linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)",
+        ...(backgroundImage
+          ? {
+              backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.55), rgba(15, 23, 42, 0.55)), url(${backgroundImage})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }
+          : {
+              background: "linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)",
+            }),
       }}
     >
       <Paper

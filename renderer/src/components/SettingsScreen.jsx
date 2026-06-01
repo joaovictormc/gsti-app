@@ -42,7 +42,7 @@ function SettingsScreen() {
   const { currentUser } = useAuth();
   const [settings, setSettings] = useState({
     email: { host: "", port: 587, secure: false, user: "", pass: "", from: "" },
-    branding: { companyName: "", logoPath: null },
+    branding: { companyName: "", logoPath: null, backgroundPath: null },
     emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
     permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
     autoBackup: { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 },
@@ -71,7 +71,7 @@ function SettingsScreen() {
         if (result.success && result.settings) {
           // Mescla com um objeto padrão para garantir que todos os campos existam
           const defaultEmail = { host: "", port: 587, secure: false, user: "", pass: "", from: "" };
-          const defaultBranding = { companyName: "GSTI App", logoPath: null };
+          const defaultBranding = { companyName: "GSTI App", logoPath: null, backgroundPath: null };
           const defaultNotifications = { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" };
           const defaultPerms = { canSeeFinancial: false, canSeeReports: false };
           const defaultAutoBackup = { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 };
@@ -269,6 +269,41 @@ function SettingsScreen() {
     }
   };
   // --- FIM NOVA FUNÇÃO ---
+
+  // --- Selecionar / Remover imagem de fundo da tela de login ---
+  const handleSelectBackground = async () => {
+    setSaveStatus({ type: "", text: "" });
+    setTestEmailStatus({ type: "", text: "" });
+    try {
+      const result = await window.api.selectBackgroundFile();
+      if (result.success && result.filePath) {
+        handleInputChange("branding", "backgroundPath", result.filePath);
+        setSaveStatus({
+          type: "info",
+          text: `Nova imagem de fundo selecionada: ${result.filePath}. Clique em Salvar para aplicar.`,
+        });
+      } else if (result.error) {
+        setSaveStatus({
+          type: "warning",
+          text: `Seleção de imagem de fundo: ${result.error}`,
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao chamar API selectBackgroundFile:", error);
+      setSaveStatus({
+        type: "error",
+        text: "Erro ao tentar selecionar imagem de fundo.",
+      });
+    }
+  };
+
+  const handleRemoveBackground = () => {
+    handleInputChange("branding", "backgroundPath", null);
+    setSaveStatus({
+      type: "info",
+      text: "Imagem de fundo removida. Clique em Salvar para aplicar.",
+    });
+  };
 
   // Segurança: Apenas Admin pode ver esta tela
   if (currentUser?.role !== "Admin") {
@@ -471,6 +506,55 @@ function SettingsScreen() {
         >
           * A logo será exibida na Sidebar e futuramente nos PDFs. Use um
           formato comum (PNG, JPG).
+        </Typography>
+
+        {/* --- Imagem de fundo da tela de login --- */}
+        <Box sx={{ mt: 3, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+          <Button
+            variant="outlined"
+            onClick={handleSelectBackground}
+            disabled={saving || testingEmail}
+          >
+            Selecionar Imagem de Fundo (Login)
+          </Button>
+          {settings.branding.backgroundPath && (
+            <>
+              <Typography
+                variant="caption"
+                sx={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  maxWidth: 300,
+                }}
+              >
+                Fundo atual: {settings.branding.backgroundPath}
+              </Typography>
+              <Button
+                variant="text"
+                color="error"
+                size="small"
+                onClick={handleRemoveBackground}
+                disabled={saving || testingEmail}
+              >
+                Remover
+              </Button>
+            </>
+          )}
+          {!settings.branding.backgroundPath && (
+            <Typography variant="caption" color="textSecondary">
+              Nenhuma imagem de fundo definida.
+            </Typography>
+          )}
+        </Box>
+        <Typography
+          variant="caption"
+          sx={{ display: "block", mt: 1 }}
+          color="textSecondary"
+        >
+          * A imagem de fundo aparece atrás do formulário de login. Prefira uma
+          imagem em boa resolução (máximo 5 MB). Sem imagem, é usado o fundo
+          padrão.
         </Typography>
       </Paper>
       {/* --- FIM NOVA SEÇÃO --- */}
