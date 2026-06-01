@@ -26,6 +26,7 @@ import {
   ListItemIcon,
   ToggleButtonGroup,
   ToggleButton,
+  Chip,
 } from "@mui/material";
 import BackupIcon from "@mui/icons-material/Backup";
 import RestoreIcon from "@mui/icons-material/Restore";
@@ -46,7 +47,9 @@ function SettingsScreen() {
     emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
     permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
     autoBackup: { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 },
+    license: { serverUrl: "" },
   });
+  const [licenseStatus, setLicenseStatus] = useState(null);
   const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,6 +86,7 @@ function SettingsScreen() {
               funcionario: { ...defaultPerms, ...(result.settings.permissions?.funcionario || {}) },
             },
             autoBackup: { ...defaultAutoBackup, ...(result.settings.autoBackup || {}) },
+            license: { serverUrl: result.settings.license?.serverUrl || "" },
           });
         } else {
           console.error("Erro ao carregar configurações:", result?.error);
@@ -103,6 +107,18 @@ function SettingsScreen() {
     };
     loadSettings();
   }, []); // Roda só uma vez ao montar
+
+  // Carrega o status atual da licença (somente leitura)
+  useEffect(() => {
+    (async () => {
+      try {
+        const result = await window.api.getLicenseStatus();
+        if (result?.success) setLicenseStatus(result.status);
+      } catch (_) {
+        setLicenseStatus(null);
+      }
+    })();
+  }, []);
 
   // Handler genérico para mudanças nos inputs
   const handleInputChange = useCallback((section, field, value) => {
@@ -189,6 +205,7 @@ function SettingsScreen() {
         emailNotifications: settings.emailNotifications,
         permissions: settings.permissions,
         autoBackup: settings.autoBackup,
+        license: { serverUrl: settings.license.serverUrl },
       };
       const result = await window.api.saveAppSettings(settingsToSave);
       if (result.success) {
@@ -558,6 +575,66 @@ function SettingsScreen() {
         </Typography>
       </Paper>
       {/* --- FIM NOVA SEÇÃO --- */}
+
+      {/* --- Licenciamento e Ativação --- */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Licenciamento e Ativação
+        </Typography>
+
+        {licenseStatus && (
+          <Box sx={{ mb: 2, display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
+            <Chip
+              label={
+                licenseStatus.active
+                  ? licenseStatus.tipo === "trial"
+                    ? "Teste ativo"
+                    : "Licença ativa"
+                  : "Inativa"
+              }
+              color={licenseStatus.active ? "success" : "error"}
+              size="small"
+            />
+            {licenseStatus.active && licenseStatus.tipo === "trial" && licenseStatus.diasRestantes != null && (
+              <Typography variant="body2" color="text.secondary">
+                {licenseStatus.diasRestantes} dia(s) restantes
+              </Typography>
+            )}
+            {licenseStatus.active && licenseStatus.tipo === "full" && (
+              <Typography variant="body2" color="text.secondary">
+                {licenseStatus.validade
+                  ? `Válida até ${new Date(licenseStatus.validade).toLocaleDateString("pt-BR")}`
+                  : "Sem expiração"}
+              </Typography>
+            )}
+            {!licenseStatus.active && licenseStatus.motivo && (
+              <Typography variant="body2" color="error">
+                {licenseStatus.motivo}
+              </Typography>
+            )}
+          </Box>
+        )}
+
+        <TextField
+          label="URL do Servidor de Ativação"
+          placeholder="https://licenca.labapp.com.br"
+          value={settings.license.serverUrl}
+          onChange={(e) => handleInputChange("license", "serverUrl", e.target.value)}
+          fullWidth
+          margin="normal"
+          size="small"
+          disabled={saving || testingEmail}
+        />
+        <Typography
+          variant="caption"
+          sx={{ display: "block", mt: 1 }}
+          color="textSecondary"
+        >
+          * Endereço do servidor que emite e valida as licenças. Deixe em branco
+          para usar o padrão do sistema. Use HTTPS em produção.
+        </Typography>
+      </Paper>
+      {/* --- FIM Licenciamento --- */}
 
       {/* --- Permissões de Funcionário --- */}
       <Paper sx={{ p: 3, mb: 3 }}>

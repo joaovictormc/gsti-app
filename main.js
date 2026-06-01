@@ -845,6 +845,7 @@ ipcMain.handle("get-app-settings", async () => {
   const settingsToSend = JSON.parse(JSON.stringify(appConfig));
   if (settingsToSend.database) delete settingsToSend.database.password; // Não envia senha do DB
   if (settingsToSend.email) delete settingsToSend.email.pass; // Não envia senha do Email
+  if (settingsToSend.license) delete settingsToSend.license.token; // Não expõe o token de licença
   return { success: true, settings: settingsToSend };
 });
 
@@ -872,6 +873,13 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
         },
       },
       autoBackup: { ...appConfig.autoBackup, ...(newSettings.autoBackup || {}) },
+      // Apenas a URL do servidor é editável aqui; token/validade/etc. são preservados.
+      license: {
+        ...appConfig.license,
+        ...(newSettings.license && typeof newSettings.license.serverUrl === "string"
+          ? { serverUrl: newSettings.license.serverUrl.trim() }
+          : {}),
+      },
       database: currentDbConfig,
       setupComplete: currentSetupStatus,
     };
