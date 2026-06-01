@@ -17,12 +17,13 @@ import {
 const InitialSetupScreen = ({ onSetupComplete }) => {
   const [activeStep, setActiveStep] = useState(0); // 0: Ativação, 1: DB Config, 2: Admin Config
 
-  // Estado para Ativação (licença vinculada ao e-mail de contratação)
-  const [license, setLicense] = useState({ email: "", key: "" });
+  // Estado para Ativação (licença emitida pelo servidor, vinculada ao e-mail)
+  const [licenseEmail, setLicenseEmail] = useState("");
   const [licenseStatus, setLicenseStatus] = useState({
-    validating: false,
+    loading: false, // "activate" | "trial" | false
     valid: false,
     error: "",
+    info: null, // { tipo, validade, diasRestantes }
   });
 
   // Estado para Configuração do Banco
@@ -51,50 +52,48 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
   const [adminStatus, setAdminStatus] = useState({ saving: false, error: "" });
 
   // Handlers para inputs
-  const handleLicenseChange = (e) => {
-    const { name, value } = e.target;
-    setLicense((prev) => ({ ...prev, [name]: value }));
-    setLicenseStatus({ validating: false, valid: false, error: "" });
+  const handleLicenseEmailChange = (e) => {
+    setLicenseEmail(e.target.value);
+    setLicenseStatus({ loading: false, valid: false, error: "", info: null });
   };
 
-  const handleValidateLicense = async () => {
-    setLicenseStatus({ validating: true, valid: false, error: "" });
-    if (!license.email || !license.key) {
+  // mode: "activate" (licença definitiva) | "trial" (teste 7 dias)
+  const handleActivate = async (mode) => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(licenseEmail.trim())) {
       setLicenseStatus({
-        validating: false,
+        loading: false,
         valid: false,
-        error: "Informe o e-mail de contratação e a chave de ativação.",
+        error: "Informe um e-mail válido.",
+        info: null,
       });
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(license.email.trim())) {
-      setLicenseStatus({
-        validating: false,
-        valid: false,
-        error: "Informe um e-mail de contratação válido.",
-      });
-      return;
-    }
+    setLicenseStatus({ loading: mode, valid: false, error: "", info: null });
     try {
-      const result = await window.api.validateLicense({
-        email: license.email,
-        key: license.key,
-      });
+      const fn = mode === "trial" ? window.api.startTrial : window.api.activateLicense;
+      const result = await fn({ email: licenseEmail.trim() });
       if (result.success) {
-        setLicenseStatus({ validating: false, valid: true, error: "" });
+        setLicenseStatus({
+          loading: false,
+          valid: true,
+          error: "",
+          info: result.license,
+        });
         setActiveStep(1); // Avança para a configuração do banco
       } else {
         setLicenseStatus({
-          validating: false,
+          loading: false,
           valid: false,
-          error: result.error || "Ativação inválida.",
+          error: result.error || "Falha na ativação.",
+          info: null,
         });
       }
     } catch (error) {
       setLicenseStatus({
-        validating: false,
+        loading: false,
         valid: false,
-        error: "Erro ao validar a ativação. Tente novamente.",
+        error: "Erro ao contatar o servidor de ativação. Tente novamente.",
+        info: null,
       });
     }
   };
@@ -147,7 +146,7 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
       return;
     }
 
-    const result = await window.api.saveInitialConfig({ dbConfig, adminUser, license });
+    const result = await window.api.saveInitialConfig({ dbConfig, adminUser });
     if (result.success) {
       alert(
         "Configuração salva e usuário administrador criado com sucesso! O aplicativo será reiniciado ou você será redirecionado para o login."
@@ -192,8 +191,9 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
             <StepLabel>Ativação do Sistema</StepLabel>
             <StepContent>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Informe o e-mail usado na contratação e a chave de ativação que
-                você recebeu. A chave é vinculada ao e-mail.
+                Informe o e-mail usado na contratação para ativar o sistema. Se
+                ainda não contratou, use o mesmo e-mail para iniciar um período
+                de teste de 7 dias. É necessária conexão com a internet.
               </Typography>
               <Box
                 sx={{
@@ -206,19 +206,12 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
               >
                 <TextField
                   name="email"
-                  label="E-mail de Contratação"
+                  label="E-mail"
                   type="email"
-                  value={license.email}
-                  onChange={handleLicenseChange}
+                  value={licenseEmail}
+                  onChange={handleLicenseEmailChange}
                   required
-                />
-                <TextField
-                  name="key"
-                  label="Chave de Ativação"
-                  placeholder="XXXX-XXXX-XXXX-XXXX"
-                  value={license.key}
-                  onChange={handleLicenseChange}
-                  required
+                  disabled={!!licenseStatus.loading}
                 />
               </Box>
               {licenseStatus.error && (
@@ -228,21 +221,37 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
               )}
               {licenseStatus.valid && (
                 <Alert severity="success" sx={{ mb: 2 }}>
-                  Ativação validada!
+                  {licenseStatus.info?.tipo === "trial"
+                    ? `Teste ativado! ${licenseStatus.info?.diasRestantes ?? 7} dias restantes.`
+                    : "Licença ativada com sucesso!"}
                 </Alert>
               )}
-              <Button
-                variant="contained"
-                onClick={handleValidateLicense}
-                disabled={licenseStatus.validating}
-                startIcon={
-                  licenseStatus.validating ? (
-                    <CircularProgress size={20} color="inherit" />
-                  ) : null
-                }
-              >
-                Validar Ativação
-              </Button>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                <Button
+                  variant="contained"
+                  onClick={() => handleActivate("activate")}
+                  disabled={!!licenseStatus.loading}
+                  startIcon={
+                    licenseStatus.loading === "activate" ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : null
+                  }
+                >
+                  Ativar Licença
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => handleActivate("trial")}
+                  disabled={!!licenseStatus.loading}
+                  startIcon={
+                    licenseStatus.loading === "trial" ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : null
+                  }
+                >
+                  Testar 7 dias grátis
+                </Button>
+              </Box>
             </StepContent>
           </Step>
 

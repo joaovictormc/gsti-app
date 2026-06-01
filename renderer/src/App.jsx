@@ -64,6 +64,7 @@ import EquipmentHistoryReport from "./components/EquipmentHistoryReport";
 import DetailedRevenueReport from "./components/DetailedRevenueReport";
 import UserManagement from "./components/UserManagement";
 import InitialSetupScreen from "./screens/InitialSetupScreen";
+import ReactivationScreen from "./screens/ReactivationScreen";
 import SettingsScreen from "./components/SettingsScreen";
 
 const drawerWidth = 240; // Largura da Sidebar
@@ -359,6 +360,8 @@ function App() {
     });
   const [needsSetup, setNeedsSetup] = useState(null); // null = verificando, true = precisa, false = não precisa
   const [checkingSetup, setCheckingSetup] = useState(true); // Para mostrar loading inicial
+  const [licenseActive, setLicenseActive] = useState(null); // null = verificando, true/false
+  const [licenseMotivo, setLicenseMotivo] = useState("");
 
   const [brandingConfig, setBrandingConfig] = useState({
     companyName: "GSTI App",
@@ -388,6 +391,38 @@ function App() {
     checkSetup();
   }, []);
   // --- FIM EFEITO SETUP ---
+
+  // --- EFEITO: Verificar licença (após confirmar que o setup está completo) ---
+  const checkLicense = async () => {
+    try {
+      // Status local imediato (assinatura + validade)
+      const local = await window.api.getLicenseStatus();
+      let status = local?.status || { active: false, motivo: "Sem licença." };
+      // Revalidação online best-effort (revogação); offline mantém o status local
+      try {
+        const revalid = await window.api.revalidateLicense();
+        if (revalid?.status) status = revalid.status;
+      } catch (_) {
+        /* offline — mantém status local */
+      }
+      setLicenseActive(!!status.active);
+      setLicenseMotivo(status.motivo || "");
+    } catch (error) {
+      console.error("Erro ao verificar licença:", error);
+      // Em caso de falha inesperada, não bloqueia indevidamente
+      setLicenseActive(true);
+    }
+  };
+
+  useEffect(() => {
+    if (needsSetup === false) {
+      checkLicense();
+    } else if (needsSetup === true) {
+      // Durante o setup a ativação é tratada na própria tela de setup
+      setLicenseActive(true);
+    }
+  }, [needsSetup]);
+  // --- FIM EFEITO LICENÇA ---
 
   // --- NOVO EFEITO: Carregar Configurações de Branding após Login ---
   useEffect(() => {
@@ -551,6 +586,42 @@ function App() {
           },
         })} />
         <InitialSetupScreen onSetupComplete={handleSetupComplete} />
+      </ThemeProvider>
+    );
+  }
+
+  // 2b. Setup completo mas ainda verificando a licença
+  if (needsSetup === false && licenseActive === null) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "100vh",
+          }}
+        >
+          <CircularProgress />
+          <Typography sx={{ ml: 2 }}>Verificando licença...</Typography>
+        </Box>
+      </ThemeProvider>
+    );
+  }
+
+  // 2c. Licença expirada/revogada/inválida — exige reativação antes do login
+  if (needsSetup === false && licenseActive === false) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ReactivationScreen
+          motivo={licenseMotivo}
+          onReactivated={() => {
+            setLicenseActive(null);
+            checkLicense();
+          }}
+        />
       </ThemeProvider>
     );
   }

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
+const os = require("os");
 const { Pool } = require("pg");
 const axios = require("axios");
 const fs = require("fs");
@@ -39,45 +40,179 @@ function pgQuery(sql) {
   return sql.replace(/\?/g, () => `$${++i}`);
 }
 
-// --- LICENCIAMENTO (ativação offline vinculada ao e-mail de contratação) ---
-// Segredo embutido no app. A chave de ativação de cada cliente é derivada do
-// e-mail de contratação via HMAC, então cada chave só ativa com o e-mail certo.
-// Para gerar chaves de clientes, use: node generate-license-key.js <email>
-const LICENSE_SECRET = "GSTI-APP-LABAPP-2026-#9f3b7a1c";
+// --- LICENCIAMENTO (ativação online + verificação offline por assinatura) ---
+// O app embute APENAS a chave PÚBLICA. As licenças são assinadas pelo servidor
+// de ativação (que detém a chave privada), então não podem ser forjadas no
+// cliente, mesmo com o .exe e a chave pública em mãos.
+// Servidor: pasta license-server/ (gere as chaves com: node gerar-chaves.js).
+const LICENSE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAa/GMq+RzvNgdD0Sf00J2gueufwoYhuOt8a6MDGp9F+o=
+-----END PUBLIC KEY-----
+`;
+// URL padrão do servidor de licenças (sobrescrevível em config.license.serverUrl).
+const DEFAULT_LICENSE_SERVER = "https://licenca.labapp.com.br";
 
-// Normaliza o e-mail (trim + minúsculas) para garantir determinismo na derivação.
+const b64urlDecode = (str) =>
+  Buffer.from(String(str).replace(/-/g, "+").replace(/_/g, "/"), "base64");
+
 function normalizeLicenseEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
-// Deriva a chave de ativação canônica a partir do e-mail.
-// Formato: XXXX-XXXX-XXXX-XXXX (16 hex maiúsculos = 64 bits do HMAC-SHA256).
-function computeLicenseKey(email) {
-  const normalized = normalizeLicenseEmail(email);
-  if (!normalized) return "";
-  const hex = crypto
-    .createHmac("sha256", LICENSE_SECRET)
-    .update(normalized)
+// Verifica a assinatura do token e retorna o payload (ou null se inválido).
+function decodeLicenseToken(token) {
+  try {
+    const [payloadB64, sigB64] = String(token || "").split(".");
+    if (!payloadB64 || !sigB64) return null;
+    const ok = crypto.verify(
+      null,
+      Buffer.from(payloadB64),
+      crypto.createPublicKey(LICENSE_PUBLIC_KEY),
+      b64urlDecode(sigB64)
+    );
+    if (!ok) return null;
+    return JSON.parse(b64urlDecode(payloadB64).toString("utf8"));
+  } catch (_) {
+    return null;
+  }
+}
+
+// Identificador de máquina derivado de hardware (estável entre reinstalações).
+function getMachineId() {
+  const nets = os.networkInterfaces();
+  let mac = "";
+  for (const name of Object.keys(nets)) {
+    for (const ni of nets[name] || []) {
+      if (!ni.internal && ni.mac && ni.mac !== "00:00:00:00:00:00") {
+        mac = ni.mac;
+        break;
+      }
+    }
+    if (mac) break;
+  }
+  return crypto
+    .createHash("sha256")
+    .update(`${os.hostname()}|${mac}`)
     .digest("hex")
-    .slice(0, 16)
-    .toUpperCase();
-  return hex.match(/.{1,4}/g).join("-");
+    .slice(0, 32);
 }
 
-// Remove separadores/espaços e normaliza para comparação.
-function normalizeLicenseKey(key) {
-  return String(key || "").replace(/[\s-]/g, "").toUpperCase();
+// Avalia o estado da licença armazenada (assinatura + validade + relógio + revogação).
+// Retorna { active, tipo, email, validade, diasRestantes, motivo }.
+function evaluateLicense() {
+  const lic = appConfig && appConfig.license;
+  if (!lic || !lic.token) return { active: false, motivo: "Sem licença ativada." };
+  if (lic.revoked) {
+    return { active: false, motivo: lic.revogadaMotivo || "Licença revogada." };
+  }
+  const payload = decodeLicenseToken(lic.token);
+  if (!payload) return { active: false, motivo: "Licença inválida (assinatura)." };
+
+  const now = Date.now();
+  // Anti-burla: detecta retrocesso significativo do relógio do sistema.
+  if (lic.lastSeen) {
+    const last = new Date(lic.lastSeen).getTime();
+    if (now < last - 86400000) {
+      return {
+        active: false,
+        motivo: "Relógio do sistema inconsistente. Conecte-se à internet para revalidar.",
+      };
+    }
+  }
+
+  let diasRestantes = null;
+  if (payload.validade) {
+    const exp = new Date(payload.validade).getTime();
+    if (exp < now) {
+      return {
+        active: false,
+        tipo: payload.tipo,
+        validade: payload.validade,
+        diasRestantes: 0,
+        motivo:
+          payload.tipo === "trial"
+            ? "Período de teste expirado."
+            : "Licença expirada.",
+      };
+    }
+    diasRestantes = Math.ceil((exp - now) / 86400000);
+  }
+  return {
+    active: true,
+    tipo: payload.tipo,
+    email: payload.email,
+    validade: payload.validade || null,
+    diasRestantes,
+  };
 }
 
-// Valida e-mail + chave em tempo constante.
-function verifyLicense(email, key) {
-  const expected = normalizeLicenseKey(computeLicenseKey(email));
-  const provided = normalizeLicenseKey(key);
-  if (!expected || expected.length !== provided.length) return false;
-  return crypto.timingSafeEqual(
-    Buffer.from(expected),
-    Buffer.from(provided)
-  );
+// Atualiza lastSeen (maior entre agora e o registrado) — base do anti-burla.
+function touchLicenseLastSeen() {
+  if (!appConfig || !appConfig.license || !appConfig.license.token) return;
+  const now = new Date();
+  const prev = appConfig.license.lastSeen ? new Date(appConfig.license.lastSeen) : null;
+  if (!prev || now > prev) {
+    appConfig.license.lastSeen = now.toISOString();
+    try {
+      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+    } catch (_) {
+      /* ignora falha de escrita */
+    }
+  }
+}
+
+// Solicita uma licença ao servidor de ativação e persiste localmente.
+async function requestLicenseFromServer(endpoint, email) {
+  const e = normalizeLicenseEmail(email);
+  if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
+    return { success: false, error: "Informe um e-mail válido." };
+  }
+  const base =
+    (appConfig.license && appConfig.license.serverUrl) || DEFAULT_LICENSE_SERVER;
+  try {
+    const { data } = await axios.post(
+      base.replace(/\/$/, "") + endpoint,
+      { email: e, maquina: getMachineId() },
+      { timeout: 15000 }
+    );
+    if (!data || !data.success || !data.token) {
+      return { success: false, error: (data && data.error) || "Falha na ativação." };
+    }
+    const payload = decodeLicenseToken(data.token);
+    if (!payload) return { success: false, error: "A licença recebida é inválida." };
+
+    appConfig.license = {
+      email: payload.email,
+      token: data.token,
+      tipo: payload.tipo,
+      validade: payload.validade || null,
+      activatedAt: new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
+      revoked: false,
+      revogadaMotivo: "",
+      serverUrl: (appConfig.license && appConfig.license.serverUrl) || "",
+    };
+    fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+
+    const status = evaluateLicense();
+    return {
+      success: true,
+      license: {
+        tipo: payload.tipo,
+        email: payload.email,
+        validade: payload.validade || null,
+        diasRestantes: status.diasRestantes,
+      },
+    };
+  } catch (err) {
+    if (err.response && err.response.data && err.response.data.error) {
+      return { success: false, error: err.response.data.error };
+    }
+    return {
+      success: false,
+      error: "Não foi possível contatar o servidor de ativação. Verifique sua conexão.",
+    };
+  }
 }
 
 // --- GERENCIAMENTO DE CONFIGURAÇÃO ---
@@ -116,7 +251,17 @@ const defaultConfig = {
     destinationPath: "",
     retentionDays: 30,
   },
-  license: { email: "", key: "", activatedAt: null },
+  license: {
+    email: "",
+    token: "",
+    tipo: "",
+    validade: null,
+    activatedAt: null,
+    lastSeen: null,
+    revoked: false,
+    revogadaMotivo: "",
+    serverUrl: "",
+  },
   setupComplete: false,
 };
 
@@ -503,14 +648,15 @@ ipcMain.handle("test-db-connection", async (event, dbConfig) => {
 // Handler para salvar a configuração inicial e criar o primeiro admin
 ipcMain.handle(
   "save-initial-config",
-  async (event, { dbConfig, adminUser, license }) => {
+  async (event, { dbConfig, adminUser }) => {
     console.log("[Setup] Salvando configuração inicial e criando admin...");
 
-    // --- Validação da licença (ativação) ---
-    if (!license || !verifyLicense(license.email, license.key)) {
+    // --- Validação da licença (precisa estar ativada antes de concluir o setup) ---
+    const licStatus = evaluateLicense();
+    if (!licStatus.active) {
       return {
         success: false,
-        error: "Ativação inválida. Verifique o e-mail de contratação e a chave de ativação.",
+        error: licStatus.motivo || "Ative o sistema antes de concluir a configuração.",
       };
     }
 
@@ -558,12 +704,7 @@ ipcMain.handle(
         user: dbConfig.user,
         password: dbConfig.password, // Salva a senha aqui
       };
-      // Persiste a licença validada (e-mail de contratação + chave)
-      appConfig.license = {
-        email: normalizeLicenseEmail(license.email),
-        key: normalizeLicenseKey(license.key),
-        activatedAt: new Date().toISOString(),
-      };
+      // A licença já foi ativada e persistida em appConfig.license antes deste passo.
       appConfig.setupComplete = true; // Marca setup como completo
       // Mantém as outras configs (email, branding) com os defaults
       fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
@@ -651,18 +792,51 @@ ipcMain.handle("is-initial-setup-needed", async () => {
   return !appConfig.setupComplete;
 });
 
-// Handler para validar a ativação (e-mail de contratação + chave) sem persistir
-ipcMain.handle("validate-license", async (event, { email, key }) => {
-  if (!email || !key) {
-    return { success: false, error: "Informe o e-mail de contratação e a chave de ativação." };
+// Ativação definitiva (e-mail cadastrado como cliente no servidor)
+ipcMain.handle("activate-license", async (event, { email }) => {
+  return await requestLicenseFromServer("/ativar", email);
+});
+
+// Início de período de teste (7 dias)
+ipcMain.handle("start-trial", async (event, { email }) => {
+  return await requestLicenseFromServer("/trial", email);
+});
+
+// Estado atual da licença (verificação local por assinatura)
+ipcMain.handle("get-license-status", async () => {
+  touchLicenseLastSeen();
+  return { success: true, status: evaluateLicense() };
+});
+
+// Revalidação online (revogação/expiração). Best-effort: offline mantém status local.
+ipcMain.handle("revalidate-license", async () => {
+  const lic = appConfig && appConfig.license;
+  if (!lic || !lic.token) {
+    return { success: true, status: evaluateLicense() };
   }
-  if (!verifyLicense(email, key)) {
-    return {
-      success: false,
-      error: "Chave de ativação inválida para este e-mail. Confira os dados recebidos.",
-    };
+  const base = lic.serverUrl || DEFAULT_LICENSE_SERVER;
+  try {
+    const { data } = await axios.post(
+      base.replace(/\/$/, "") + "/validar",
+      { token: lic.token },
+      { timeout: 10000 }
+    );
+    if (data && data.valido === false) {
+      appConfig.license = {
+        ...lic,
+        revoked: true,
+        revogadaMotivo: data.motivo || "Licença inválida.",
+      };
+      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+    } else if (data && data.valido === true && lic.revoked) {
+      // Reabilitada no servidor — limpa a marcação local.
+      appConfig.license = { ...lic, revoked: false, revogadaMotivo: "" };
+      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+    }
+  } catch (_) {
+    // Sem conexão: mantém o status local (modo offline).
   }
-  return { success: true };
+  return { success: true, status: evaluateLicense() };
 });
 
 // Handler para buscar as configurações atuais (para a tela de Settings)

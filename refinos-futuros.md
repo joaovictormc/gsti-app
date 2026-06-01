@@ -41,4 +41,4 @@
 
 ## Autenticação para instalar
 - [x] Adicionar recurso no instalador para o usuário inserir o e-mail usado para contratar o sistema e uma senha que será vinculada ao e-mail da pessoa que contratou, isso pode assegurar de possíveis usos indevidos do sistema
-  - Ativação offline: chave vinculada ao e-mail via HMAC (segredo `LICENSE_SECRET` em `main.js`). Gerar chaves de clientes com `node generate-license-key.js <email>`.
+  - Ativação **online** via servidor próprio (`license-server/`, Express). O app embute só a chave pública Ed25519 (`LICENSE_PUBLIC_KEY` em `main.js`); o servidor assina as licenças com a privada. Suporta licença definitiva, **trial de 7 dias** e **revogação**. Verificação offline por assinatura + revalidação online.
