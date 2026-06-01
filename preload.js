@@ -108,6 +108,7 @@ contextBridge.exposeInMainWorld('api', {
   getOSByClient: (clientId) => ipcRenderer.invoke('get-os-by-client', clientId),
   getOSByStatus: (status) => ipcRenderer.invoke('get-os-by-status', status),
   getOSByAttendant: (data) => ipcRenderer.invoke('get-os-by-attendant', data),
+  getOpenOSAging: () => ipcRenderer.invoke('get-open-os-aging'),
   getDetailedCashflow: (period) => ipcRenderer.invoke('get-detailed-cashflow', period),
   getMostUsedServices: (period) => ipcRenderer.invoke('get-most-used-services', period),
   searchOSBySerial: (serialNumber) => ipcRenderer.invoke('search-os-by-serial', serialNumber),

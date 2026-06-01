@@ -3158,6 +3158,41 @@ ipcMain.handle("get-os-by-status", async (event, status) => {
   }
 });
 
+// Relatório de OS abertas por tempo: todas as OS não finalizadas,
+// ordenadas das mais antigas para as mais recentes, com dias em aberto.
+ipcMain.handle("get-open-os-aging", async () => {
+  if (!dbPool)
+    return { success: false, error: "Banco de dados não configurado." };
+
+  const sql = `
+    SELECT
+      os.id,
+      CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento,
+      os.status,
+      os.data_entrada,
+      os.data_prevista,
+      os.valor_total,
+      c.nome AS nome_cliente,
+      (CURRENT_DATE - os.data_entrada::date)::int AS dias_aberto,
+      CASE
+        WHEN os.data_prevista IS NOT NULL AND os.data_prevista < NOW() THEN true
+        ELSE false
+      END AS atrasada
+    FROM ordens_servico AS os
+    JOIN clientes AS c ON os.id_cliente = c.id
+    WHERE os.status NOT IN ('Finalizado', 'Entregue', 'Cancelado')
+    ORDER BY os.data_entrada ASC NULLS LAST, os.id ASC
+  `;
+
+  try {
+    const { rows } = await dbPool.query(sql);
+    return { success: true, data: rows };
+  } catch (error) {
+    console.error("Erro ao buscar OS abertas por tempo:", error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Listener para buscar os Serviços/Produtos mais utilizados
 ipcMain.handle(
   "get-most-used-services",

@@ -12,7 +12,7 @@
 
 ## Ordens de Serviço (Fase 2 e Fase 4 - Melhorias e Relatórios)
 
-- [ ] **Relatório de OS Abertas por Tempo:** Listar OS com status 'Em Aberto', 'Aguardando Peça', 'Em Andamento', ordenadas pelas mais antigas.
+- [x] **Relatório de OS Abertas por Tempo:** Listar OS com status 'Em Aberto', 'Aguardando Peça', 'Em Andamento', ordenadas pelas mais antigas.
 - [x] **Busca Avançada de OS:** Implementar busca mais robusta na tela `OSGrid`, permitindo filtrar por ID da OS, Telefone do Cliente, ou detalhes do Equipamento (Marca/Modelo).
 - [ ] **Vincular OS a Equipamento Específico:** (Requer Módulo de Equipamentos) Associar uma OS a um item específico da tabela `equipamentos` do cliente.
 - [ ] **Adicionar Notas por Item na OS:** Permitir adicionar observações específicas para cada produto ou serviço *dentro* da OS (`os_itens`).
