@@ -7,8 +7,8 @@
 - [x] **Gráfico de Receitas (OS vs. Avulsas):** Criar gráfico no `FinancialDashboard` mostrando a proporção das fontes de receita.
 - [x] **Relatório Detalhado de Despesas (Visualização/Excel):** Criar tela/planilha Excel listando todas as despesas no período, talvez agrupadas por Categoria ou Tipo (Fixa/Variável).
 - [x] **Aprimorar Exportação Excel:** Adicionar mais planilhas ou detalhes (ex: Despesas por Categoria, Receitas por Fonte) ao arquivo `.xlsx`.
-- [ ] **Projeção Financeira Simplificada:** Calcular e exibir "Lucro Líquido Mensal Projetado" (Receita Média - Desp. Var. Média - Desp. Fixa Estimada - *requer campo para Desp. Fixa Estimada*).
-- [ ] **Metas Financeiras Múltiplas:** Permitir cadastrar várias metas (descrição, valor) e exibir tempo estimado para cada uma baseado no Lucro Médio.
+- [x] **Projeção Financeira Simplificada:** Calcular e exibir "Lucro Líquido Mensal Projetado" (Receita Média - Desp. Var. Média - Desp. Fixa Estimada - *requer campo para Desp. Fixa Estimada*).
+- [x] **Metas Financeiras Múltiplas:** Permitir cadastrar várias metas (descrição, valor) e exibir tempo estimado para cada uma baseado no Lucro Médio.
 
 ## Ordens de Serviço (Fase 2 e Fase 4 - Melhorias e Relatórios)
 

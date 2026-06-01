@@ -106,6 +106,7 @@ const defaultConfig = {
     from: "",
   },
   branding: { companyName: "GSTI App", logoPath: null, backgroundPath: null },
+  financeiro: { despesaFixaEstimada: 0 },
   emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
   permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
   autoBackup: {
@@ -180,6 +181,7 @@ function initializeDbPool() {
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS bairro VARCHAR(100)",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cidade VARCHAR(100)",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS estado VARCHAR(2)",
+        "CREATE TABLE IF NOT EXISTS metas_financeiras (id SERIAL PRIMARY KEY, descricao TEXT NOT NULL, valor NUMERIC(12,2) NOT NULL DEFAULT 0, criada_em TIMESTAMP NOT NULL DEFAULT NOW())",
       ].forEach((sql) =>
         dbPool.query(sql)
           .then(() => console.log("[Migration] OK:", sql.slice(0, 60)))
@@ -2556,6 +2558,162 @@ ipcMain.handle("get-average-profit", async (event, { months = 6 } = {}) => {
     return { success: true, averageProfit };
   } catch (error) {
     console.error("Erro ao calcular média de lucro:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// --- PROJEÇÃO FINANCEIRA E METAS ---
+
+// Calcula a receita média mensal e a despesa variável média mensal nos últimos N meses.
+// A despesa fixa é estimada pelo usuário (config), então aqui só consideramos a variável.
+ipcMain.handle("get-financial-projection", async (event, { months = 6 } = {}) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  const numMonths = Math.max(1, parseInt(months, 10));
+
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - numMonths);
+  startDate.setDate(1);
+  const fStart = startDate.toISOString().split("T")[0];
+  const fEnd = endDate.toISOString().split("T")[0];
+
+  const getMonthKey = (y, m) => `${y}-${String(m).padStart(2, "0")}`;
+
+  try {
+    const osSql = pgQuery(`
+      SELECT EXTRACT(YEAR FROM data_saida)::int AS year, EXTRACT(MONTH FROM data_saida)::int AS month,
+             SUM(valor_total) AS total
+      FROM ordens_servico
+      WHERE status IN ('Finalizado', 'Entregue') AND data_saida IS NOT NULL
+        AND data_saida >= ? AND data_saida <= ?
+      GROUP BY EXTRACT(YEAR FROM data_saida), EXTRACT(MONTH FROM data_saida)`);
+    const { rows: osRows } = await dbPool.query(osSql, [`${fStart} 00:00:00`, `${fEnd} 23:59:59`]);
+
+    const miscSql = pgQuery(`
+      SELECT EXTRACT(YEAR FROM data)::int AS year, EXTRACT(MONTH FROM data)::int AS month,
+             SUM(valor) AS total
+      FROM receitas_avulsas
+      WHERE data >= ? AND data <= ?
+      GROUP BY EXTRACT(YEAR FROM data), EXTRACT(MONTH FROM data)`);
+    const { rows: miscRows } = await dbPool.query(miscSql, [fStart, fEnd]);
+
+    // Apenas despesas variáveis (a fixa é estimada pelo usuário)
+    const varSql = pgQuery(`
+      SELECT EXTRACT(YEAR FROM data)::int AS year, EXTRACT(MONTH FROM data)::int AS month,
+             SUM(valor) AS total
+      FROM despesas
+      WHERE tipo_despesa <> 'Fixa' AND data >= ? AND data <= ?
+      GROUP BY EXTRACT(YEAR FROM data), EXTRACT(MONTH FROM data)`);
+    const { rows: varRows } = await dbPool.query(varSql, [fStart, fEnd]);
+
+    const revByMonth = {};
+    const varByMonth = {};
+    osRows.forEach((r) => {
+      const k = getMonthKey(r.year, r.month);
+      revByMonth[k] = (revByMonth[k] || 0) + (Number(r.total) || 0);
+    });
+    miscRows.forEach((r) => {
+      const k = getMonthKey(r.year, r.month);
+      revByMonth[k] = (revByMonth[k] || 0) + (Number(r.total) || 0);
+    });
+    varRows.forEach((r) => {
+      const k = getMonthKey(r.year, r.month);
+      varByMonth[k] = (varByMonth[k] || 0) + (Number(r.total) || 0);
+    });
+
+    // Média sobre os meses que tiveram algum movimento (receita ou despesa variável)
+    const activeMonths = new Set([...Object.keys(revByMonth), ...Object.keys(varByMonth)]);
+    const count = activeMonths.size;
+    const sumRevenue = Object.values(revByMonth).reduce((s, v) => s + v, 0);
+    const sumVariable = Object.values(varByMonth).reduce((s, v) => s + v, 0);
+
+    const avgRevenue = count > 0 ? sumRevenue / count : 0;
+    const avgVariableExpense = count > 0 ? sumVariable / count : 0;
+
+    return {
+      success: true,
+      avgRevenue,
+      avgVariableExpense,
+      monthsWithData: count,
+      months: numMonths,
+    };
+  } catch (error) {
+    console.error("[get-financial-projection] Erro:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Lê os parâmetros financeiros de planejamento (config.json)
+ipcMain.handle("get-financial-config", async () => {
+  const financeiro = appConfig.financeiro || { despesaFixaEstimada: 0 };
+  return { success: true, financeiro };
+});
+
+// Salva os parâmetros financeiros de planejamento (config.json)
+ipcMain.handle("save-financial-config", async (event, { despesaFixaEstimada }) => {
+  try {
+    const value = Number(despesaFixaEstimada);
+    if (!isFinite(value) || value < 0) {
+      return { success: false, error: "Valor de despesa fixa estimada inválido." };
+    }
+    appConfig.financeiro = { ...appConfig.financeiro, despesaFixaEstimada: value };
+    fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+    return { success: true, financeiro: appConfig.financeiro };
+  } catch (error) {
+    console.error("[save-financial-config] Erro:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Metas financeiras (CRUD)
+ipcMain.handle("get-financial-goals", async () => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const { rows } = await dbPool.query(
+      "SELECT id, descricao, valor::float AS valor, criada_em FROM metas_financeiras ORDER BY criada_em ASC, id ASC"
+    );
+    return {
+      success: true,
+      data: rows.map((r) => ({
+        id: r.id,
+        descricao: r.descricao,
+        valor: Number(r.valor) || 0,
+        criada_em: r.criada_em,
+      })),
+    };
+  } catch (error) {
+    console.error("[get-financial-goals] Erro:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("add-financial-goal", async (event, { descricao, valor }) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  const desc = String(descricao || "").trim();
+  const value = Number(valor);
+  if (!desc) return { success: false, error: "Informe uma descrição para a meta." };
+  if (!isFinite(value) || value <= 0) {
+    return { success: false, error: "Informe um valor de meta maior que zero." };
+  }
+  try {
+    const { rows } = await dbPool.query(
+      pgQuery("INSERT INTO metas_financeiras (descricao, valor) VALUES (?, ?) RETURNING id"),
+      [desc, value]
+    );
+    return { success: true, id: rows[0].id };
+  } catch (error) {
+    console.error("[add-financial-goal] Erro:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("delete-financial-goal", async (event, id) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    await dbPool.query(pgQuery("DELETE FROM metas_financeiras WHERE id = ?"), [id]);
+    return { success: true };
+  } catch (error) {
+    console.error("[delete-financial-goal] Erro:", error);
     return { success: false, error: error.message };
   }
 });

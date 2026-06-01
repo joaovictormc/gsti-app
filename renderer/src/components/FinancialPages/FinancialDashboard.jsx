@@ -20,7 +20,8 @@ import {
 } from "chart.js";
 import PeriodSelector from "./PeriodSelector";
 import SummaryCards from "./SummaryCards";
-import InvestmentGoal from "./InvestmentGoal";
+import FinancialProjection from "./FinancialProjection";
+import FinancialGoals from "./FinancialGoals";
 import MonthlyChart from "./MonthlyChart";
 import AnnualChart from "./AnnualChart";
 
@@ -147,8 +148,6 @@ function FinancialDashboard() {
   const [averageProfit, setAverageProfit] = useState(0);
   const [loadingAverageProfit, setLoadingAverageProfit] = useState(false);
   const averageProfitMonths = 6;
-  const [investmentGoal, setInvestmentGoal] = useState("");
-  const [timeToGoal, setTimeToGoal] = useState(null);
 
   // Efeito para buscar o resumo do período selecionado
   useEffect(() => {
@@ -296,18 +295,6 @@ function FinancialDashboard() {
     fetchAverageProfit();
   }, [averageProfitMonths]); // Depende do número de meses (se quiséssemos torná-lo dinâmico)
   // --- FIM EFEITO LUCRO MÉDIO ---
-
-  // --- EFEITO PARA CALCULAR TEMPO PARA META ---
-  useEffect(() => {
-    const goal = parseFloat(investmentGoal);
-    if (averageProfit > 0 && goal > 0) {
-      const months = Math.ceil(goal / averageProfit); // Arredonda para cima
-      setTimeToGoal(months);
-    } else {
-      setTimeToGoal(null); // Limpa se o lucro for 0/negativo ou a meta for inválida
-    }
-  }, [averageProfit, investmentGoal]); // Recalcula quando a média ou a meta mudam
-  // --- FIM EFEITO META ---
 
   // --- Funções Auxiliares e Handlers (Mantidos no componente pai) ---
   // Usamos useCallback para otimizar e evitar re-renderizações desnecessárias do PeriodSelector
@@ -659,15 +646,13 @@ function FinancialDashboard() {
       </Paper>
       {/* --- FIM DESPESAS DETALHADAS --- */}
 
-      {/* --- RENDERIZA O NOVO COMPONENTE DE META --- */}
-      <InvestmentGoal
-        investmentGoal={investmentGoal}
-        // Passa a função set do estado diretamente
-        onInvestmentGoalChange={setInvestmentGoal}
-        timeToGoal={timeToGoal}
-        averageProfit={averageProfit}
-      />
-      {/* --- FIM DA RENDERIZAÇÃO DA META --- */}
+      {/* --- PROJEÇÃO FINANCEIRA --- */}
+      <FinancialProjection months={averageProfitMonths} />
+      {/* --- FIM PROJEÇÃO --- */}
+
+      {/* --- METAS FINANCEIRAS MÚLTIPLAS --- */}
+      <FinancialGoals averageProfit={averageProfit} />
+      {/* --- FIM METAS --- */}
 
       {/* --- RENDERIZA O NOVO COMPONENTE DE GRÁFICO MENSAL --- */}
       <MonthlyChart

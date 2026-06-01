@@ -97,6 +97,12 @@ contextBridge.exposeInMainWorld('api', {
   exportFinancialReport: (period) => ipcRenderer.invoke('export-financial-report', period),
   getAnnualSummary: () => ipcRenderer.invoke('get-annual-summary'),
   getAverageProfit: (options) => ipcRenderer.invoke('get-average-profit', options),
+  getFinancialProjection: (options) => ipcRenderer.invoke('get-financial-projection', options),
+  getFinancialConfig: () => ipcRenderer.invoke('get-financial-config'),
+  saveFinancialConfig: (data) => ipcRenderer.invoke('save-financial-config', data),
+  getFinancialGoals: () => ipcRenderer.invoke('get-financial-goals'),
+  addFinancialGoal: (data) => ipcRenderer.invoke('add-financial-goal', data),
+  deleteFinancialGoal: (id) => ipcRenderer.invoke('delete-financial-goal', id),
 
   // Funções de Relatórios (Nova Seção)
   getOSByClient: (clientId) => ipcRenderer.invoke('get-os-by-client', clientId),
