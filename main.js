@@ -39,6 +39,47 @@ function pgQuery(sql) {
   return sql.replace(/\?/g, () => `$${++i}`);
 }
 
+// --- LICENCIAMENTO (ativação offline vinculada ao e-mail de contratação) ---
+// Segredo embutido no app. A chave de ativação de cada cliente é derivada do
+// e-mail de contratação via HMAC, então cada chave só ativa com o e-mail certo.
+// Para gerar chaves de clientes, use: node generate-license-key.js <email>
+const LICENSE_SECRET = "GSTI-APP-LABAPP-2026-#9f3b7a1c";
+
+// Normaliza o e-mail (trim + minúsculas) para garantir determinismo na derivação.
+function normalizeLicenseEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+// Deriva a chave de ativação canônica a partir do e-mail.
+// Formato: XXXX-XXXX-XXXX-XXXX (16 hex maiúsculos = 64 bits do HMAC-SHA256).
+function computeLicenseKey(email) {
+  const normalized = normalizeLicenseEmail(email);
+  if (!normalized) return "";
+  const hex = crypto
+    .createHmac("sha256", LICENSE_SECRET)
+    .update(normalized)
+    .digest("hex")
+    .slice(0, 16)
+    .toUpperCase();
+  return hex.match(/.{1,4}/g).join("-");
+}
+
+// Remove separadores/espaços e normaliza para comparação.
+function normalizeLicenseKey(key) {
+  return String(key || "").replace(/[\s-]/g, "").toUpperCase();
+}
+
+// Valida e-mail + chave em tempo constante.
+function verifyLicense(email, key) {
+  const expected = normalizeLicenseKey(computeLicenseKey(email));
+  const provided = normalizeLicenseKey(key);
+  if (!expected || expected.length !== provided.length) return false;
+  return crypto.timingSafeEqual(
+    Buffer.from(expected),
+    Buffer.from(provided)
+  );
+}
+
 // --- GERENCIAMENTO DE CONFIGURAÇÃO ---
 const userDataPath = app.getPath("userData"); // Pasta de dados do usuário
 const configPath = path.join(userDataPath, "config.json"); // Caminho completo do arquivo
@@ -74,6 +115,7 @@ const defaultConfig = {
     destinationPath: "",
     retentionDays: 30,
   },
+  license: { email: "", key: "", activatedAt: null },
   setupComplete: false,
 };
 
@@ -459,8 +501,16 @@ ipcMain.handle("test-db-connection", async (event, dbConfig) => {
 // Handler para salvar a configuração inicial e criar o primeiro admin
 ipcMain.handle(
   "save-initial-config",
-  async (event, { dbConfig, adminUser }) => {
+  async (event, { dbConfig, adminUser, license }) => {
     console.log("[Setup] Salvando configuração inicial e criando admin...");
+
+    // --- Validação da licença (ativação) ---
+    if (!license || !verifyLicense(license.email, license.key)) {
+      return {
+        success: false,
+        error: "Ativação inválida. Verifique o e-mail de contratação e a chave de ativação.",
+      };
+    }
 
     // --- Validações ---
     if (
@@ -505,6 +555,12 @@ ipcMain.handle(
         database: dbConfig.database,
         user: dbConfig.user,
         password: dbConfig.password, // Salva a senha aqui
+      };
+      // Persiste a licença validada (e-mail de contratação + chave)
+      appConfig.license = {
+        email: normalizeLicenseEmail(license.email),
+        key: normalizeLicenseKey(license.key),
+        activatedAt: new Date().toISOString(),
       };
       appConfig.setupComplete = true; // Marca setup como completo
       // Mantém as outras configs (email, branding) com os defaults
@@ -591,6 +647,20 @@ ipcMain.handle(
 // Handler para verificar se o setup inicial é necessário
 ipcMain.handle("is-initial-setup-needed", async () => {
   return !appConfig.setupComplete;
+});
+
+// Handler para validar a ativação (e-mail de contratação + chave) sem persistir
+ipcMain.handle("validate-license", async (event, { email, key }) => {
+  if (!email || !key) {
+    return { success: false, error: "Informe o e-mail de contratação e a chave de ativação." };
+  }
+  if (!verifyLicense(email, key)) {
+    return {
+      success: false,
+      error: "Chave de ativação inválida para este e-mail. Confira os dados recebidos.",
+    };
+  }
+  return { success: true };
 });
 
 // Handler para buscar as configurações atuais (para a tela de Settings)

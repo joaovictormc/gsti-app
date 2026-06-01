@@ -34,10 +34,11 @@
 
 
 ## Whitelabeling
-- [ ] Criar área para o usuário definir um plano de fundo para a tela de login/home ao lado da opção de adicionar a lgomarca da empresa
+- [x] Criar área para o usuário definir um plano de fundo para a tela de login/home ao lado da opção de adicionar a lgomarca da empresa
 
-- [ ] Adicionar opção para inserir imagem para plano de fundo na tela de login da empresa
+- [x] Adicionar opção para inserir imagem para plano de fundo na tela de login da empresa
 
 
 ## Autenticação para instalar
-- [ ] Adicionar recurso no instalador para o usuário inserir o e-mail usado para contratar o sistema e uma senha que será vinculada ao e-mail da pessoa que contratou, isso pode assegurar de possíveis usos indevidos do sistema
+- [x] Adicionar recurso no instalador para o usuário inserir o e-mail usado para contratar o sistema e uma senha que será vinculada ao e-mail da pessoa que contratou, isso pode assegurar de possíveis usos indevidos do sistema
+  - Ativação offline: chave vinculada ao e-mail via HMAC (segredo `LICENSE_SECRET` em `main.js`). Gerar chaves de clientes com `node generate-license-key.js <email>`.

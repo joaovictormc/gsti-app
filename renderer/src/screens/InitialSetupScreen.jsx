@@ -15,7 +15,15 @@ import {
 } from "@mui/material";
 
 const InitialSetupScreen = ({ onSetupComplete }) => {
-  const [activeStep, setActiveStep] = useState(0); // 0: DB Config, 1: Admin Config
+  const [activeStep, setActiveStep] = useState(0); // 0: Ativação, 1: DB Config, 2: Admin Config
+
+  // Estado para Ativação (licença vinculada ao e-mail de contratação)
+  const [license, setLicense] = useState({ email: "", key: "" });
+  const [licenseStatus, setLicenseStatus] = useState({
+    validating: false,
+    valid: false,
+    error: "",
+  });
 
   // Estado para Configuração do Banco
   const [dbConfig, setDbConfig] = useState({
@@ -43,6 +51,54 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
   const [adminStatus, setAdminStatus] = useState({ saving: false, error: "" });
 
   // Handlers para inputs
+  const handleLicenseChange = (e) => {
+    const { name, value } = e.target;
+    setLicense((prev) => ({ ...prev, [name]: value }));
+    setLicenseStatus({ validating: false, valid: false, error: "" });
+  };
+
+  const handleValidateLicense = async () => {
+    setLicenseStatus({ validating: true, valid: false, error: "" });
+    if (!license.email || !license.key) {
+      setLicenseStatus({
+        validating: false,
+        valid: false,
+        error: "Informe o e-mail de contratação e a chave de ativação.",
+      });
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(license.email.trim())) {
+      setLicenseStatus({
+        validating: false,
+        valid: false,
+        error: "Informe um e-mail de contratação válido.",
+      });
+      return;
+    }
+    try {
+      const result = await window.api.validateLicense({
+        email: license.email,
+        key: license.key,
+      });
+      if (result.success) {
+        setLicenseStatus({ validating: false, valid: true, error: "" });
+        setActiveStep(1); // Avança para a configuração do banco
+      } else {
+        setLicenseStatus({
+          validating: false,
+          valid: false,
+          error: result.error || "Ativação inválida.",
+        });
+      }
+    } catch (error) {
+      setLicenseStatus({
+        validating: false,
+        valid: false,
+        error: "Erro ao validar a ativação. Tente novamente.",
+      });
+    }
+  };
+
   const handleDbChange = (e) => {
     const { name, value } = e.target;
     setDbConfig((prev) => ({ ...prev, [name]: value }));
@@ -66,7 +122,7 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
       error: result.error || "",
     });
     if (result.success) {
-      setActiveStep(1); // Avança para o próximo passo se a conexão for bem-sucedida
+      setActiveStep(2); // Avança para a criação do admin se a conexão for bem-sucedida
     }
   };
 
@@ -91,7 +147,7 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
       return;
     }
 
-    const result = await window.api.saveInitialConfig({ dbConfig, adminUser });
+    const result = await window.api.saveInitialConfig({ dbConfig, adminUser, license });
     if (result.success) {
       alert(
         "Configuração salva e usuário administrador criado com sucesso! O aplicativo será reiniciado ou você será redirecionado para o login."
@@ -131,7 +187,66 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
         </Typography>
 
         <Stepper activeStep={activeStep} orientation="vertical">
-          {/* Passo 1: Configuração do Banco */}
+          {/* Passo 1: Ativação do Sistema */}
+          <Step key="license">
+            <StepLabel>Ativação do Sistema</StepLabel>
+            <StepContent>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Informe o e-mail usado na contratação e a chave de ativação que
+                você recebeu. A chave é vinculada ao e-mail.
+              </Typography>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                  mt: 1,
+                  mb: 2,
+                }}
+              >
+                <TextField
+                  name="email"
+                  label="E-mail de Contratação"
+                  type="email"
+                  value={license.email}
+                  onChange={handleLicenseChange}
+                  required
+                />
+                <TextField
+                  name="key"
+                  label="Chave de Ativação"
+                  placeholder="XXXX-XXXX-XXXX-XXXX"
+                  value={license.key}
+                  onChange={handleLicenseChange}
+                  required
+                />
+              </Box>
+              {licenseStatus.error && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {licenseStatus.error}
+                </Alert>
+              )}
+              {licenseStatus.valid && (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  Ativação validada!
+                </Alert>
+              )}
+              <Button
+                variant="contained"
+                onClick={handleValidateLicense}
+                disabled={licenseStatus.validating}
+                startIcon={
+                  licenseStatus.validating ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : null
+                }
+              >
+                Validar Ativação
+              </Button>
+            </StepContent>
+          </Step>
+
+          {/* Passo 2: Configuração do Banco */}
           <Step key="dbConfig">
             <StepLabel>Configuração do Banco de Dados</StepLabel>
             <StepContent>
@@ -278,7 +393,7 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
               </Button>
               <Button
                 variant="text"
-                onClick={() => setActiveStep(0)} // Botão para voltar
+                onClick={() => setActiveStep(1)} // Botão para voltar ao Banco
                 sx={{ ml: 1 }}
                 disabled={adminStatus.saving}
               >
