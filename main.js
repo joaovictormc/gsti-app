@@ -1846,12 +1846,20 @@ ipcMain.handle("get-expenses-by-category", async (event, { startDate, endDate })
   try {
     const { rows } = await dbPool.query(pgQuery(`
       SELECT COALESCE(NULLIF(TRIM(categoria),''), 'Sem categoria') AS categoria,
-             SUM(valor)::float AS total
+             SUM(valor)::float AS total,
+             COUNT(*)::int AS quantidade
       FROM despesas
       WHERE data BETWEEN ? AND ?
       GROUP BY COALESCE(NULLIF(TRIM(categoria),''), 'Sem categoria')
       ORDER BY total DESC`), [startDate, endDate]);
-    return { success: true, data: rows.map(r => ({ categoria: r.categoria, total: Number(r.total) || 0 })) };
+    return {
+      success: true,
+      data: rows.map((r) => ({
+        categoria: r.categoria,
+        total: Number(r.total) || 0,
+        quantidade: Number(r.quantidade) || 0,
+      })),
+    };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -2185,6 +2193,89 @@ ipcMain.handle(
           data: item.data ? new Date(item.data) : null, // Converte para objeto Date
         });
       });
+
+      // --- Planilha Despesas por Categoria (resumo) ---
+      const categoryMap = new Map();
+      expenses.forEach((item) => {
+        const cat =
+          (item.categoria || "").trim() || "Sem categoria";
+        const entry = categoryMap.get(cat) || { total: 0, quantidade: 0 };
+        entry.total += Number(item.valor) || 0;
+        entry.quantidade += 1;
+        categoryMap.set(cat, entry);
+      });
+      const categoryRows = Array.from(categoryMap.entries())
+        .map(([categoria, v]) => ({ categoria, ...v }))
+        .sort((a, b) => b.total - a.total);
+
+      const expCatSheet = workbook.addWorksheet("Despesas por Categoria");
+      expCatSheet.columns = [
+        { header: "Categoria", key: "categoria", width: 30 },
+        { header: "Qtde. Lançamentos", key: "quantidade", width: 20 },
+        {
+          header: "Total",
+          key: "total",
+          width: 18,
+          style: { numFmt: '"R$"#,##0.00' },
+        },
+        {
+          header: "% do Total",
+          key: "percentual",
+          width: 14,
+          style: { numFmt: '0.0"%"' },
+        },
+      ];
+      expCatSheet.getRow(1).font = { bold: true };
+      categoryRows.forEach((r) => {
+        expCatSheet.addRow({
+          categoria: r.categoria,
+          quantidade: r.quantidade,
+          total: r.total,
+          percentual: totalExpenses > 0 ? (r.total / totalExpenses) * 100 : 0,
+        });
+      });
+      const expCatTotalRow = expCatSheet.addRow({
+        categoria: "TOTAL",
+        quantidade: expenses.length,
+        total: totalExpenses,
+        percentual: totalExpenses > 0 ? 100 : 0,
+      });
+      expCatTotalRow.font = { bold: true };
+
+      // --- Planilha Receitas por Fonte (resumo) ---
+      const revSourceSheet = workbook.addWorksheet("Receitas por Fonte");
+      revSourceSheet.columns = [
+        { header: "Fonte", key: "fonte", width: 30 },
+        {
+          header: "Total",
+          key: "total",
+          width: 18,
+          style: { numFmt: '"R$"#,##0.00' },
+        },
+        {
+          header: "% do Total",
+          key: "percentual",
+          width: 14,
+          style: { numFmt: '0.0"%"' },
+        },
+      ];
+      revSourceSheet.getRow(1).font = { bold: true };
+      [
+        { fonte: "Receita de OS", total: totalOSRevenue },
+        { fonte: "Receitas Avulsas", total: totalMiscRevenue },
+      ].forEach((r) => {
+        revSourceSheet.addRow({
+          fonte: r.fonte,
+          total: r.total,
+          percentual: totalRevenue > 0 ? (r.total / totalRevenue) * 100 : 0,
+        });
+      });
+      const revTotalRow = revSourceSheet.addRow({
+        fonte: "TOTAL",
+        total: totalRevenue,
+        percentual: totalRevenue > 0 ? 100 : 0,
+      });
+      revTotalRow.font = { bold: true };
 
       // 5. Salvar o Arquivo
       await workbook.xlsx.writeFile(filePath);

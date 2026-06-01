@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Typography, Box, Paper, Chip, CircularProgress, Grid,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TableFooter,
+  LinearProgress, Stack,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { Bar, Line, Doughnut } from "react-chartjs-2";
@@ -526,6 +528,136 @@ function FinancialDashboard() {
         </Grid>
       </Grid>
       {/* --- FIM GRÁFICOS PIZZA --- */}
+
+      {/* --- DESPESAS DETALHADAS POR CATEGORIA --- */}
+      <Paper sx={{ p: 3, mt: 1, mb: 1 }}>
+        <Typography variant="h6" fontWeight={600} gutterBottom>
+          Despesas Detalhadas por Categoria
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Total por categoria no período, com participação percentual e
+          separação por tipo (Fixa/Variável).
+        </Typography>
+
+        {loadingExpCat ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : expensesByCategory.length === 0 ? (
+          <Box sx={{ py: 4, textAlign: "center" }}>
+            <Typography color="text.secondary" variant="body2">
+              Sem despesas no período selecionado.
+            </Typography>
+          </Box>
+        ) : (
+          (() => {
+            const totalDespesas = expensesByCategory.reduce(
+              (s, e) => s + (Number(e.total) || 0),
+              0
+            );
+            const totalLancamentos = expensesByCategory.reduce(
+              (s, e) => s + (Number(e.quantidade) || 0),
+              0
+            );
+            return (
+              <>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Categoria</TableCell>
+                        <TableCell align="center">Lançamentos</TableCell>
+                        <TableCell align="right">Total</TableCell>
+                        <TableCell align="right" sx={{ width: 180 }}>
+                          % do Total
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {expensesByCategory.map((e, idx) => {
+                        const pct =
+                          totalDespesas > 0
+                            ? (Number(e.total) / totalDespesas) * 100
+                            : 0;
+                        return (
+                          <TableRow key={e.categoria} hover>
+                            <TableCell>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Box
+                                  sx={{
+                                    width: 12,
+                                    height: 12,
+                                    borderRadius: "2px",
+                                    bgcolor:
+                                      DONUT_COLORS[idx % DONUT_COLORS.length],
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                {e.categoria}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center">{e.quantidade}</TableCell>
+                            <TableCell align="right">
+                              {formatCurrency(e.total)}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Stack direction="row" alignItems="center" spacing={1} justifyContent="flex-end">
+                                <Box sx={{ width: 90 }}>
+                                  <LinearProgress
+                                    variant="determinate"
+                                    value={Math.min(pct, 100)}
+                                    sx={{ height: 6, borderRadius: 3 }}
+                                  />
+                                </Box>
+                                <Typography variant="body2" sx={{ minWidth: 44 }}>
+                                  {pct.toFixed(1)}%
+                                </Typography>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700, color: "text.primary" }}>
+                          TOTAL
+                        </TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 700, color: "text.primary" }}>
+                          {totalLancamentos}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, color: "error.main" }}>
+                          {formatCurrency(totalDespesas)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700, color: "text.primary" }}>
+                          100%
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </TableContainer>
+
+                {/* Split Fixa / Variável */}
+                <Box sx={{ display: "flex", gap: 3, mt: 2, flexWrap: "wrap" }}>
+                  <Chip
+                    label={`Fixas: ${formatCurrency(summary.totalFixedExpenses)}`}
+                    color="warning"
+                    variant="outlined"
+                    size="small"
+                  />
+                  <Chip
+                    label={`Variáveis: ${formatCurrency(summary.totalVariableExpenses)}`}
+                    color="info"
+                    variant="outlined"
+                    size="small"
+                  />
+                </Box>
+              </>
+            );
+          })()
+        )}
+      </Paper>
+      {/* --- FIM DESPESAS DETALHADAS --- */}
 
       {/* --- RENDERIZA O NOVO COMPONENTE DE META --- */}
       <InvestmentGoal
