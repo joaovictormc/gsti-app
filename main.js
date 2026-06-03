@@ -5,7 +5,7 @@ const { Pool } = require("pg");
 const axios = require("axios");
 const fs = require("fs");
 const ExcelJS = require("exceljs");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const { execFile, execSync } = require("child_process");
@@ -46,7 +46,7 @@ function pgQuery(sql) {
 // cliente, mesmo com o .exe e a chave pública em mãos.
 // Servidor: pasta license-server/ (gere as chaves com: node gerar-chaves.js).
 const LICENSE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAa/GMq+RzvNgdD0Sf00J2gueufwoYhuOt8a6MDGp9F+o=
+MCowBQYDK2VwAyEAyYz7gEz9GYCrp6HviceNhO2u7ylntpkLOYAEGTRYICs=
 -----END PUBLIC KEY-----
 `;
 // URL padrão do servidor de licenças (sobrescrevível em config.license.serverUrl).

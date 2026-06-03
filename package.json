@@ -1,6 +1,6 @@
 {
   "name": "gsti-project",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Gestor de Serviços de TI",
   "main": "main.js",
   "scripts": {
@@ -25,7 +25,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.1",
     "axios": "^1.11.0",
-    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
     "exceljs": "^4.4.0",
     "nodemailer": "^7.0.10",

@@ -1,7 +1,7 @@
 # GSTI App — Pendências e Próxima Versão
 
 Registro das mudanças **adiadas** e dos **ajustes planejados** para a próxima
-versão. Atualizado em 2026-05-31.
+versão. Atualizado em 2026-06-02.
 
 ---
 
@@ -22,6 +22,29 @@ Itens que estavam na fila e foram deixados para a próxima versão:
   do cliente (depende do módulo de equipamentos).
 - **Vincular Custo a Produtos/Serviços** — campo de custo em `produtos_servicos`
   para cálculo de margem.
+- **Clareza nas configurações de personalização do login** — Os campos de
+  whitelabeling nas Configurações precisam de rótulos mais descritivos: deixar
+  explícito qual campo define a *imagem de fundo da tela de login* e qual define
+  o *ícone do app* (ícone da barra de título / taskbar).
+- **Alterar logo e nome na tela de login** — Permitir que o operador substitua a
+  logo exibida na tela de login e edite o nome/título do sistema mostrado nessa
+  tela, além do que já é configurável hoje via whitelabeling.
+- **Crédito ao desenvolvedor em telas do sistema** — Para preservar a identidade
+  do criador, incluir em algumas telas (ex.: rodapé do login, tela "Sobre" ou
+  rodapé dos PDFs gerados) a informação "Desenvolvido por [nome/empresa]".
+  Configurável, mas com o padrão apontando para o desenvolvedor original.
+- **Emissão de NFS-e / NF-e após finalização de OS** — Criar botão ou área
+  dedicada nas OS com status "Finalizado" para iniciar a emissão de nota fiscal
+  (NFS-e para serviços ou NF-e para produtos). Avaliar integração com APIs de
+  prefeitura/SEFAZ ou com emissores de terceiros.
+- **Barra de título personalizada (frameless window)** — Substituir a barra de
+  título padrão do sistema operacional por uma implementada em React, eliminando
+  a barra nativa do Electron com os menus "File / Edit / View / Window / Help".
+  A barra customizada deve exibir o favicon e o nome do app (configuráveis via
+  whitelabeling), os botões de minimizar, maximizar/restaurar e fechar estilizados
+  conforme o tema do sistema, e não expor os menus padrão do Electron em produção.
+  Requer `frame: false` (ou `titleBarStyle: 'hidden'`) no `BrowserWindow` e
+  implementação de drag region + controles de janela via `ipcRenderer`.
 
 ---
 
@@ -105,6 +128,11 @@ Itens levantados na análise técnica e durante o desenvolvimento:
   app no primeiro acesso, para o cliente não precisar rodá-lo manualmente.
 - **`main.js` monolítico** (~2.800 linhas) → considerar modularizar handlers por
   domínio.
+- **Backup do banco de dados em hospedagem remota** — Levantar como viabilizar
+  backup automático/periódico quando o PostgreSQL está hospedado fora da máquina
+  local (VPS, serviço gerenciado, etc.). Opções a avaliar: `pg_dump` agendado
+  via cron no servidor, snapshots oferecidos pelo provedor, ou exportação
+  disparada pelo próprio app via IPC.
 
 ---
 
