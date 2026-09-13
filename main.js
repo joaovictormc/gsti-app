@@ -46,11 +46,11 @@ function pgQuery(sql) {
 // cliente, mesmo com o .exe e a chave pública em mãos.
 // Servidor: pasta license-server/ (gere as chaves com: node gerar-chaves.js).
 const LICENSE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAyYz7gEz9GYCrp6HviceNhO2u7ylntpkLOYAEGTRYICs=
+MCowBQYDK2VwAyEAJO0JMV4iAtyVEQ4G3eaa79use0f8c9Wt+1sy048ZEL0=
 -----END PUBLIC KEY-----
 `;
 // URL padrão do servidor de licenças (sobrescrevível em config.license.serverUrl).
-const DEFAULT_LICENSE_SERVER = "https://licenca.labapp.com.br";
+const DEFAULT_LICENSE_SERVER = "http://localhost";
 
 const b64urlDecode = (str) =>
   Buffer.from(String(str).replace(/-/g, "+").replace(/_/g, "/"), "base64");
