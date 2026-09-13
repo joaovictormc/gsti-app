@@ -18,5 +18,16 @@
     "companyName": "GSTI App",
     "logoPath": null 
   },
+  "license": {
+    "email": "",
+    "token": "",
+    "tipo": "",
+    "validade": null,
+    "activatedAt": null,
+    "lastSeen": null,
+    "revoked": false,
+    "revogadaMotivo": "",
+    "serverUrl": "http://joaosrv:3030"
+  },
   "setupComplete": false 
 }
