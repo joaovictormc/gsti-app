@@ -1,2 +1,4 @@
 node_modules/
 trials.json
+public.key
+private.key
