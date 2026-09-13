@@ -54,6 +54,9 @@ Hoje a contratação é manual (cadastrar o e-mail em `clientes.json`). Como o
 sistema será vendido junto a uma **landing page**, o licenciamento precisa ser
 integrado ao fluxo de compra.
 
+> **Plano detalhado:** [PLANO-LICENCIAMENTO-E-VENDAS.md](./PLANO-LICENCIAMENTO-E-VENDAS.md)
+> (arquitetura, modelo de dados, API, token v2, segurança e fases).
+
 ### Fluxo proposto (recomendado)
 ```
 Cliente compra na landing page
