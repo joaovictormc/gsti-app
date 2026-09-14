@@ -2988,6 +2988,16 @@ ipcMain.handle("send-warranty-email", async (event, { clienteEmail, clienteNome,
   }
 });
 
+// Abre páginas fixas do site de vendas (planos, área do cliente) no navegador.
+ipcMain.handle("open-license-site", async (event, { pagina } = {}) => {
+  const LICENSE_CONFIG = require("./license-config");
+  const base = String(LICENSE_CONFIG.siteUrl || LICENSE_CONFIG.serverUrl || "").replace(/\/+$/, "");
+  const caminhos = { planos: "/#planos", cliente: "/cliente" };
+  if (!/^https?:\/\//.test(base) || !caminhos[pagina]) return { success: false, error: "Site não configurado." };
+  shell.openExternal(base + caminhos[pagina]);
+  return { success: true };
+});
+
 // Handler para abrir link do WhatsApp
 ipcMain.handle("open-whatsapp-link", async (event, { telefone, mensagem }) => {
   const digits = String(telefone || "").replace(/\D/g, "");

@@ -266,13 +266,20 @@ de `hostname + MAC`. Ele não muda com adaptadores de rede.
 - [x] ~~Compatibilidade com tokens v1~~ — descartada: a única chave v1 foi vazada, então
       tokens v1 não são confiáveis. Apps v1 recebem "versão desatualizada".
 
-### Fase 3 — Pagamentos
-- [ ] Integração com o gateway escolhido (sandbox → produção).
-- [ ] Webhooks idempotentes, e-mails transacionais, assinaturas e renovações.
+### Fase 3 — Pagamentos — implementada em 2026-09-14 (Mercado Pago)
+- [x] Checkout Pro (Pix, boleto, cartão) e assinatura anual (preapproval) com renovação automática.
+- [x] Webhook com validação de `x-signature`, aplicação idempotente, conciliação a cada 30 min.
+- [x] Estorno/chargeback (revoga ou remove os 12 meses), reembolso e cancelamento pelo painel.
+- [x] E-mails transacionais editáveis e lembretes de renovação (30/7/1 dias).
+- [ ] Homologar com credenciais e contas de teste do Mercado Pago; depois produção.
 
-### Fase 4 — Landing page e portal
-- [ ] Landing, checkout, trial com e-mail confirmado, download.
-- [ ] Portal do cliente (link mágico, transferência de máquina).
+### Fase 4 — Landing page, portal e painel — implementada em 2026-09-14
+- [x] Landing servida pelo servidor, com textos, imagens, FAQ e páginas legais editáveis (histórico e restauração).
+- [x] Portal do cliente (link mágico): licenças, desvincular computador, nova chave, renovar, cancelar renovação automática.
+- [x] Painel `/admin` com papéis (Administrador, Licenças, Financeiro, Conteúdo), 2FA e auditoria.
+- [x] App: links para comprar (ativação) e para a área do cliente (Configurações).
+- [ ] Trial com confirmação de e-mail (hoje o teste é iniciado direto no app, com rate limit).
+- [ ] Revisar textos legais com jurídico; screenshots reais do sistema; link do instalador.
 
 ### Fase 5 — Go-live
 - [ ] Servidor em URL pública com HTTPS, backups e monitoramento ativos.

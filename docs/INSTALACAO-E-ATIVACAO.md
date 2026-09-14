@@ -113,14 +113,13 @@ As configurações ficam salvas em `config.json` (na pasta de dados do usuário)
 
 ## 5. Como contratar
 
-**Modelo atual:**
-1. O cliente entra em contato (suporte@labapp.com.br).
-2. O vendedor emite a licença no servidor:
-   `node admin.js emitir --email cliente@empresa.com --plano anual --dias 365`
-3. A **chave de licença** exibida é enviada ao cliente por e-mail.
+1. O cliente escolhe o plano no **site** (Anual à vista, Anual com renovação automática
+   ou Vitalícia) e paga pelo **Mercado Pago** (Pix, boleto ou cartão).
+2. Confirmado o pagamento, a **chave de licença chega por e-mail** automaticamente.
+3. Pela **área do cliente** (`/cliente`, acesso por link no e-mail) é possível renovar,
+   desvincular computadores, gerar nova chave e cancelar a renovação automática.
 
-> O fluxo automatizado (landing page → pagamento → licença e e-mail automáticos)
-> está planejado em [PLANO-LICENCIAMENTO-E-VENDAS.md](./PLANO-LICENCIAMENTO-E-VENDAS.md).
+Vendas fora do site (cortesias, parceiros): *Painel → Licenças → Emitir licença*.
 
 ---
 
@@ -149,9 +148,10 @@ As configurações ficam salvas em `config.json` (na pasta de dados do usuário)
 
 ## 7. Operação do servidor de licenças (vendedor)
 
-O servidor fica em **`license-server/`** (Node 22.13+ e Express, banco SQLite).
-Guia completo — instalação, systemd, administração, rotação de chaves e backup —
-em [`license-server/README.md`](../license-server/README.md).
+O servidor fica em **`license-server/`** (Node 22.13+ e Express, banco SQLite) e
+entrega também o site de vendas, a área do cliente e o **painel da equipe** (`/admin`).
+Guia completo — instalação, Mercado Pago, Cloudflare Tunnel, papéis da equipe,
+rotação de chaves e backup — em [`license-server/README.md`](../license-server/README.md).
 
 Resumo:
 1. `npm ci --omit=dev` e `node gerar-chaves.js` (uma vez). Cole a chave pública

@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Link,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -147,6 +148,14 @@ function LicenseActivationForm({ onActivated, trialDays = 7 }) {
 
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
         É necessário estar conectado à internet para ativar.
+        {mode === "key" && (
+          <>
+            {" "}Não tem uma chave?{" "}
+            <Link component="button" type="button" variant="caption" onClick={() => window.api.openLicenseSite?.("planos")}>
+              Ver planos
+            </Link>
+          </>
+        )}
       </Typography>
     </Box>
   );

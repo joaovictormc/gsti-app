@@ -680,6 +680,9 @@ function SettingsScreen() {
           >
             Verificar agora
           </Button>
+          <Button variant="outlined" onClick={() => window.api.openLicenseSite?.(licenseStatus?.tipo === "full" ? "cliente" : "planos")}>
+            {licenseStatus?.tipo === "full" ? "Renovar ou gerenciar (área do cliente)" : "Comprar licença"}
+          </Button>
           {licenseStatus?.tipo === "full" && (
             <Button variant="outlined" color="warning" onClick={() => setTransferDialogOpen(true)} disabled={licenseBusy}>
               Transferir para outro computador

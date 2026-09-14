@@ -31,7 +31,11 @@ cliente, veja [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
 - [ ] **Backup seguro de `license-server/data/`** (chaves + `licencas.db`).
 - [ ] **`serverUrl`** correto no `license-config.js` (HTTPS em produção).
 - [ ] Servidor de licenças **ligado e acessível** a partir das máquinas dos clientes.
-- [ ] Licença do cliente emitida (`node admin.js emitir ...`) e chave enviada.
+- [ ] Site e painel publicados em HTTPS (Cloudflare Tunnel ou VPS); *Painel → Sistema* com
+  Mercado Pago, webhook e SMTP em "OK".
+- [ ] Planos com preços revisados e **ativados** em *Painel → Planos e preços*.
+- [ ] Link do instalador preenchido em *Textos e e-mails → Informações gerais*.
+- [ ] Compra real de baixo valor testada ponta a ponta (e reembolsada pelo painel).
 
 ---
 

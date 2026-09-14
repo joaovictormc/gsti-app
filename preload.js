@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   getLicenseStatus: () => ipcRenderer.invoke('get-license-status'),
   revalidateLicense: () => ipcRenderer.invoke('revalidate-license'),
   deactivateLicense: () => ipcRenderer.invoke('deactivate-license'),
+  openLicenseSite: (pagina) => ipcRenderer.invoke('open-license-site', { pagina }),
   testEmailSettings: (emailConfig) => ipcRenderer.invoke('test-email-settings', emailConfig),
   selectLogoFile: () => ipcRenderer.invoke('select-logo-file'),
   loadLogoImage: (logoPath) => ipcRenderer.invoke('load-logo-image', logoPath),

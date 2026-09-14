@@ -12,6 +12,8 @@
  */
 module.exports = {
   serverUrl: "http://joaosrv:3030",
+  // Site de vendas / área do cliente (padrão: o mesmo endereço do servidor).
+  siteUrl: "",
 
   publicKeys: {
     // "2026-09-13": `-----BEGIN PUBLIC KEY-----
