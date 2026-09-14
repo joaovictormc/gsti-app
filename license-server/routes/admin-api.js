@@ -101,6 +101,7 @@ r.get("/painel", eq("painel.ver"), rota((req) => {
   if (auth.tem(req.equipe, "sistema.ver")) {
     out.sistema = {
       mercadoPago: mp.configurado(),
+      simulador: cfg.MP_API_BASE !== cfg.MP_API_OFICIAL,
       smtp: email.smtpConfigurado(),
       eventosComErro: db.prepare("SELECT COUNT(*) n FROM eventos_webhook WHERE processado_em IS NULL AND tentativas > 0").get().n,
     };
@@ -407,7 +408,10 @@ r.get("/sistema", eq("sistema.ver"), rota(() => {
     versao: version,
     publicUrl: cfg.PUBLIC_URL,
     webhookUrl: `${cfg.PUBLIC_URL}/webhooks/mercadopago`,
-    mercadoPago: { configurado: mp.configurado(), sandbox: cfg.MP_SANDBOX, assinaturaWebhook: !!cfg.MP_WEBHOOK_SECRET },
+    mercadoPago: {
+      configurado: mp.configurado(), sandbox: cfg.MP_SANDBOX, assinaturaWebhook: !!cfg.MP_WEBHOOK_SECRET,
+      simulador: cfg.MP_API_BASE !== cfg.MP_API_OFICIAL ? cfg.MP_API_BASE : null,
+    },
     smtp: { configurado: email.smtpConfigurado(), remetente: cfg.EMAIL_FROM },
     chaves: keys.kids(),
     chaveAtiva: keys.kidAtivo(),

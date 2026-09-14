@@ -13,7 +13,14 @@ Um único servidor Node que entrega:
 | `/health` | Verificação de saúde |
 
 Dados ficam em **`data/`** (fora do git): banco SQLite (`licencas.db`), chaves de
-assinatura (`keys/`), imagens enviadas (`uploads/`) e, em desenvolvimento, `.env`.
+assinatura (`keys/`), imagens enviadas (`uploads/`) e `.env`.
+
+**Ambientes**
+
+| Ambiente | Onde | Pagamentos | Acesso |
+|----------|------|-----------|--------|
+| Homologação | Windows local ou o Ubuntu de testes | Simulador (`scripts/mp-simulado.js`) | `localhost` / Tailscale |
+| Produção | VPS com domínio próprio do produto | Mercado Pago real | HTTPS público |
 
 ---
 
@@ -53,61 +60,118 @@ por 15 minutos. Toda ação fica na auditoria.
 
 ---
 
-## 3. Instalação (Ubuntu)
+## 3. Homologação — testar a landing page e o fluxo de compra
 
-Requisitos: **Node.js 22.13+** (SQLite nativo) e git.
+Requisitos: **Node.js 22.13+**.
+
+### 3.1 Preparar (uma vez)
 
 ```bash
-cd ~/gsti-app && git pull
 cd license-server
-npm ci --omit=dev           # servidor
-npm run build:admin         # compila o painel (public/admin)
-node gerar-chaves.js        # 1x: cria data/keys/<data>.key e imprime a chave pública
+npm ci                                  # dependências do servidor
+npm run build:admin                     # compila o painel
+mkdir -p data && cp .env.homologacao.example data/.env
+node gerar-chaves.js homologacao        # chave de assinatura de testes
+node admin.js criar-usuario --email voce@exemplo.com --nome "Seu Nome" --papeis admin
+node admin.js oferta anual-avulso --ativar
+node admin.js oferta anual-assinatura --ativar
+node admin.js oferta vitalicia-avulso --ativar
+```
+
+> No Windows (PowerShell), crie a pasta com `mkdir data` e copie com
+> `copy .env.homologacao.example data\.env`.
+
+### 3.2 Rodar (dois terminais)
+
+```bash
+node scripts/mp-simulado.js     # terminal 1: simulador do Mercado Pago (porta 3099)
+node server.js                  # terminal 2: plataforma (porta 3030)
+```
+
+Abra:
+
+| O quê | Endereço |
+|-------|----------|
+| Landing page | http://localhost:3030 |
+| Painel da equipe | http://localhost:3030/admin |
+| Área do cliente | http://localhost:3030/cliente |
+| Painel do simulador | http://localhost:3099 |
+
+Uma faixa vermelha "Ambiente de homologação" aparece no site e no painel enquanto o
+simulador estiver configurado.
+
+### 3.3 Roteiro de avaliação
+
+1. **Landing**: navegue pelas seções, teste no celular (DevTools → modo responsivo)
+   e confira textos, planos e FAQ.
+2. **Editar textos**: *Painel → Textos e e-mails* → altere o título do topo → recarregue a landing.
+3. **Comprar**: clique em *Comprar* num plano → preencha nome/e-mail → no simulador escolha
+   *Pagar com Pix* → você volta para "Pagamento confirmado".
+4. **E-mail com a chave**: sem SMTP, o e-mail aparece no terminal do servidor
+   (copie a chave `GSTI-...`). Ele também fica em *Painel → Sistema*.
+5. **Boleto pendente**: compre escolhendo *Gerar boleto* → no painel do simulador clique
+   *Aprovar* → o pedido vira "Pago" e a licença é emitida.
+6. **Renovação automática**: compre o plano com renovação → *Autorizar* → no painel do
+   simulador use *Cobrar próximo ano* e veja a validade somar 12 meses.
+7. **Estorno**: no simulador clique *Estornar* (ou reembolse em *Painel → Pedidos*) → a licença é revogada.
+8. **Área do cliente**: `/cliente` → informe o e-mail da compra → copie o link do terminal →
+   veja licenças, gere nova chave, desvincule computador.
+9. **Ativar no app**: aponte o app para este servidor (`serverUrl` no `license-config.js`,
+   com a chave pública de `node gerar-chaves.js --publicas`) e ative com a chave recebida.
+
+### 3.4 Homologação no Ubuntu (acesso por Tailscale ou rede local)
+
+Mesmos passos acima, com estes ajustes no `data/.env`:
+
+```ini
+HOST=0.0.0.0
+PUBLIC_URL=http://joaosrv:3030
+```
+
+E ao iniciar o simulador informe o endereço visto pelo navegador:
+
+```bash
+SIMULADOR_URL=http://joaosrv:3099 node scripts/mp-simulado.js
+```
+
+Libere as portas só para o Tailscale: `sudo ufw allow in on tailscale0 to any port 3030,3099 proto tcp`.
+Assim dá para avaliar a landing no celular (app Tailscale ligado) em `http://joaosrv:3030`.
+
+Para manter rodando como serviço, use o systemd da seção 4 (e um segundo serviço
+para o simulador, se quiser).
+
+---
+
+## 4. Produção (VPS)
+
+Requisitos: VPS Ubuntu, **Node.js 22.13+**, git, Nginx, domínio próprio do produto
+apontando (registro A) para a VPS.
+
+```bash
+git clone <repositório> ~/gsti-app && cd ~/gsti-app/license-server
+npm ci --omit=dev
+npm run build:admin
+mkdir -p data && cp .env.example data/.env && chmod 600 data/.env && nano data/.env
+node gerar-chaves.js                    # chave de PRODUÇÃO (diferente da de homologação)
 chmod 700 data && chmod 600 data/keys/*.key
+node admin.js criar-usuario --email voce@seudominio.com.br --nome "Seu Nome" --papeis admin
 ```
 
-Cole a chave pública impressa em `publicKeys` no **`license-config.js`** (raiz do
-app) e gere o instalador do app.
-
-### Configuração
-
-```bash
-cp .env.example data/.env && chmod 600 data/.env && nano data/.env
-```
-
-Variáveis principais (lista completa em `.env.example`):
-
-| Variável | Uso |
-|----------|-----|
-| `PUBLIC_URL` | Endereço público **HTTPS** (e-mails, checkout, webhook) |
-| `HOST` / `PORT` | Use `127.0.0.1` atrás do túnel |
-| `TRUST_PROXY` | `loopback` atrás do Cloudflare Tunnel/Nginx local |
-| `MP_ACCESS_TOKEN` / `MP_WEBHOOK_SECRET` / `MP_SANDBOX` | Mercado Pago |
-| `SMTP_*`, `EMAIL_FROM`, `EMAIL_SUPORTE` | Envio de e-mails (sem SMTP, os e-mails só aparecem no log) |
-| `TRIAL_DIAS`, `REVALIDAR_DIAS`, `DIAS_ANUAL`, `MAX_MAQUINAS_PADRAO` | Regras de licença |
-
-### Primeiro usuário do painel
-
-```bash
-node admin.js criar-usuario --email voce@labapp.com.br --nome "Seu Nome" --papeis admin
-```
-
-Entre em `https://SEU_DOMINIO/admin` com a senha temporária, troque-a em
-*Minha conta* e ative a verificação em duas etapas. Convide o restante da equipe
-em *Equipe*.
+Cole a chave pública em `publicKeys` no **`license-config.js`** (raiz do app), ajuste
+`serverUrl` para `https://seudominio.com.br` e gere o instalador.
 
 ### systemd
 
 ```ini
-# /etc/systemd/system/gsti-license.service
+# /etc/systemd/system/gsti.service
 [Unit]
 Description=Plataforma GSTI App
 After=network-online.target
 
 [Service]
-User=joaosrv
-WorkingDirectory=/home/joaosrv/gsti-app/license-server
-EnvironmentFile=/home/joaosrv/gsti-app/license-server/data/.env
+User=gsti
+WorkingDirectory=/home/gsti/gsti-app/license-server
+EnvironmentFile=/home/gsti/gsti-app/license-server/data/.env
 Environment=NODE_OPTIONS=--disable-warning=ExperimentalWarning
 ExecStart=/usr/bin/node server.js
 Restart=always
@@ -117,60 +181,60 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl daemon-reload && sudo systemctl restart gsti-license
+sudo systemctl daemon-reload && sudo systemctl enable --now gsti
 curl http://127.0.0.1:3030/health
-journalctl -u gsti-license -f
+journalctl -u gsti -f
 ```
 
-## 4. Publicar na internet sem abrir portas (Cloudflare Tunnel)
+### Nginx + HTTPS
 
-O Mercado Pago precisa alcançar o webhook por **HTTPS público**; o Tailscale
-privado não serve para isso. Com o domínio `labapp.com.br` na Cloudflare:
+```nginx
+# /etc/nginx/sites-available/gsti
+server {
+    server_name seudominio.com.br www.seudominio.com.br;
+    client_max_body_size 6m;
 
-```bash
-# instalar
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
-sudo dpkg -i cloudflared.deb
-
-cloudflared tunnel login                      # autoriza o domínio no navegador
-cloudflared tunnel create gsti
-cloudflared tunnel route dns gsti gsti.labapp.com.br
-```
-
-`~/.cloudflared/config.yml`:
-
-```yaml
-tunnel: gsti
-credentials-file: /home/joaosrv/.cloudflared/<ID-DO-TUNEL>.json
-ingress:
-  - hostname: gsti.labapp.com.br
-    service: http://127.0.0.1:3030
-  - service: http_status:404
+    location / {
+        proxy_pass http://127.0.0.1:3030;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
 
 ```bash
-sudo cloudflared --config /home/joaosrv/.cloudflared/config.yml service install
-sudo systemctl enable --now cloudflared
+sudo ln -s /etc/nginx/sites-available/gsti /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d seudominio.com.br -d www.seudominio.com.br
+sudo ufw allow OpenSSH && sudo ufw allow 'Nginx Full' && sudo ufw enable
 ```
 
-Depois: `PUBLIC_URL=https://gsti.labapp.com.br`, `HOST=127.0.0.1`,
-`TRUST_PROXY=loopback`, reinicie o serviço e ajuste `serverUrl` no
-`license-config.js` do app para o mesmo endereço.
+No `data/.env`: `HOST=127.0.0.1`, `TRUST_PROXY=loopback`, `PUBLIC_URL=https://seudominio.com.br`.
 
-> Com o servidor em casa, uma queda de energia/internet derruba o site e atrasa
-> ativações novas (apps já ativados seguem funcionando por até 30 dias). Ao
-> crescer, mova para uma VPS — nada no código muda.
+### Variáveis (lista completa em `.env.example`)
+
+| Variável | Uso |
+|----------|-----|
+| `PUBLIC_URL` | Endereço público **HTTPS** (e-mails, checkout, webhook) |
+| `HOST` / `PORT` | `127.0.0.1` atrás do Nginx |
+| `TRUST_PROXY` | `loopback` atrás do Nginx local |
+| `MP_ACCESS_TOKEN` / `MP_WEBHOOK_SECRET` / `MP_SANDBOX` | Mercado Pago |
+| `SMTP_*`, `EMAIL_FROM`, `EMAIL_SUPORTE` | E-mails (padrão: `nao-responda@` e `suporte@` o domínio de `PUBLIC_URL`) |
+| `TRIAL_DIAS`, `REVALIDAR_DIAS`, `DIAS_ANUAL`, `MAX_MAQUINAS_PADRAO` | Regras de licença |
+
+> **Não** defina `MP_API_BASE` em produção — ele só existe para o simulador.
 
 ## 5. Mercado Pago
 
 1. **Credenciais**: [Suas integrações](https://www.mercadopago.com.br/developers/panel/app) → criar aplicação
    (Checkout Pro + Assinaturas) → copiar o *Access Token* para `MP_ACCESS_TOKEN`.
-2. **Webhook**: na aplicação → *Webhooks* → URL `https://SEU_DOMINIO/webhooks/mercadopago`,
-   eventos **Pagamentos** e **Planos e assinaturas** → copie a *assinatura secreta*
-   para `MP_WEBHOOK_SECRET`.
-3. **Testes**: use credenciais e **contas de teste** (comprador e vendedor) do painel
-   do Mercado Pago com `MP_SANDBOX=true`. Assinaturas exigem que o e-mail do
-   comprador seja o da conta de teste compradora.
+2. **Webhook**: na aplicação → *Webhooks* → URL `https://seudominio.com.br/webhooks/mercadopago`,
+   eventos **Pagamentos** e **Planos e assinaturas** → copie a *assinatura secreta* para `MP_WEBHOOK_SECRET`.
+3. **Teste com o Mercado Pago real** (antes de abrir as vendas): credenciais e **contas de
+   teste** (comprador e vendedor) com `MP_SANDBOX=true`. Assinaturas exigem que o
+   e-mail do comprador seja o da conta de teste compradora. Esse teste precisa de URL
+   HTTPS pública (a VPS) para receber webhooks.
 4. Em *Painel → Sistema* confira: Mercado Pago, webhook e SMTP em "OK".
 5. Faça uma compra real de baixo valor antes de divulgar (e reembolse pelo painel).
 
@@ -180,15 +244,19 @@ Tudo do painel também existe no CLI (útil em emergência):
 
 ```bash
 node admin.js --help
-node admin.js emitir --email cliente@x.com --plano anual --dias 365
+node admin.js emitir --email cliente@exemplo.com --plano anual --dias 365
 node admin.js listar --email cliente
+node admin.js ofertas
+node admin.js oferta anual-avulso --preco 497,00 --ativar
 node admin.js suspender <ref> --motivo "Pagamento em atraso"
-node admin.js redefinir-senha --email pessoa@labapp.com.br
-node admin.js resetar-2fa --email pessoa@labapp.com.br
+node admin.js redefinir-senha --email pessoa@exemplo.com
+node admin.js resetar-2fa --email pessoa@exemplo.com
 ```
 
 ## 7. Chaves de assinatura
 
+- Homologação e produção usam **chaves diferentes**; a build do app de produção deve
+  conter só a chave pública de produção.
 - `node gerar-chaves.js` cria um novo `kid`; a mais recente assina os novos tokens,
   as antigas continuam validando.
 - Para trocar: gere a nova, **adicione** a pública no `license-config.js` (mantendo a
@@ -197,9 +265,9 @@ node admin.js resetar-2fa --email pessoa@labapp.com.br
   publique o app.
 - O hook `.githooks/pre-commit` bloqueia commits com chaves privadas.
 
-## 8. Backup
+## 8. Backup (produção)
 
-Copie **`data/`** inteira diariamente para outro lugar (cifrada). Instale o `sqlite3` (`sudo apt install sqlite3`):
+Copie **`data/`** inteira diariamente para fora da VPS (cifrada). Instale o `sqlite3` (`sudo apt install sqlite3`):
 
 ```bash
 sqlite3 data/licencas.db ".backup /caminho/backup/licencas-$(date +%F).db"
@@ -208,13 +276,11 @@ tar czf /caminho/backup/gsti-data-$(date +%F).tgz -C data keys uploads .env
 
 Perder `keys/` invalida as licenças; perder o banco perde clientes e pedidos.
 
-## 9. Desenvolvimento
+## 9. Desenvolvimento do painel
 
 ```bash
-cp .env.example data/.env   # ajuste: HOST=0.0.0.0, PUBLIC_URL=http://localhost:3030, JOBS=0 se quiser
-node gerar-chaves.js dev
-node server.js              # site em http://localhost:3030
-cd admin-ui && npm install && npm run dev   # painel com recarga em http://localhost:5174/admin
+node server.js                               # plataforma em http://localhost:3030
+cd admin-ui && npm install && npm run dev    # painel com recarga em http://localhost:5174/admin
 ```
 
 ## 10. API do aplicativo

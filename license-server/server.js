@@ -72,6 +72,10 @@ app.use(tratadorErros);
 
 if (cfg.JOBS) tarefas.iniciar();
 
+if (cfg.MP_API_BASE !== cfg.MP_API_OFICIAL) {
+  console.warn(`\n  ⚠ ATENÇÃO: usando API de pagamentos SIMULADA (${cfg.MP_API_BASE}). Somente homologação.\n`);
+}
+
 app.listen(cfg.PORT, cfg.HOST, () => {
   console.log(`GSTI plataforma v${version} em ${cfg.HOST}:${cfg.PORT} — ${cfg.PUBLIC_URL} (chave ativa: ${keys.kidAtivo()})`);
 });

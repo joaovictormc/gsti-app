@@ -112,4 +112,4 @@ Idealmente em uma **máquina limpa** (ou VM):
 
 ---
 
-**Suporte:** suporte@labapp.com.br
+**Suporte:** pelo e-mail de suporte informado no site do produto.

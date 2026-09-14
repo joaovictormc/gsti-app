@@ -54,8 +54,9 @@ export default function Painel() {
       <Cabecalho titulo={`Olá, ${usuario.nome.split(" ")[0]}`} subtitulo="Resumo das licenças e vendas." />
       <Erro erro={erro} onTentar={recarregar} />
 
-      {s && (!s.mercadoPago || !s.smtp || s.eventosComErro > 0) && (
+      {s && (s.simulador || !s.mercadoPago || !s.smtp || s.eventosComErro > 0) && (
         <Stack spacing={1} sx={{ mb: 3 }}>
+          {s.simulador && <Alert severity="error" variant="filled">Ambiente de HOMOLOGAÇÃO: pagamentos usam o simulador do Mercado Pago. Nenhuma cobrança é real.</Alert>}
           {!s.mercadoPago && <Alert severity="warning" action={<Button component={RouterLink} to="/sistema" color="inherit" size="small">Ver</Button>}>Mercado Pago não configurado — o site não consegue vender.</Alert>}
           {!s.smtp && <Alert severity="warning" action={<Button component={RouterLink} to="/sistema" color="inherit" size="small">Ver</Button>}>E-mail (SMTP) não configurado — as chaves não estão sendo enviadas aos clientes.</Alert>}
           {s.eventosComErro > 0 && <Alert severity="error" action={<Button component={RouterLink} to="/sistema" color="inherit" size="small">Ver</Button>}>{s.eventosComErro} notificação(ões) do Mercado Pago com erro de processamento.</Alert>}

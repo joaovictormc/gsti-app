@@ -41,7 +41,11 @@ export default function Sistema() {
       </Alert>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-          <Item rotulo="Mercado Pago" ok={s.mercadoPago.configurado} detalhe={s.mercadoPago.configurado ? `Credenciais ${s.mercadoPago.sandbox ? "de TESTE (sandbox)" : "de produção"}` : "Defina MP_ACCESS_TOKEN"} />
+          <Item
+            rotulo="Mercado Pago"
+            ok={s.mercadoPago.configurado && !s.mercadoPago.simulador}
+            detalhe={s.mercadoPago.simulador ? `SIMULADOR de homologação (${s.mercadoPago.simulador})` : s.mercadoPago.configurado ? `Credenciais ${s.mercadoPago.sandbox ? "de TESTE (sandbox)" : "de produção"}` : "Defina MP_ACCESS_TOKEN"}
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 6, lg: 3 }}>
           <Item rotulo="Webhook" ok={s.mercadoPago.assinaturaWebhook} detalhe={<><Box sx={mono}>{s.webhookUrl}</Box>{!s.mercadoPago.assinaturaWebhook && "Defina MP_WEBHOOK_SECRET"}</>} />

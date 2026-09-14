@@ -27,6 +27,10 @@ Testes (trial)
   trials [--email E]               Lista testes emitidos
   liberar-trial --email E | --maquina ID   Permite um novo teste
 
+Planos (site)
+  ofertas                          Lista os planos, preços e se estão disponíveis
+  oferta <id> [--preco 497,00] [--ativar | --desativar]
+
 Equipe (área admin)
   criar-usuario --email E --nome N [--papeis admin,licencas,financeiro,conteudo]
                                    Cria usuário do painel e imprime a senha temporária
@@ -138,6 +142,23 @@ function executar() {
         const r = L.emitirLicenca({ email: c.email, ate: c.validade || undefined, observacao: "importado do clientes.json (v1)" });
         console.log(`${r.email}: ${r.chave}`);
       }
+      break;
+    }
+    case "ofertas":
+      require("./lib/vendas").semearOfertas();
+      console.table(require("./lib/vendas").listarOfertas().map((o) => ({
+        id: o.id, nome: o.nome, preco: (o.preco_centavos / 100).toFixed(2), parcelas: o.parcelas_max, disponivel: !!o.ativo,
+      })));
+      break;
+    case "oferta": {
+      const vendas = require("./lib/vendas");
+      vendas.semearOfertas();
+      const dados = {};
+      if (op.preco) dados.precoCentavos = Math.round(Number(String(op.preco).replace(",", ".")) * 100);
+      if (op.ativar) dados.ativo = true;
+      if (op.desativar) dados.ativo = false;
+      const o = vendas.atualizarOferta(pos[0], dados, "cli");
+      console.log(`${o.id}: R$ ${(o.preco_centavos / 100).toFixed(2)} — ${o.ativo ? "disponível" : "oculto"}`);
       break;
     }
     case "criar-usuario": {

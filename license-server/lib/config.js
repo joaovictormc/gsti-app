@@ -19,14 +19,23 @@ if (fs.existsSync(ENV_FILE)) {
 const env = process.env;
 const bool = (v) => /^(1|true|sim|yes)$/i.test(String(v || ""));
 
+const MP_API_OFICIAL = "https://api.mercadopago.com";
+// URL pública (https em produção) — usada em links de e-mail, retorno do checkout e webhook.
+const PUBLIC_URL = String(env.PUBLIC_URL || `http://localhost:${env.PORT || 3030}`).replace(/\/+$/, "");
+let dominio = "localhost";
+try {
+  dominio = new URL(PUBLIC_URL).hostname;
+} catch {
+  /* PUBLIC_URL inválida: mantém localhost */
+}
+
 module.exports = {
   PORT: Number(env.PORT || 3030),
   HOST: env.HOST || "0.0.0.0",
   // Defina quando houver proxy/túnel na frente (ex.: "loopback" ou "1"),
   // para rate limit e cookies "secure" enxergarem o cliente real.
   TRUST_PROXY: env.TRUST_PROXY || false,
-  // URL pública (https) — usada em links de e-mail, retorno do checkout e webhook.
-  PUBLIC_URL: String(env.PUBLIC_URL || `http://localhost:${env.PORT || 3030}`).replace(/\/+$/, ""),
+  PUBLIC_URL,
   NODE_ENV: env.NODE_ENV || "development",
 
   DATA_DIR,
@@ -52,7 +61,8 @@ module.exports = {
   MP_ACCESS_TOKEN: env.MP_ACCESS_TOKEN || "",
   MP_WEBHOOK_SECRET: env.MP_WEBHOOK_SECRET || "",
   MP_SANDBOX: bool(env.MP_SANDBOX),
-  MP_API_BASE: String(env.MP_API_BASE || "https://api.mercadopago.com").replace(/\/+$/, ""),
+  MP_API_BASE: String(env.MP_API_BASE || MP_API_OFICIAL).replace(/\/+$/, ""),
+  MP_API_OFICIAL,
   MP_STATEMENT_DESCRIPTOR: env.MP_STATEMENT_DESCRIPTOR || "GSTI APP",
 
   // E-mail (SMTP — ex.: Brevo)
@@ -61,8 +71,9 @@ module.exports = {
   SMTP_SECURE: bool(env.SMTP_SECURE),
   SMTP_USER: env.SMTP_USER || "",
   SMTP_PASS: env.SMTP_PASS || "",
-  EMAIL_FROM: env.EMAIL_FROM || "GSTI App <nao-responda@labapp.com.br>",
-  EMAIL_SUPORTE: env.EMAIL_SUPORTE || "suporte@labapp.com.br",
+  // Padrões derivados do domínio de PUBLIC_URL; defina explicitamente em produção.
+  EMAIL_FROM: env.EMAIL_FROM || `GSTI App <nao-responda@${dominio}>`,
+  EMAIL_SUPORTE: env.EMAIL_SUPORTE || `suporte@${dominio}`,
 
   // Tarefas em segundo plano (desligue em testes)
   JOBS: env.JOBS === undefined ? true : bool(env.JOBS),

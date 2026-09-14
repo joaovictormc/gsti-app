@@ -7,7 +7,8 @@
     "start": "node server.js",
     "admin": "node admin.js",
     "gerar-chaves": "node gerar-chaves.js",
-    "build:admin": "npm --prefix admin-ui ci && npm --prefix admin-ui run build"
+    "build:admin": "npm --prefix admin-ui ci && npm --prefix admin-ui run build",
+    "simulador": "node scripts/mp-simulado.js"
   },
   "author": "João Victor Maciel Campos",
   "license": "ISC",

@@ -3,6 +3,7 @@
  * Todo texto dinâmico passa por escapeHtml.
  */
 const conteudo = require("../lib/conteudo");
+const cfg = require("../lib/config");
 const { escapeHtml: e } = require("../lib/http");
 
 const FAVICON =
@@ -51,6 +52,7 @@ function layout({ titulo, descricao, corpo, pagina = "", semNav = false }) {
 </head>
 <body class="pg-${e(pagina)}">
 <a class="pular" href="#conteudo">Pular para o conteúdo</a>
+${cfg.MP_API_BASE !== cfg.MP_API_OFICIAL ? `<p class="faixa-homologacao">Ambiente de homologação · pagamentos simulados, nenhuma cobrança é real</p>` : ""}
 <header class="topo">
   <div class="topo__in">
     <a class="marca" href="/" aria-label="${e(g.nomeProduto)} — início">

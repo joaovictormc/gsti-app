@@ -54,7 +54,7 @@ Sem nenhuma etapa manual do vendedor no caminho feliz.
 | **Máquinas por licença** | 1 · 2 · por plano | 1 no plano básico, com **transferência self-service** |
 | **Trial** | Pelo app · pela landing (com e-mail confirmado) | Pela landing, com confirmação de e-mail (reduz abuso) |
 | **Hospedagem do servidor** | Servidor doméstico + Cloudflare Tunnel · VPS | **VPS pequena** (Hetzner, Contabo, Magalu Cloud etc.) ao vender; Cloudflare Tunnel é aceitável no início |
-| **Domínio** | `licenca.labapp.com.br` · `api.labapp.com.br` | `api.labapp.com.br`, fixo no `DEFAULT_LICENSE_SERVER` |
+| **Domínio** | Domínio próprio do produto (a registrar) | Mesmo domínio para site, painel e API; fixo em `serverUrl` no `license-config.js` |
 | **Envio de e-mail** | Brevo · Resend · Amazon SES | **Brevo** (já usado no app) |
 
 Aspectos legais: emissão de NFS-e sobre as vendas (o gateway pode automatizar),
@@ -214,7 +214,9 @@ de `hostname + MAC`. Ele não muda com adaptadores de rede.
 
 - **HTTPS obrigatório** e **URL pública estável**: o gateway precisa alcançar o webhook.
   O Tailscale privado (uso atual) **não serve** para vendas.
-- Servidor doméstico: **Cloudflare Tunnel** com `api.labapp.com.br`, sem abrir
+- **Decisão (2026-09-14):** homologação no servidor Ubuntu doméstico (Tailscale, com o
+  simulador do Mercado Pago); produção em **VPS** com domínio próprio, Nginx e HTTPS.
+- Alternativa descartada — servidor doméstico com **Cloudflare Tunnel**, sem abrir
   portas. Porém uma queda de luz ou de internet impede compras novas de ativarem e
   atrasa webhooks (os gateways reenviam por algumas horas). Ao escalar, migrar para VPS.
 - **Backups**: `pg_dump` diário cifrado para armazenamento externo + backup do

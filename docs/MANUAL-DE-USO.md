@@ -297,4 +297,4 @@ Painel com seletor de período (datas ou atalhos "Este mês", "Mês passado",
 - **Licença expirada / "Ativação necessária"**: veja
   [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
 
-**Suporte:** suporte@labapp.com.br
+**Suporte:** pelo e-mail de suporte informado no site do produto.

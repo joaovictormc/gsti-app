@@ -188,4 +188,4 @@ Resumo:
 | "Ativação necessária" ao abrir | Licença expirada/revogada — reative na tela exibida. |
 | Tabelas faltando / erro de coluna inexistente | Rode o `script.sql` no banco; abra o app uma vez para aplicar as migrações automáticas. |
 
-**Suporte:** suporte@labapp.com.br
+**Suporte:** pelo e-mail de suporte informado no site do produto.
