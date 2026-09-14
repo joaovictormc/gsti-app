@@ -40,180 +40,15 @@ function pgQuery(sql) {
   return sql.replace(/\?/g, () => `$${++i}`);
 }
 
-// --- LICENCIAMENTO (ativação online + verificação offline por assinatura) ---
-// O app embute APENAS a chave PÚBLICA. As licenças são assinadas pelo servidor
-// de ativação (que detém a chave privada), então não podem ser forjadas no
-// cliente, mesmo com o .exe e a chave pública em mãos.
-// Servidor: pasta license-server/ (gere as chaves com: node gerar-chaves.js).
-const LICENSE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAJO0JMV4iAtyVEQ4G3eaa79use0f8c9Wt+1sy048ZEL0=
------END PUBLIC KEY-----
-`;
-// URL padrão do servidor de licenças (sobrescrevível em config.license.serverUrl).
-const DEFAULT_LICENSE_SERVER = "http://localhost";
-
-const b64urlDecode = (str) =>
-  Buffer.from(String(str).replace(/-/g, "+").replace(/_/g, "/"), "base64");
-
-function normalizeLicenseEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-// Verifica a assinatura do token e retorna o payload (ou null se inválido).
-function decodeLicenseToken(token) {
-  try {
-    const [payloadB64, sigB64] = String(token || "").split(".");
-    if (!payloadB64 || !sigB64) return null;
-    const ok = crypto.verify(
-      null,
-      Buffer.from(payloadB64),
-      crypto.createPublicKey(LICENSE_PUBLIC_KEY),
-      b64urlDecode(sigB64)
-    );
-    if (!ok) return null;
-    return JSON.parse(b64urlDecode(payloadB64).toString("utf8"));
-  } catch (_) {
-    return null;
-  }
-}
-
-// Identificador de máquina derivado de hardware (estável entre reinstalações).
-function getMachineId() {
-  const nets = os.networkInterfaces();
-  let mac = "";
-  for (const name of Object.keys(nets)) {
-    for (const ni of nets[name] || []) {
-      if (!ni.internal && ni.mac && ni.mac !== "00:00:00:00:00:00") {
-        mac = ni.mac;
-        break;
-      }
-    }
-    if (mac) break;
-  }
-  return crypto
-    .createHash("sha256")
-    .update(`${os.hostname()}|${mac}`)
-    .digest("hex")
-    .slice(0, 32);
-}
-
-// Avalia o estado da licença armazenada (assinatura + validade + relógio + revogação).
-// Retorna { active, tipo, email, validade, diasRestantes, motivo }.
-function evaluateLicense() {
-  const lic = appConfig && appConfig.license;
-  if (!lic || !lic.token) return { active: false, motivo: "Sem licença ativada." };
-  if (lic.revoked) {
-    return { active: false, motivo: lic.revogadaMotivo || "Licença revogada." };
-  }
-  const payload = decodeLicenseToken(lic.token);
-  if (!payload) return { active: false, motivo: "Licença inválida (assinatura)." };
-
-  const now = Date.now();
-  // Anti-burla: detecta retrocesso significativo do relógio do sistema.
-  if (lic.lastSeen) {
-    const last = new Date(lic.lastSeen).getTime();
-    if (now < last - 86400000) {
-      return {
-        active: false,
-        motivo: "Relógio do sistema inconsistente. Conecte-se à internet para revalidar.",
-      };
-    }
-  }
-
-  let diasRestantes = null;
-  if (payload.validade) {
-    const exp = new Date(payload.validade).getTime();
-    if (exp < now) {
-      return {
-        active: false,
-        tipo: payload.tipo,
-        validade: payload.validade,
-        diasRestantes: 0,
-        motivo:
-          payload.tipo === "trial"
-            ? "Período de teste expirado."
-            : "Licença expirada.",
-      };
-    }
-    diasRestantes = Math.ceil((exp - now) / 86400000);
-  }
-  return {
-    active: true,
-    tipo: payload.tipo,
-    email: payload.email,
-    validade: payload.validade || null,
-    diasRestantes,
-  };
-}
-
-// Atualiza lastSeen (maior entre agora e o registrado) — base do anti-burla.
-function touchLicenseLastSeen() {
-  if (!appConfig || !appConfig.license || !appConfig.license.token) return;
-  const now = new Date();
-  const prev = appConfig.license.lastSeen ? new Date(appConfig.license.lastSeen) : null;
-  if (!prev || now > prev) {
-    appConfig.license.lastSeen = now.toISOString();
-    try {
-      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
-    } catch (_) {
-      /* ignora falha de escrita */
-    }
-  }
-}
-
-// Solicita uma licença ao servidor de ativação e persiste localmente.
-async function requestLicenseFromServer(endpoint, email) {
-  const e = normalizeLicenseEmail(email);
-  if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
-    return { success: false, error: "Informe um e-mail válido." };
-  }
-  const base =
-    (appConfig.license && appConfig.license.serverUrl) || DEFAULT_LICENSE_SERVER;
-  try {
-    const { data } = await axios.post(
-      base.replace(/\/$/, "") + endpoint,
-      { email: e, maquina: getMachineId() },
-      { timeout: 15000 }
-    );
-    if (!data || !data.success || !data.token) {
-      return { success: false, error: (data && data.error) || "Falha na ativação." };
-    }
-    const payload = decodeLicenseToken(data.token);
-    if (!payload) return { success: false, error: "A licença recebida é inválida." };
-
-    appConfig.license = {
-      email: payload.email,
-      token: data.token,
-      tipo: payload.tipo,
-      validade: payload.validade || null,
-      activatedAt: new Date().toISOString(),
-      lastSeen: new Date().toISOString(),
-      revoked: false,
-      revogadaMotivo: "",
-      serverUrl: (appConfig.license && appConfig.license.serverUrl) || "",
-    };
-    fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
-
-    const status = evaluateLicense();
-    return {
-      success: true,
-      license: {
-        tipo: payload.tipo,
-        email: payload.email,
-        validade: payload.validade || null,
-        diasRestantes: status.diasRestantes,
-      },
-    };
-  } catch (err) {
-    if (err.response && err.response.data && err.response.data.error) {
-      return { success: false, error: err.response.data.error };
-    }
-    return {
-      success: false,
-      error: "Não foi possível contatar o servidor de ativação. Verifique sua conexão.",
-    };
-  }
-}
+// --- LICENCIAMENTO ---
+// Lógica em license-manager.js; chaves públicas e URL do servidor em license-config.js.
+// O servidor de licenças (license-server/) detém a chave privada.
+const { createLicenseManager } = require("./license-manager");
+const licenseManager = createLicenseManager({
+  getConfig: () => appConfig,
+  saveConfig: () => fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2)),
+  appVersion: app.getVersion(),
+});
 
 // --- GERENCIAMENTO DE CONFIGURAÇÃO ---
 const userDataPath = app.getPath("userData"); // Pasta de dados do usuário
@@ -255,7 +90,9 @@ const defaultConfig = {
     email: "",
     token: "",
     tipo: "",
+    plano: "",
     validade: null,
+    detalhes: null,
     activatedAt: null,
     lastSeen: null,
     revoked: false,
@@ -652,7 +489,7 @@ ipcMain.handle(
     console.log("[Setup] Salvando configuração inicial e criando admin...");
 
     // --- Validação da licença (precisa estar ativada antes de concluir o setup) ---
-    const licStatus = evaluateLicense();
+    const licStatus = licenseManager.evaluate();
     if (!licStatus.active) {
       return {
         success: false,
@@ -787,56 +624,103 @@ ipcMain.handle(
   }
 );
 
+// Setup em nova instalação quando o banco já existe: valida um usuário cadastrado
+// em vez de criar outro administrador. Retorna o usuário para login automático.
+ipcMain.handle(
+  "save-initial-config-existing-user",
+  async (event, { dbConfig, login, password }) => {
+    const licStatus = licenseManager.evaluate();
+    if (!licStatus.active) {
+      return {
+        success: false,
+        error: licStatus.motivo || "Ative o sistema antes de concluir a configuração.",
+      };
+    }
+    if (!dbConfig || !dbConfig.host || !dbConfig.port || !dbConfig.database || !dbConfig.user) {
+      return { success: false, error: "Todos os campos de configuração do banco são obrigatórios." };
+    }
+    if (!login || !password) {
+      return { success: false, error: "Informe login e senha." };
+    }
+
+    const database = {
+      host: dbConfig.host,
+      port: parseInt(dbConfig.port, 10) || 5432,
+      database: dbConfig.database,
+      user: dbConfig.user,
+      password: dbConfig.password,
+    };
+    let tempPool = null;
+    try {
+      tempPool = new Pool({ ...database, max: 1, connectionTimeoutMillis: 10000 });
+      const { rows } = await tempPool.query(
+        pgQuery("SELECT id, nome, senha, role FROM usuarios WHERE login = ?"),
+        [login]
+      );
+      await tempPool.end();
+      tempPool = null;
+
+      const user = rows[0];
+      if (!user || !(await bcrypt.compare(password, user.senha))) {
+        return { success: false, error: "Login ou senha inválidos." };
+      }
+
+      appConfig.database = database;
+      appConfig.setupComplete = true;
+      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+      console.log(`[Setup] Instalação vinculada ao banco existente (usuário ${user.nome}).`);
+
+      initializeDbPool();
+      initializeMailTransporter();
+      scheduleAutoBackup();
+
+      return { success: true, user: { id: user.id, nome: user.nome, role: user.role } };
+    } catch (error) {
+      if (tempPool) await tempPool.end().catch(() => {});
+      console.error("[Setup] Erro ao vincular banco existente:", error);
+      let errorMessage = error.message;
+      if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED")
+        errorMessage = "Não foi possível conectar ao Host/Porta do banco.";
+      else if (error.code === "28P01") errorMessage = "Usuário ou Senha do banco inválidos.";
+      else if (error.code === "3D000") errorMessage = "Banco de dados não encontrado.";
+      else if (error.code === "42P01")
+        errorMessage =
+          "Este banco não possui cadastro do GSTI App. Use \"Criar novo administrador\" ou verifique o nome do banco.";
+      return { success: false, error: errorMessage };
+    }
+  }
+);
+
 // Handler para verificar se o setup inicial é necessário
 ipcMain.handle("is-initial-setup-needed", async () => {
   return !appConfig.setupComplete;
 });
 
-// Ativação definitiva (e-mail cadastrado como cliente no servidor)
-ipcMain.handle("activate-license", async (event, { email }) => {
-  return await requestLicenseFromServer("/ativar", email);
+// Ativação com chave de licença (GSTI-XXXX-XXXX-XXXX-XXXX)
+ipcMain.handle("activate-license", async (event, { chave }) => {
+  return await licenseManager.activate(chave);
 });
 
-// Início de período de teste (7 dias)
+// Início de período de teste
 ipcMain.handle("start-trial", async (event, { email }) => {
-  return await requestLicenseFromServer("/trial", email);
+  return await licenseManager.startTrial(email);
 });
 
-// Estado atual da licença (verificação local por assinatura)
+// Estado atual da licença (verificação local: assinatura, computador, validade)
 ipcMain.handle("get-license-status", async () => {
-  touchLicenseLastSeen();
-  return { success: true, status: evaluateLicense() };
+  licenseManager.touchLastSeen();
+  return { success: true, status: licenseManager.evaluate() };
 });
 
-// Revalidação online (revogação/expiração). Best-effort: offline mantém status local.
+// Revalidação online (revogação/renovação). Offline mantém o status local.
 ipcMain.handle("revalidate-license", async () => {
-  const lic = appConfig && appConfig.license;
-  if (!lic || !lic.token) {
-    return { success: true, status: evaluateLicense() };
-  }
-  const base = lic.serverUrl || DEFAULT_LICENSE_SERVER;
-  try {
-    const { data } = await axios.post(
-      base.replace(/\/$/, "") + "/validar",
-      { token: lic.token },
-      { timeout: 10000 }
-    );
-    if (data && data.valido === false) {
-      appConfig.license = {
-        ...lic,
-        revoked: true,
-        revogadaMotivo: data.motivo || "Licença inválida.",
-      };
-      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
-    } else if (data && data.valido === true && lic.revoked) {
-      // Reabilitada no servidor — limpa a marcação local.
-      appConfig.license = { ...lic, revoked: false, revogadaMotivo: "" };
-      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
-    }
-  } catch (_) {
-    // Sem conexão: mantém o status local (modo offline).
-  }
-  return { success: true, status: evaluateLicense() };
+  const { status, online } = await licenseManager.revalidate();
+  return { success: true, status, online };
+});
+
+// Transferência: libera este computador no servidor e remove a licença local.
+ipcMain.handle("deactivate-license", async () => {
+  return await licenseManager.deactivate();
 });
 
 // Handler para buscar as configurações atuais (para a tela de Settings)
@@ -873,13 +757,8 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
         },
       },
       autoBackup: { ...appConfig.autoBackup, ...(newSettings.autoBackup || {}) },
-      // Apenas a URL do servidor é editável aqui; token/validade/etc. são preservados.
-      license: {
-        ...appConfig.license,
-        ...(newSettings.license && typeof newSettings.license.serverUrl === "string"
-          ? { serverUrl: newSettings.license.serverUrl.trim() }
-          : {}),
-      },
+      // Licença não é editável pelas Configurações (token/URL preservados).
+      license: appConfig.license,
       database: currentDbConfig,
       setupComplete: currentSetupStatus,
     };
@@ -3819,7 +3698,15 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  // Revalida a licença periodicamente enquanto o app fica aberto.
+  setInterval(() => {
+    if (appConfig && appConfig.license && appConfig.license.token) {
+      licenseManager.revalidate().catch(() => {});
+    }
+  }, 6 * 60 * 60 * 1000);
+});
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });

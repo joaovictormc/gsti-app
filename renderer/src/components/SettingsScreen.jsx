@@ -47,9 +47,11 @@ function SettingsScreen() {
     emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
     permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
     autoBackup: { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 },
-    license: { serverUrl: "" },
   });
   const [licenseStatus, setLicenseStatus] = useState(null);
+  const [licenseBusy, setLicenseBusy] = useState(false);
+  const [licenseMsg, setLicenseMsg] = useState({ type: "", text: "" });
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -86,7 +88,6 @@ function SettingsScreen() {
               funcionario: { ...defaultPerms, ...(result.settings.permissions?.funcionario || {}) },
             },
             autoBackup: { ...defaultAutoBackup, ...(result.settings.autoBackup || {}) },
-            license: { serverUrl: result.settings.license?.serverUrl || "" },
           });
         } else {
           console.error("Erro ao carregar configurações:", result?.error);
@@ -119,6 +120,41 @@ function SettingsScreen() {
       }
     })();
   }, []);
+
+  // Revalida a licença no servidor (aplica renovação/revogação)
+  const handleRevalidateLicense = async () => {
+    setLicenseBusy(true);
+    setLicenseMsg({ type: "", text: "" });
+    try {
+      const r = await window.api.revalidateLicense();
+      if (r?.status) setLicenseStatus(r.status);
+      setLicenseMsg(
+        r?.online
+          ? { type: "success", text: "Licença verificada com o servidor." }
+          : { type: "warning", text: "Servidor de licenças indisponível. O status local foi mantido." }
+      );
+    } catch {
+      setLicenseMsg({ type: "error", text: "Não foi possível verificar a licença." });
+    } finally {
+      setLicenseBusy(false);
+    }
+  };
+
+  // Libera este computador na licença e volta para a tela de ativação
+  const handleTransferLicense = async () => {
+    setLicenseBusy(true);
+    try {
+      const r = await window.api.deactivateLicense();
+      if (r?.success) {
+        window.location.reload();
+      } else {
+        setTransferDialogOpen(false);
+        setLicenseMsg({ type: "error", text: r?.error || "Não foi possível transferir a licença." });
+      }
+    } finally {
+      setLicenseBusy(false);
+    }
+  };
 
   // Handler genérico para mudanças nos inputs
   const handleInputChange = useCallback((section, field, value) => {
@@ -205,7 +241,6 @@ function SettingsScreen() {
         emailNotifications: settings.emailNotifications,
         permissions: settings.permissions,
         autoBackup: settings.autoBackup,
-        license: { serverUrl: settings.license.serverUrl },
       };
       const result = await window.api.saveAppSettings(settingsToSave);
       if (result.success) {
@@ -582,58 +617,99 @@ function SettingsScreen() {
           Licenciamento e Ativação
         </Typography>
 
-        {licenseStatus && (
-          <Box sx={{ mb: 2, display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
-            <Chip
-              label={
-                licenseStatus.active
-                  ? licenseStatus.tipo === "trial"
-                    ? "Teste ativo"
-                    : "Licença ativa"
-                  : "Inativa"
-              }
-              color={licenseStatus.active ? "success" : "error"}
-              size="small"
-            />
-            {licenseStatus.active && licenseStatus.tipo === "trial" && licenseStatus.diasRestantes != null && (
-              <Typography variant="body2" color="text.secondary">
-                {licenseStatus.diasRestantes} dia(s) restantes
-              </Typography>
-            )}
-            {licenseStatus.active && licenseStatus.tipo === "full" && (
-              <Typography variant="body2" color="text.secondary">
-                {licenseStatus.validade
-                  ? `Válida até ${new Date(licenseStatus.validade).toLocaleDateString("pt-BR")}`
-                  : "Sem expiração"}
-              </Typography>
-            )}
-            {!licenseStatus.active && licenseStatus.motivo && (
-              <Typography variant="body2" color="error">
-                {licenseStatus.motivo}
-              </Typography>
-            )}
-          </Box>
+        {licenseStatus && (() => {
+          const d = licenseStatus.detalhes || {};
+          const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : null);
+          const planos = { mensal: "Mensal", anual: "Anual", vitalicia: "Vitalícia", cortesia: "Cortesia", trial: "Teste grátis" };
+          const linhas = [
+            ["Plano", planos[licenseStatus.plano] || licenseStatus.plano],
+            ["E-mail", licenseStatus.email],
+            ["Chave", d.chaveFinal ? `GSTI-••••-••••-••••-${d.chaveFinal}` : null],
+            [
+              "Validade",
+              licenseStatus.validade
+                ? `${fmt(licenseStatus.validade)}${licenseStatus.diasRestantes != null ? ` (${licenseStatus.diasRestantes} dia(s) restantes)` : ""}`
+                : licenseStatus.tipo ? "Sem expiração" : null,
+            ],
+            ["Computadores", d.maxMaquinas ? `${d.maquinasAtivas ?? "?"} de ${d.maxMaquinas} em uso` : null],
+            ["Última verificação", licenseStatus.lastSeen ? new Date(licenseStatus.lastSeen).toLocaleString("pt-BR") : null],
+            ["Verificar online até", fmt(licenseStatus.revalidarAte)],
+          ].filter(([, v]) => v);
+          return (
+            <>
+              <Box sx={{ mb: 2, display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
+                <Chip
+                  label={licenseStatus.active ? (licenseStatus.tipo === "trial" ? "Teste ativo" : "Licença ativa") : "Inativa"}
+                  color={licenseStatus.active ? "success" : "error"}
+                  size="small"
+                />
+                {!licenseStatus.active && licenseStatus.motivo && (
+                  <Typography variant="body2" color="error">
+                    {licenseStatus.motivo}
+                  </Typography>
+                )}
+              </Box>
+              {linhas.length > 0 && (
+                <Grid container spacing={1} sx={{ mb: 2 }}>
+                  {linhas.map(([rotulo, valor]) => (
+                    <Grid key={rotulo} size={{ xs: 12, sm: 6 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                        {rotulo}
+                      </Typography>
+                      <Typography variant="body2">{valor}</Typography>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
+            </>
+          );
+        })()}
+
+        {licenseMsg.text && (
+          <Alert severity={licenseMsg.type || "info"} sx={{ mb: 2 }} onClose={() => setLicenseMsg({ type: "", text: "" })}>
+            {licenseMsg.text}
+          </Alert>
         )}
 
-        <TextField
-          label="URL do Servidor de Ativação"
-          placeholder="https://licenca.labapp.com.br"
-          value={settings.license.serverUrl}
-          onChange={(e) => handleInputChange("license", "serverUrl", e.target.value)}
-          fullWidth
-          margin="normal"
-          size="small"
-          disabled={saving || testingEmail}
-        />
-        <Typography
-          variant="caption"
-          sx={{ display: "block", mt: 1 }}
-          color="textSecondary"
-        >
-          * Endereço do servidor que emite e valida as licenças. Deixe em branco
-          para usar o padrão do sistema. Use HTTPS em produção.
-        </Typography>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+          <Button
+            variant="outlined"
+            onClick={handleRevalidateLicense}
+            disabled={licenseBusy}
+            startIcon={licenseBusy ? <CircularProgress size={18} color="inherit" /> : null}
+          >
+            Verificar agora
+          </Button>
+          {licenseStatus?.tipo === "full" && (
+            <Button variant="outlined" color="warning" onClick={() => setTransferDialogOpen(true)} disabled={licenseBusy}>
+              Transferir para outro computador
+            </Button>
+          )}
+        </Stack>
       </Paper>
+
+      <Dialog open={transferDialogOpen} onClose={() => !licenseBusy && setTransferDialogOpen(false)}>
+        <DialogTitle>Transferir licença</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            Este computador será desvinculado da licença e o sistema voltará para a
+            tela de ativação. Use a mesma chave de licença para ativar no novo
+            computador.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Os dados continuam no banco de dados — nada é apagado. É necessário
+            estar conectado à internet.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTransferDialogOpen(false)} disabled={licenseBusy}>
+            Cancelar
+          </Button>
+          <Button color="warning" variant="contained" onClick={handleTransferLicense} disabled={licenseBusy}>
+            Transferir
+          </Button>
+        </DialogActions>
+      </Dialog>
       {/* --- FIM Licenciamento --- */}
 
       {/* --- Permissões de Funcionário --- */}

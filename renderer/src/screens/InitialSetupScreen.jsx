@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box,
   Button,
@@ -7,29 +7,40 @@ import {
   Paper,
   Alert,
   CircularProgress,
-  Divider,
   Stepper,
   Step,
   StepLabel,
   StepContent,
+  ToggleButtonGroup,
+  ToggleButton,
 } from "@mui/material";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import LoginIcon from "@mui/icons-material/Login";
+import LicenseActivationForm from "../components/LicenseActivationForm";
+import { useAuth } from "../contexts/AuthContext";
 
 const InitialSetupScreen = ({ onSetupComplete }) => {
-  const [activeStep, setActiveStep] = useState(0); // 0: Ativação, 1: DB Config, 2: Admin Config
+  const { login } = useAuth();
+  const [activeStep, setActiveStep] = useState(0); // 0: Ativação, 1: Banco, 2: Acesso
+  const [licenseInfo, setLicenseInfo] = useState(null); // { tipo, plano, diasRestantes, ... }
 
-  // Estado para Ativação (licença emitida pelo servidor, vinculada ao e-mail)
-  const [licenseEmail, setLicenseEmail] = useState("");
-  const [licenseStatus, setLicenseStatus] = useState({
-    loading: false, // "activate" | "trial" | false
-    valid: false,
-    error: "",
-    info: null, // { tipo, validade, diasRestantes }
-  });
+  // Se a licença já foi ativada antes (ex.: app fechado no meio do setup), pula a ativação.
+  useEffect(() => {
+    window.api
+      .getLicenseStatus()
+      .then((r) => {
+        if (r?.status?.active) {
+          setLicenseInfo(r.status);
+          setActiveStep((step) => (step === 0 ? 1 : step));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Estado para Configuração do Banco
   const [dbConfig, setDbConfig] = useState({
     host: "localhost",
-    port: 3306,
+    port: 5432,
     database: "gsti_db",
     user: "",
     password: "",
@@ -41,7 +52,8 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
     error: "",
   });
 
-  // Estado para Criação do Admin
+  // Passo 3: "new" = criar administrador | "existing" = já tenho cadastro
+  const [accessMode, setAccessMode] = useState("new");
   const [adminUser, setAdminUser] = useState({
     nome: "",
     email: "",
@@ -49,54 +61,8 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
     password: "",
     confirmPassword: "",
   });
+  const [existingUser, setExistingUser] = useState({ login: "", password: "" });
   const [adminStatus, setAdminStatus] = useState({ saving: false, error: "" });
-
-  // Handlers para inputs
-  const handleLicenseEmailChange = (e) => {
-    setLicenseEmail(e.target.value);
-    setLicenseStatus({ loading: false, valid: false, error: "", info: null });
-  };
-
-  // mode: "activate" (licença definitiva) | "trial" (teste 7 dias)
-  const handleActivate = async (mode) => {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(licenseEmail.trim())) {
-      setLicenseStatus({
-        loading: false,
-        valid: false,
-        error: "Informe um e-mail válido.",
-        info: null,
-      });
-      return;
-    }
-    setLicenseStatus({ loading: mode, valid: false, error: "", info: null });
-    try {
-      const fn = mode === "trial" ? window.api.startTrial : window.api.activateLicense;
-      const result = await fn({ email: licenseEmail.trim() });
-      if (result.success) {
-        setLicenseStatus({
-          loading: false,
-          valid: true,
-          error: "",
-          info: result.license,
-        });
-        setActiveStep(1); // Avança para a configuração do banco
-      } else {
-        setLicenseStatus({
-          loading: false,
-          valid: false,
-          error: result.error || "Falha na ativação.",
-          info: null,
-        });
-      }
-    } catch (error) {
-      setLicenseStatus({
-        loading: false,
-        valid: false,
-        error: "Erro ao contatar o servidor de ativação. Tente novamente.",
-        info: null,
-      });
-    }
-  };
 
   const handleDbChange = (e) => {
     const { name, value } = e.target;
@@ -110,6 +76,12 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
     setAdminStatus({ saving: false, error: "" }); // Limpa erro ao digitar
   };
 
+  const handleExistingChange = (e) => {
+    const { name, value } = e.target;
+    setExistingUser((prev) => ({ ...prev, [name]: value }));
+    setAdminStatus({ saving: false, error: "" });
+  };
+
   // Função para testar conexão com o BD
   const handleTestConnection = async () => {
     setDbStatus({ testing: true, tested: false, success: false, error: "" });
@@ -121,14 +93,13 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
       error: result.error || "",
     });
     if (result.success) {
-      setActiveStep(2); // Avança para a criação do admin se a conexão for bem-sucedida
+      setActiveStep(2); // Avança para o acesso se a conexão for bem-sucedida
     }
   };
 
-  // Função para salvar tudo e criar admin
+  // Cria o primeiro administrador
   const handleSaveAndCreate = async () => {
     setAdminStatus({ saving: true, error: "" });
-    // Validação extra no frontend (opcional, backend já valida)
     if (!adminUser.nome || !adminUser.email || !adminUser.login || !adminUser.password) {
       setAdminStatus({ saving: false, error: "Todos os campos do administrador são obrigatórios." });
       return;
@@ -148,15 +119,8 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
 
     const result = await window.api.saveInitialConfig({ dbConfig, adminUser });
     if (result.success) {
-      alert(
-        "Configuração salva e usuário administrador criado com sucesso! O aplicativo será reiniciado ou você será redirecionado para o login."
-      );
-      // Chama a função passada pelo App.jsx para indicar que o setup terminou
-      if (onSetupComplete) {
-        onSetupComplete();
-      }
-      // O ideal aqui seria forçar um reload da aplicação ou redirecionar programaticamente
-      // window.location.reload(); // Força reload (pode precisar ajustar dependendo do fluxo)
+      alert("Configuração salva e usuário administrador criado com sucesso!");
+      onSetupComplete?.();
     } else {
       setAdminStatus({
         saving: false,
@@ -164,6 +128,29 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
       });
     }
   };
+
+  // Nova instalação apontando para um banco que já tem cadastro: valida e entra direto
+  const handleExistingLogin = async (e) => {
+    e?.preventDefault();
+    if (!existingUser.login || !existingUser.password) {
+      setAdminStatus({ saving: false, error: "Informe login e senha." });
+      return;
+    }
+    setAdminStatus({ saving: true, error: "" });
+    const result = await window.api.saveInitialConfigExistingUser({
+      dbConfig,
+      login: existingUser.login.trim(),
+      password: existingUser.password,
+    });
+    if (result.success) {
+      login(result.user); // Sessão persiste no reload feito por onSetupComplete
+      onSetupComplete?.();
+    } else {
+      setAdminStatus({ saving: false, error: result.error || "Não foi possível validar o cadastro." });
+    }
+  };
+
+  const loginDuplicado = /já existe/i.test(adminStatus.error);
 
   return (
     <Box
@@ -181,77 +168,37 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
           Configuração Inicial - GSTI App
         </Typography>
         <Typography variant="body1" align="center" gutterBottom sx={{ mb: 3 }}>
-          Bem-vindo! Por favor, configure a conexão com o banco de dados e crie
-          o usuário administrador.
+          Bem-vindo! Ative o sistema, conecte ao banco de dados e crie o
+          administrador — ou entre com um cadastro que já existe no banco.
         </Typography>
 
         <Stepper activeStep={activeStep} orientation="vertical">
           {/* Passo 1: Ativação do Sistema */}
           <Step key="license">
-            <StepLabel>Ativação do Sistema</StepLabel>
+            <StepLabel
+              optional={
+                licenseInfo && activeStep > 0 ? (
+                  <Typography variant="caption" color="success.main">
+                    {licenseInfo.tipo === "trial"
+                      ? `Teste ativo — ${licenseInfo.diasRestantes ?? ""} dia(s) restantes`
+                      : "Licença ativada"}
+                  </Typography>
+                ) : null
+              }
+            >
+              Ativação do Sistema
+            </StepLabel>
             <StepContent>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Informe o e-mail usado na contratação para ativar o sistema. Se
-                ainda não contratou, use o mesmo e-mail para iniciar um período
-                de teste de 7 dias. É necessária conexão com a internet.
+                Informe a chave de licença recebida por e-mail após a compra, ou
+                inicie um período de teste gratuito.
               </Typography>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 2,
-                  mt: 1,
-                  mb: 2,
+              <LicenseActivationForm
+                onActivated={(license) => {
+                  setLicenseInfo(license);
+                  setTimeout(() => setActiveStep(1), 600);
                 }}
-              >
-                <TextField
-                  name="email"
-                  label="E-mail"
-                  type="email"
-                  value={licenseEmail}
-                  onChange={handleLicenseEmailChange}
-                  required
-                  disabled={!!licenseStatus.loading}
-                />
-              </Box>
-              {licenseStatus.error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {licenseStatus.error}
-                </Alert>
-              )}
-              {licenseStatus.valid && (
-                <Alert severity="success" sx={{ mb: 2 }}>
-                  {licenseStatus.info?.tipo === "trial"
-                    ? `Teste ativado! ${licenseStatus.info?.diasRestantes ?? 7} dias restantes.`
-                    : "Licença ativada com sucesso!"}
-                </Alert>
-              )}
-              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-                <Button
-                  variant="contained"
-                  onClick={() => handleActivate("activate")}
-                  disabled={!!licenseStatus.loading}
-                  startIcon={
-                    licenseStatus.loading === "activate" ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : null
-                  }
-                >
-                  Ativar Licença
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => handleActivate("trial")}
-                  disabled={!!licenseStatus.loading}
-                  startIcon={
-                    licenseStatus.loading === "trial" ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : null
-                  }
-                >
-                  Testar 7 dias grátis
-                </Button>
-              </Box>
+              />
             </StepContent>
           </Step>
 
@@ -330,76 +277,143 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
             </StepContent>
           </Step>
 
-          {/* Passo 2: Criar Admin */}
+          {/* Passo 3: Acesso — criar administrador ou usar cadastro existente */}
           <Step key="adminConfig">
-            <StepLabel>Criar Conta de Administrador</StepLabel>
+            <StepLabel>Acesso ao Sistema</StepLabel>
             <StepContent>
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 2,
-                  mt: 1,
-                  mb: 2,
+              <ToggleButtonGroup
+                value={accessMode}
+                exclusive
+                fullWidth
+                size="small"
+                color="primary"
+                disabled={adminStatus.saving}
+                onChange={(_e, v) => {
+                  if (!v) return;
+                  setAccessMode(v);
+                  setAdminStatus({ saving: false, error: "" });
                 }}
+                sx={{ mt: 1, mb: 2 }}
               >
-                <TextField
-                  name="nome"
-                  label="Nome Completo"
-                  value={adminUser.nome}
-                  onChange={handleAdminChange}
-                  required
-                />
-                <TextField
-                  name="email"
-                  label="Email"
-                  type="email"
-                  value={adminUser.email}
-                  onChange={handleAdminChange}
-                  required
-                />
-                <TextField
-                  name="login"
-                  label="Login de Acesso"
-                  value={adminUser.login}
-                  onChange={handleAdminChange}
-                  required
-                />
-                <TextField
-                  name="password"
-                  label="Senha"
-                  type="password"
-                  value={adminUser.password}
-                  onChange={handleAdminChange}
-                  required
-                />
-                <TextField
-                  name="confirmPassword"
-                  label="Confirmar Senha"
-                  type="password"
-                  value={adminUser.confirmPassword}
-                  onChange={handleAdminChange}
-                  required
-                />
-              </Box>
+                <ToggleButton value="new">
+                  <PersonAddIcon fontSize="small" sx={{ mr: 1 }} /> Criar novo administrador
+                </ToggleButton>
+                <ToggleButton value="existing">
+                  <LoginIcon fontSize="small" sx={{ mr: 1 }} /> Já tenho cadastro
+                </ToggleButton>
+              </ToggleButtonGroup>
+
+              {accessMode === "new" ? (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 2 }}>
+                  <TextField
+                    name="nome"
+                    label="Nome Completo"
+                    value={adminUser.nome}
+                    onChange={handleAdminChange}
+                    required
+                  />
+                  <TextField
+                    name="email"
+                    label="Email"
+                    type="email"
+                    value={adminUser.email}
+                    onChange={handleAdminChange}
+                    required
+                  />
+                  <TextField
+                    name="login"
+                    label="Login de Acesso"
+                    value={adminUser.login}
+                    onChange={handleAdminChange}
+                    required
+                  />
+                  <TextField
+                    name="password"
+                    label="Senha"
+                    type="password"
+                    value={adminUser.password}
+                    onChange={handleAdminChange}
+                    required
+                  />
+                  <TextField
+                    name="confirmPassword"
+                    label="Confirmar Senha"
+                    type="password"
+                    value={adminUser.confirmPassword}
+                    onChange={handleAdminChange}
+                    required
+                  />
+                </Box>
+              ) : (
+                <Box
+                  component="form"
+                  onSubmit={handleExistingLogin}
+                  sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 2 }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Use esta opção ao reinstalar o GSTI App ou instalá-lo em outro
+                    computador que usa o mesmo banco de dados. Entre com um usuário
+                    já cadastrado — nenhum dado será alterado.
+                  </Typography>
+                  <TextField
+                    name="login"
+                    label="Login"
+                    value={existingUser.login}
+                    onChange={handleExistingChange}
+                    autoComplete="username"
+                    required
+                  />
+                  <TextField
+                    name="password"
+                    label="Senha"
+                    type="password"
+                    value={existingUser.password}
+                    onChange={handleExistingChange}
+                    autoComplete="current-password"
+                    required
+                  />
+                  {/* Permite Enter para enviar */}
+                  <button type="submit" hidden />
+                </Box>
+              )}
+
               {adminStatus.error && (
-                <Alert severity="error" sx={{ mb: 2 }}>
+                <Alert
+                  severity="error"
+                  sx={{ mb: 2 }}
+                  action={
+                    accessMode === "new" && loginDuplicado ? (
+                      <Button color="inherit" size="small" onClick={() => setAccessMode("existing")}>
+                        Já tenho cadastro
+                      </Button>
+                    ) : null
+                  }
+                >
                   {adminStatus.error}
                 </Alert>
               )}
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleSaveAndCreate}
-                disabled={!dbStatus.success || adminStatus.saving} // Habilita só se DB OK e não estiver salvando
-                startIcon={
-                  adminStatus.saving ? (
-                    <CircularProgress size={20} color="inherit" />
-                  ) : null
-                }
-              >
-                Salvar Configuração e Criar Admin
-              </Button>
+
+              {accessMode === "new" ? (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSaveAndCreate}
+                  disabled={!dbStatus.success || adminStatus.saving}
+                  startIcon={adminStatus.saving ? <CircularProgress size={20} color="inherit" /> : null}
+                >
+                  Salvar Configuração e Criar Admin
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleExistingLogin}
+                  disabled={!dbStatus.success || adminStatus.saving}
+                  startIcon={adminStatus.saving ? <CircularProgress size={20} color="inherit" /> : null}
+                >
+                  Validar e Entrar
+                </Button>
+              )}
               <Button
                 variant="text"
                 onClick={() => setActiveStep(1)} // Botão para voltar ao Banco

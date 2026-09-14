@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
+  Alert,
   Avatar,
   Box,
   Collapse,
@@ -362,6 +363,8 @@ function App() {
   const [checkingSetup, setCheckingSetup] = useState(true); // Para mostrar loading inicial
   const [licenseActive, setLicenseActive] = useState(null); // null = verificando, true/false
   const [licenseMotivo, setLicenseMotivo] = useState("");
+  const [licenseStatus, setLicenseStatus] = useState(null); // status completo (avisos de vencimento)
+  const [licenseBannerClosed, setLicenseBannerClosed] = useState(false);
 
   const [brandingConfig, setBrandingConfig] = useState({
     companyName: "GSTI App",
@@ -405,6 +408,7 @@ function App() {
       } catch (_) {
         /* offline — mantém status local */
       }
+      setLicenseStatus(status);
       setLicenseActive(!!status.active);
       setLicenseMotivo(status.motivo || "");
     } catch (error) {
@@ -617,6 +621,7 @@ function App() {
         <CssBaseline />
         <ReactivationScreen
           motivo={licenseMotivo}
+          codigo={licenseStatus?.codigo}
           onReactivated={() => {
             setLicenseActive(null);
             checkLicense();
@@ -656,6 +661,24 @@ function App() {
       !isAdmin &&
       ((financialComponents.includes(activeComponent) && !funcionarioPerms.canSeeFinancial) ||
        (reportComponents.includes(activeComponent) && !funcionarioPerms.canSeeReports));
+
+    // Aviso de vencimento (15, 7 e 1 dia) ou de revalidação pendente
+    let licenseWarning = null;
+    const dias = licenseStatus?.diasRestantes;
+    if (licenseStatus?.active && dias != null && dias <= 15) {
+      const oque = licenseStatus.tipo === "trial" ? "O período de teste" : "Sua licença";
+      licenseWarning = {
+        severity: dias <= 7 ? "error" : "warning",
+        text: `${oque} termina em ${dias} dia(s). ${
+          licenseStatus.tipo === "trial" ? "Adquira uma licença" : "Renove"
+        } para continuar usando o sistema sem interrupção.`,
+      };
+    } else if (licenseStatus?.active && licenseStatus.avisoRevalidar) {
+      licenseWarning = {
+        severity: "warning",
+        text: `A licença não é verificada online há algum tempo. Conecte-se à internet nos próximos ${licenseStatus.diasParaRevalidar} dia(s) para evitar o bloqueio.`,
+      };
+    }
 
     const ComponentToRender = isAccessDenied
       ? () => (
@@ -706,6 +729,15 @@ function App() {
               overflowY: "auto",
             }}
           >
+            {licenseWarning && !licenseBannerClosed && (
+              <Alert
+                severity={licenseWarning.severity}
+                onClose={() => setLicenseBannerClosed(true)}
+                sx={{ mb: 2 }}
+              >
+                {licenseWarning.text}
+              </Alert>
+            )}
             <ComponentToRender />
           </Box>
         </Box>
