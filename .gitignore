@@ -1,3 +1,8 @@
 node_modules
 .vs
 dist_electron
+# Segredos do licenciamento — NUNCA versionar
+*.key
+*.pem
+license-server/data/
+license-server/trials.json

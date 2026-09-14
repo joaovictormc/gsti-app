@@ -4,6 +4,7 @@
   "description": "Gestor de Serviços de TI",
   "main": "main.js",
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "dev:renderer": "npm run dev --prefix renderer",
     "dev:main": "electron .",
     "build": "npm run build --prefix renderer",

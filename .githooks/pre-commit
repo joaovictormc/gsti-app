@@ -1,0 +1,17 @@
+#!/bin/sh
+# Bloqueia commits que contenham chaves privadas ou arquivos de chave.
+# Ativado automaticamente pelo script "prepare" do package.json (npm install).
+
+bad_files=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(key|pem)$|(^|/)license-server/data/')
+if [ -n "$bad_files" ]; then
+  echo "[pre-commit] BLOQUEADO: arquivos de chave/dados de licença no commit:" >&2
+  echo "$bad_files" | sed 's/^/  - /' >&2
+  echo "Remova com: git restore --staged <arquivo>" >&2
+  exit 1
+fi
+
+if git diff --cached -U0 --diff-filter=ACMR | grep -q -E '^\+.*-----BEGIN ([A-Z]+ )?PRIVATE KEY-----'; then
+  echo "[pre-commit] BLOQUEADO: conteúdo de chave privada (BEGIN PRIVATE KEY) no commit." >&2
+  exit 1
+fi
+exit 0

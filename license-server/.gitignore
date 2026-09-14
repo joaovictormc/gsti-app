@@ -1,4 +1,7 @@
 node_modules/
+# Chaves, banco e dados de clientes ficam só no servidor
+data/
+*.key
+*.pem
 trials.json
-public.key
-private.key
+clientes.json
