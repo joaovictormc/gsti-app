@@ -244,19 +244,27 @@ de `hostname + MAC`. Ele não muda com adaptadores de rede.
 ## 12. Fases de implementação
 
 ### Fase 0 — Correções imediatas (antes de qualquer distribuição)
-- [ ] Remover `private.key`/`public.key` do repositório e restaurar `.gitignore`.
-- [ ] Regenerar as chaves no servidor, atualizar `LICENSE_PUBLIC_KEY`, gerar build nova.
-- [ ] Trava de pre-commit contra chaves privadas.
+- [x] Remover `private.key`/`public.key` do repositório e restaurar `.gitignore`.
+- [ ] Regenerar as chaves no servidor (`node gerar-chaves.js`), colar a pública em
+      `license-config.js`, gerar build nova. *(depende do servidor)*
+- [x] Trava de pre-commit contra chaves privadas (`.githooks/pre-commit`).
 
-### Fase 1 — Servidor v2 (base)
-- [ ] Banco + migrações; importar `clientes.json` atual.
-- [ ] Chaves de licença, `ativacoes` com `max_maquinas`, `kid` nos tokens.
-- [ ] Endpoints `/v2/*`, rate limit, `/health` com `kids`.
-- [ ] Painel admin mínimo (CLI ou página simples) para emitir/revogar.
+### Fase 1 — Servidor v2 (base) — implementada em 2026-09-13
+- [x] Banco SQLite (`node:sqlite`) + migrações; importação do `clientes.json` (`admin.js importar-clientes`).
+- [x] Chaves de licença (hash no banco), `ativacoes` com `max_maquinas`, `kid` nos tokens.
+- [x] Endpoints `/v2/*`, rate limit, `/health` com `kids`; rotas v1 respondem 410.
+- [x] CLI admin (`admin.js`): emitir, listar, ver, estender, suspender, revogar, máquinas, trials, auditoria.
+- [ ] Painel admin web (opcional, futuro).
 
-### Fase 2 — App v2
-- [ ] Itens da seção 8 + ID de máquina estável.
-- [ ] Compatibilidade com tokens v1 durante a transição.
+### Fase 2 — App v2 — implementada em 2026-09-13
+- [x] Ativação por chave, verificação de `kid`/computador/`revalidarAte`, token renovado na revalidação
+      (`license-manager.js` + `license-config.js`).
+- [x] ID de máquina estável (MachineGuid / machine-id / IOPlatformUUID).
+- [x] Diagnóstico de chave desconhecida, aviso de vencimento e de revalidação, transferência de computador.
+- [x] URL do servidor removida das Configurações (override só via `config.json`).
+- [x] Configuração inicial: opção **"Já tenho cadastro"** para reinstalação com banco existente.
+- [x] ~~Compatibilidade com tokens v1~~ — descartada: a única chave v1 foi vazada, então
+      tokens v1 não são confiáveis. Apps v1 recebem "versão desatualizada".
 
 ### Fase 3 — Pagamentos
 - [ ] Integração com o gateway escolhido (sandbox → produção).

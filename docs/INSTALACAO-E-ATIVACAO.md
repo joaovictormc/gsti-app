@@ -17,7 +17,7 @@ do dia a dia, veja [MANUAL-DE-USO.md](./MANUAL-DE-USO.md).
 3. [Instalar o aplicativo](#3-instalar-o-aplicativo)
 4. [Primeiro acesso — assistente de configuração](#4-primeiro-acesso--assistente-de-configuração)
 5. [Como contratar](#5-como-contratar)
-6. [Como ativar e reativar](#6-como-ativar-e-reativar)
+6. [Como ativar, reativar e transferir](#6-como-ativar-reativar-e-transferir)
 7. [Operação do servidor de licenças (vendedor)](#7-operação-do-servidor-de-licenças-vendedor)
 8. [Backup e manutenção](#8-backup-e-manutenção)
 9. [Solução de problemas](#9-solução-de-problemas)
@@ -82,11 +82,11 @@ do dia a dia, veja [MANUAL-DE-USO.md](./MANUAL-DE-USO.md).
 Na primeira execução, o app abre um assistente com **3 passos**:
 
 ### Passo 1 — Ativação do Sistema
-- Informe o **e-mail** e escolha:
-  - **Ativar Licença** — para quem já contratou (e-mail cadastrado no servidor).
-  - **Testar 7 dias grátis** — inicia um período de teste (uma vez por
-    e-mail/máquina).
-- Requer internet. Em caso de sucesso, o assistente avança.
+- **Tenho uma chave**: informe a **chave de licença** recebida por e-mail
+  (`GSTI-XXXX-XXXX-XXXX-XXXX`). Pode colar com ou sem hífens.
+- **Testar 7 dias grátis**: informe um e-mail (uma vez por e-mail e por computador).
+- Requer internet. Em caso de sucesso, o assistente avança. Se a licença já estiver
+  ativa (ex.: o app foi fechado no meio do assistente), este passo é pulado.
 
 ### Passo 2 — Configuração do Banco de Dados
 - **Host**: `localhost` (banco local).
@@ -95,11 +95,16 @@ Na primeira execução, o app abre um assistente com **3 passos**:
 - **Usuário** e **Senha** do PostgreSQL.
 - Clique em **Testar Conexão**.
 
-### Passo 3 — Criar Conta de Administrador
-- **Nome**, **e-mail**, **login**, **senha** (mín. 6 caracteres) e confirmação.
-- Clique em **Salvar Configuração e Criar Admin**.
+### Passo 3 — Acesso ao Sistema
+Escolha uma das opções:
 
-Concluído o passo 3, o app cria o usuário administrador e está pronto para uso.
+- **Criar novo administrador** — primeira instalação, banco vazio: informe
+  **nome**, **e-mail**, **login**, **senha** (mín. 6 caracteres) e confirmação, e
+  clique em **Salvar Configuração e Criar Admin**.
+- **Já tenho cadastro** — reinstalação ou novo computador usando um banco que já
+  tem usuários: informe **login e senha** de um usuário existente e clique em
+  **Validar e Entrar**. Nenhum dado é alterado e o sistema já abre logado.
+
 As configurações ficam salvas em `config.json` (na pasta de dados do usuário).
 
 > 🖼️ *Telas do assistente: ativação → banco → administrador.*
@@ -109,59 +114,52 @@ As configurações ficam salvas em `config.json` (na pasta de dados do usuário)
 ## 5. Como contratar
 
 **Modelo atual:**
-1. O cliente entra em contato (suporte@labapp.com.br) e informa o **e-mail** que
-   usará para ativar.
-2. O e-mail é **cadastrado na base de clientes** do servidor de licenças
-   (`clientes.json`, com `"ativo": true`).
-3. A partir daí, o cliente consegue usar **Ativar Licença** com esse e-mail.
+1. O cliente entra em contato (suporte@labapp.com.br).
+2. O vendedor emite a licença no servidor:
+   `node admin.js emitir --email cliente@empresa.com --plano anual --dias 365`
+3. A **chave de licença** exibida é enviada ao cliente por e-mail.
 
-> O fluxo automatizado de compra (landing page → pagamento → cadastro e ativação
-> automáticos) está planejado para a próxima versão — ver
-> [PROXIMA-VERSAO.md](./PROXIMA-VERSAO.md).
+> O fluxo automatizado (landing page → pagamento → licença e e-mail automáticos)
+> está planejado em [PLANO-LICENCIAMENTO-E-VENDAS.md](./PLANO-LICENCIAMENTO-E-VENDAS.md).
 
 ---
 
-## 6. Como ativar e reativar
+## 6. Como ativar, reativar e transferir
 
-- **Ativação definitiva**: e-mail cadastrado como cliente → licença sem prazo
-  (ou com a validade definida no cadastro).
-- **Teste (trial)**: 7 dias, uma vez por e-mail/máquina.
-- **Verificação**: o app valida a licença **offline** (assinatura digital) a cada
-  abertura e **revalida online** quando há internet (para refletir
-  cancelamentos/renovações).
-- **Reativação**: se a licença **expirar** ou for **revogada**, o app abre a tela
-  de **Ativação necessária** antes do login, permitindo ativar novamente ou
-  iniciar/retomar um teste.
-- **Status**: visível em **Configurações → Licenciamento e Ativação** (tipo,
-  validade, dias restantes) — e ali também é possível ajustar a **URL do servidor
-  de ativação**.
+- **Ativação**: chave de licença → vincula a licença a **este computador**
+  (por padrão, 1 computador por licença).
+- **Teste (trial)**: 7 dias, uma vez por e-mail/computador.
+- **Verificação**: o app valida a licença **offline** a cada abertura (assinatura
+  digital + computador + validade) e **revalida online** ao abrir e a cada 6 horas.
+  Sem conseguir revalidar por **30 dias**, pede conexão com a internet.
+- **Avisos**: faltando 15 dias ou menos para vencer, aparece um aviso no topo do
+  sistema.
+- **Reativação**: licença expirada, suspensa, revogada ou sem revalidação abre a
+  tela **Ativação necessária** antes do login.
+- **Transferir para outro computador**: **Configurações → Licenciamento e
+  Ativação → Transferir para outro computador**. Depois, ative com a mesma chave no
+  computador novo. Se o computador antigo não estiver mais disponível, o suporte
+  libera a vaga (`node admin.js desativar-maquina`).
+- **Status**: em **Configurações → Licenciamento e Ativação** (plano, validade,
+  computadores em uso, última verificação).
 
-> Como a validade é verificada também offline, atrasar o relógio do sistema é
-> detectado e bloqueia o uso até uma revalidação online.
+> Atrasar o relógio do sistema é detectado e bloqueia o uso até uma revalidação online.
 
 ---
 
 ## 7. Operação do servidor de licenças (vendedor)
 
-O servidor fica em **`license-server/`** (Node + Express). Resumo — detalhes
-completos em [`license-server/README.md`](../license-server/README.md):
+O servidor fica em **`license-server/`** (Node 22.13+ e Express, banco SQLite).
+Guia completo — instalação, systemd, administração, rotação de chaves e backup —
+em [`license-server/README.md`](../license-server/README.md).
 
-1. **Gerar as chaves** (uma vez): `node gerar-chaves.js` cria `private.key`
-   (fica só no servidor) e imprime a **chave pública**, que deve ser colada em
-   `LICENSE_PUBLIC_KEY` no `main.js` do app.
-2. **Hospedar** o servidor em um host sempre ligado, com **HTTPS** (VPS, Render,
-   Railway ou a hospedagem própria). Configurar a URL pública no app
-   (`DEFAULT_LICENSE_SERVER` no `main.js` ou em Configurações).
-3. **Gerenciar clientes** editando `clientes.json`:
-   - Adicionar: incluir o e-mail com `"ativo": true`.
-   - **Revogar**: `"ativo": false` (vale na próxima revalidação do app).
-   - Licença com prazo: definir `"validade"` (data ISO) ou `null` para sem
-     expiração.
-4. **Endpoints**: `POST /ativar`, `POST /trial`, `POST /validar`, `GET /health`.
-
-> ⚠️ **Importante (produção):** faça **backup do `private.key`** — perdê-lo
-> invalida todas as licenças. As chaves embutidas atualmente no repositório são
-> de teste; **regenere** antes de distribuir.
+Resumo:
+1. `npm ci --omit=dev` e `node gerar-chaves.js` (uma vez). Cole a chave pública
+   impressa em `publicKeys` no **`license-config.js`** do app e ajuste `serverUrl`.
+2. Hospede o servidor em um host sempre ligado (HTTPS em produção).
+3. Gerencie licenças com `node admin.js` (emitir, estender, suspender, revogar,
+   liberar computador).
+4. Faça **backup da pasta `license-server/data/`** (chaves + banco).
 
 ---
 
@@ -182,7 +180,11 @@ completos em [`license-server/README.md`](../license-server/README.md):
 | "Usuário ou senha do banco inválidos" (erro `28P01`) | Credenciais do PostgreSQL incorretas no passo 2. |
 | "Banco de dados não encontrado" (erro `3D000`) | O banco (ex.: `gsti_db`) não foi criado. Crie-o e rode o `script.sql`. |
 | "Não foi possível conectar ao Host/Porta" | PostgreSQL não está rodando, porta errada, ou firewall. |
-| "Não foi possível contatar o servidor de ativação" | Sem internet ou URL do servidor incorreta (Configurações → Licenciamento). |
+| "Não foi possível contatar o servidor de licenças" | Sem internet, servidor desligado ou `serverUrl` incorreto (`license-config.js` ou `license.serverUrl` no `config.json`). |
+| "Chave de licença inválida" | Chave digitada errada ou licença não emitida no servidor. |
+| "Esta licença já está em uso no limite de N computador(es)" | Transfira a licença no outro computador ou peça ao suporte para liberar a vaga. |
+| "…chave que esta versão do GSTI App não reconhece" | Build com `license-config.js` desatualizado em relação ao servidor. Instale a versão mais recente. |
+| "Este banco não possui cadastro do GSTI App" (Já tenho cadastro) | Banco errado ou vazio — confira o nome do banco ou use **Criar novo administrador**. |
 | "Ativação necessária" ao abrir | Licença expirada/revogada — reative na tela exibida. |
 | Tabelas faltando / erro de coluna inexistente | Rode o `script.sql` no banco; abra o app uma vez para aplicar as migrações automáticas. |
 

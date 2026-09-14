@@ -22,21 +22,16 @@ cliente, veja [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
 
 ## 2. Licenciamento (crítico)
 
-> As chaves embutidas no repositório são **de teste**. Distribuir sem regenerar
-> compromete a segurança do licenciamento.
+> Detalhes em [`license-server/README.md`](../license-server/README.md).
 
-- [ ] **Regenerar as chaves Ed25519** no servidor: `node gerar-chaves.js` em
-  `license-server/`. Isso cria o `private.key` (fica **só no servidor**) e imprime a
-  **chave pública**.
-- [ ] **Colar a nova chave pública** em `LICENSE_PUBLIC_KEY` no `main.js` (≈ linha 48).
-- [ ] **Fazer backup seguro do `private.key`** — perdê-lo **invalida todas as licenças**
-  já emitidas.
-- [ ] Definir o **`DEFAULT_LICENSE_SERVER`** real, com **HTTPS**, no `main.js`
-  (≈ linha 53) — atualmente `https://licenca.labapp.com.br`.
-- [ ] Garantir o **servidor de licenças hospedado e sempre ligado** (responde em
-  `/ativar`, `/trial`, `/validar`, `/health`).
-- [ ] Confirmar que o **e-mail do cliente** está cadastrado em `clientes.json`
-  (`"ativo": true`) no servidor — fluxo de contratação atual.
+- [ ] **Chave de assinatura gerada no servidor** (`node gerar-chaves.js`), com a
+  chave pública colada em `publicKeys` no **`license-config.js`**.
+- [ ] Conferir: `curl <servidor>/health` lista em `kids` a mesma chave presente no
+  `license-config.js` (se não bater, o app mostra "chave não reconhecida").
+- [ ] **Backup seguro de `license-server/data/`** (chaves + `licencas.db`).
+- [ ] **`serverUrl`** correto no `license-config.js` (HTTPS em produção).
+- [ ] Servidor de licenças **ligado e acessível** a partir das máquinas dos clientes.
+- [ ] Licença do cliente emitida (`node admin.js emitir ...`) e chave enviada.
 
 ---
 
@@ -52,9 +47,11 @@ cliente, veja [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
   (dívida técnica registrada em [PROXIMA-VERSAO.md](./PROXIMA-VERSAO.md)).
 - [ ] Confirmar que **`license-server/` NÃO é empacotado** — ele não está no array
   `build.files` do `package.json` (apenas `main.js`, `preload.js`, `pdf-worker.js`,
-  `package.json` e `renderer/dist/**`).
-- [ ] Confirmar que `private.key`, `public.key` e `trials.json` estão no `.gitignore`
-  do servidor (não vão para o repositório nem para a release).
+  `license-manager.js`, `license-config.js`, `package.json` e `renderer/dist/**`).
+- [ ] Hook de pre-commit ativo (`git config core.hooksPath` → `.githooks`) e
+  nenhuma chave privada no repositório.
+- [ ] **Instalador não é gerado?** (só `win-unpacked`): ative o *Modo de
+  Desenvolvedor* do Windows — o electron-builder precisa criar links simbólicos.
 
 ---
 
