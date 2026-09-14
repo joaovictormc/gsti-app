@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "admin": "node admin.js",
-    "gerar-chaves": "node gerar-chaves.js"
+    "gerar-chaves": "node gerar-chaves.js",
+    "build:admin": "npm --prefix admin-ui ci && npm --prefix admin-ui run build"
   },
   "author": "João Victor Maciel Campos",
   "license": "ISC",
