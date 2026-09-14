@@ -1,37 +1,62 @@
 /**
- * Gera o par de chaves Ed25519 do servidor de licenças.
+ * Gera um novo par de chaves Ed25519 identificado por "kid".
  *
- * Uso: node gerar-chaves.js
+ * Uso:
+ *   node gerar-chaves.js              # kid = data de hoje (ex.: 2026-09-13)
+ *   node gerar-chaves.js <kid>        # kid personalizado
+ *   node gerar-chaves.js --publicas   # só imprime as chaves públicas existentes
  *
- * - Salva private.key (NUNCA versionar / NUNCA enviar ao cliente).
- * - Salva public.key e imprime a chave pública para você colar em main.js
- *   (constante LICENSE_PUBLIC_KEY do app).
- *
- * ATENÇÃO: ao regenerar as chaves, todas as licenças já emitidas deixam de
- * valer. Faça isso apenas na configuração inicial.
+ * A chave privada fica em data/keys/<kid>.key (NUNCA versionar). A mais recente
+ * passa a assinar os novos tokens; as anteriores continuam validando tokens já
+ * emitidos. Cole o trecho impresso em license-config.js (raiz do app) e gere
+ * uma nova build.
  */
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { KEYS_DIR } = require("./lib/config");
+const { KID_RE } = require("./lib/keys");
 
-const PRIVATE_KEY_PATH = path.join(__dirname, "private.key");
-const PUBLIC_KEY_PATH = path.join(__dirname, "public.key");
+function imprimirPublicas() {
+  const arquivos = fs.existsSync(KEYS_DIR) ? fs.readdirSync(KEYS_DIR).filter((f) => f.endsWith(".key")).sort() : [];
+  if (!arquivos.length) {
+    console.log("Nenhuma chave encontrada.");
+    return;
+  }
+  console.log("\n=== Cole em publicKeys no license-config.js do app ===\n");
+  for (const arquivo of arquivos) {
+    const kid = arquivo.slice(0, -4);
+    const pub = crypto
+      .createPublicKey(crypto.createPrivateKey(fs.readFileSync(path.join(KEYS_DIR, arquivo), "utf8")))
+      .export({ type: "spki", format: "pem" })
+      .trim();
+    console.log(`    "${kid}": \`${pub}\`,`);
+  }
+  console.log("");
+}
 
-if (fs.existsSync(PRIVATE_KEY_PATH)) {
-  console.error(
-    "[ABORTADO] private.key já existe. Apague-o manualmente se realmente quiser regenerar (isso invalida todas as licenças)."
-  );
+const arg = process.argv[2];
+if (arg === "--publicas") {
+  imprimirPublicas();
+  process.exit(0);
+}
+
+const kid = arg || new Date().toISOString().slice(0, 10);
+if (!KID_RE.test(kid)) {
+  console.error("[ABORTADO] kid inválido (use letras, números, ponto, hífen ou sublinhado).");
+  process.exit(1);
+}
+const destino = path.join(KEYS_DIR, `${kid}.key`);
+if (fs.existsSync(destino)) {
+  console.error(`[ABORTADO] ${destino} já existe. Escolha outro kid.`);
   process.exit(1);
 }
 
-const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
-const pub = publicKey.export({ type: "spki", format: "pem" });
-const priv = privateKey.export({ type: "pkcs8", format: "pem" });
+fs.mkdirSync(KEYS_DIR, { recursive: true, mode: 0o700 });
+const { privateKey } = crypto.generateKeyPairSync("ed25519");
+fs.writeFileSync(destino, privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });
 
-fs.writeFileSync(PRIVATE_KEY_PATH, priv);
-fs.writeFileSync(PUBLIC_KEY_PATH, pub);
-
-console.log("Chaves geradas com sucesso.");
-console.log("\n=== CHAVE PÚBLICA (cole em LICENSE_PUBLIC_KEY no main.js do app) ===\n");
-process.stdout.write(pub);
-console.log("\nprivate.key salvo apenas no servidor. NÃO versione nem distribua.");
+console.log(`Chave "${kid}" gerada em ${destino}`);
+console.log("Faça BACKUP desse arquivo em local seguro (perdê-lo invalida as licenças assinadas com ele).");
+imprimirPublicas();
+console.log("Reinicie o servidor para passar a assinar com a chave nova.");

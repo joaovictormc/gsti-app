@@ -1,15 +1,19 @@
 {
   "name": "gsti-license-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Servidor de ativação de licenças do GSTI App",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "admin": "node admin.js",
     "gerar-chaves": "node gerar-chaves.js"
   },
   "author": "João Victor Maciel Campos",
   "license": "ISC",
   "dependencies": {
     "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }

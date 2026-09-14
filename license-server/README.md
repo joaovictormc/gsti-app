@@ -1,67 +1,138 @@
-# Servidor de Ativação — GSTI App
+# Servidor de Licenças — GSTI App (v2)
 
-Servidor Express que emite e valida licenças do GSTI App. Mantém a **chave
-privada** (assina as licenças) e a lista de **clientes pagantes**. O app cliente
-embute apenas a **chave pública** e verifica as licenças offline; a revalidação
-online permite **revogação**.
+Emite e valida as licenças do GSTI App. Guarda as **chaves privadas** (assinam
+as licenças) e o **banco de licenças**. O app embute só as **chaves públicas**
+(`license-config.js`) e verifica as licenças offline; a revalidação online aplica
+revogação, suspensão e renovação.
 
 ## Como funciona
 
-- Cada licença é um token assinado (Ed25519) com `{ email, tipo, validade, maquina }`.
-- `tipo: "full"` (definitiva, sem validade) ou `tipo: "trial"` (7 dias).
-- O app verifica a assinatura com a chave pública embutida — não dá para forjar
-  sem a chave privada, que **só existe neste servidor**.
+- O cliente recebe uma **chave de licença** `GSTI-XXXX-XXXX-XXXX-XXXX` e ativa no app.
+- Cada ativação ocupa uma vaga de **computador** (`max_maquinas`, padrão 1). O
+  cliente libera a vaga em *Configurações → Licença → Transferir*.
+- O servidor devolve um **token assinado (Ed25519)** com `kid` (id da chave),
+  plano, validade, computador e `revalidarAte` (janela offline, padrão 30 dias).
+- A cada revalidação o app recebe um token renovado. Sem revalidar dentro da
+  janela, o app pede conexão.
+- **Trial**: 7 dias, uma vez por e-mail e por computador.
 
-## Setup
+## Requisitos
+
+- **Node.js 22.13 ou superior** (usa o SQLite nativo `node:sqlite`, sem compilar nada).
+- Express (única dependência).
+
+## Instalação
 
 ```bash
 cd license-server
-npm install
-node gerar-chaves.js          # gera private.key + public.key (1x só!)
+npm ci --omit=dev
+node gerar-chaves.js           # cria data/keys/<data>.key e imprime a chave pública
+chmod 600 data/keys/*.key
 ```
 
-Copie a **chave pública** impressa e cole em `main.js` do app, na constante
-`LICENSE_PUBLIC_KEY`. Depois rode o servidor:
+Cole o trecho impresso em `publicKeys` no **`license-config.js`** (raiz do app),
+ajuste `serverUrl` e gere uma build nova. Depois:
 
 ```bash
-npm start                     # porta 3030 (ou defina PORT)
+npm start                      # porta 3030
 ```
 
-Publique em um host sempre ligado (VPS, Render, Railway, ou sua hospedagem) e
-configure a URL pública no app (constante `DEFAULT_LICENSE_SERVER` em `main.js`,
-ou no `config.json` do cliente em `license.serverUrl`). Use **HTTPS** em produção.
+### systemd (Ubuntu)
 
-## Gerenciar clientes
+```ini
+[Unit]
+Description=Servidor de licencas GSTI
+After=network.target
 
-Edite `clientes.json`:
+[Service]
+User=SEU_USUARIO
+WorkingDirectory=/caminho/gsti-app/license-server
+ExecStart=/usr/bin/node server.js
+Environment=PORT=3030
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--disable-warning=ExperimentalWarning
+Restart=always
 
-```json
-[
-  { "email": "cliente@empresa.com", "ativo": true, "validade": null }
-]
+[Install]
+WantedBy=multi-user.target
 ```
 
-- **Adicionar cliente**: inclua o e-mail com `"ativo": true`.
-- **Revogar**: mude para `"ativo": false` (vale na próxima revalidação do app).
-- **Licença definitiva com prazo**: defina `"validade"` como uma data ISO
-  (`"2027-01-01T00:00:00.000Z"`); `null` = sem expiração.
+### Variáveis de ambiente
 
-O arquivo é lido a cada requisição — não precisa reiniciar o servidor.
+| Variável | Padrão | Uso |
+|----------|--------|-----|
+| `PORT` / `HOST` | `3030` / `0.0.0.0` | Onde escutar |
+| `DATA_DIR` | `./data` | Banco (`licencas.db`) e chaves (`keys/`) |
+| `TRIAL_DIAS` | `7` | Duração do teste |
+| `REVALIDAR_DIAS` | `30` | Janela offline do app |
+| `MAX_MAQUINAS_PADRAO` | `1` | Computadores por licença nova |
+| `ACTIVE_KID` | mais recente | Força a chave que assina novos tokens |
+| `TRUST_PROXY` | — | Defina (ex.: `loopback`) atrás de proxy/túnel, para o rate limit ver o IP real |
+
+## Administração
+
+```bash
+node admin.js --help
+
+# Vender / cortesia
+node admin.js emitir --email cliente@empresa.com --nome "Empresa X" --plano anual --dias 365
+node admin.js emitir --email amigo@x.com --plano cortesia --maquinas 2          # sem expiração
+
+node admin.js listar [--email parte-do-email]
+node admin.js ver <ref>                       # detalhes + computadores
+node admin.js estender <ref> --dias 365       # renovação
+node admin.js suspender <ref> --motivo "Pagamento em atraso"
+node admin.js reativar <ref>
+node admin.js revogar <ref> --motivo "Estorno"
+node admin.js maquinas <ref> 3                # novo limite de computadores
+node admin.js desativar-maquina <ativacaoId>  # libera vaga (cliente perdeu o PC)
+node admin.js trials / liberar-trial --email x@y.com
+node admin.js importar-clientes clientes.json # migra a base da v1
+node admin.js auditoria
+```
+
+`<ref>` é a chave completa ou o início do id mostrado em `listar`. A chave só é
+exibida na emissão (o banco guarda apenas o hash) — envie ao cliente na hora.
+
+Pode rodar com o servidor ligado.
 
 ## Endpoints
 
-| Método | Rota       | Corpo                | Resposta                          |
-|--------|------------|----------------------|-----------------------------------|
-| POST   | `/ativar`  | `{ email, maquina }` | `{ success, token, license }`     |
-| POST   | `/trial`   | `{ email, maquina }` | `{ success, token, license }`     |
-| POST   | `/validar` | `{ token }`          | `{ valido, motivo? }`             |
-| GET    | `/health`  | —                    | `{ ok: true }`                    |
+| Método | Rota | Corpo | Resposta |
+|--------|------|-------|----------|
+| POST | `/v2/ativar` | `{ chave, maquinaId, nomeMaquina, appVersao }` | `{ success, token, detalhes }` |
+| POST | `/v2/validar` | `{ token }` | `{ valido, token?, detalhes?, motivo? }` |
+| POST | `/v2/desativar` | `{ token }` | `{ success }` |
+| POST | `/v2/trial` | `{ email, maquinaId }` | `{ success, token }` |
+| GET | `/health` | — | `{ ok, versao, kids }` |
 
-## Arquivos
+As rotas da v1 (`/ativar`, `/trial`, `/validar`) respondem **410** avisando que
+o app está desatualizado. Há rate limit por IP em todas as rotas `/v2`.
 
-- `private.key` — chave privada (gitignored). **Nunca** versione nem distribua.
-- `public.key` — chave pública (cópia da que vai no app).
-- `clientes.json` — base de clientes pagantes.
-- `trials.json` — trials já emitidos (gerado automaticamente; gitignored).
+## Rotação de chaves
 
-Faça **backup do `private.key`**: perdê-lo invalida todas as licenças emitidas.
+1. `node gerar-chaves.js` (gera um novo `kid`; a chave antiga continua válida).
+2. Adicione a nova chave pública em `license-config.js`, **mantendo a antiga**, e
+   publique a build nova.
+3. Reinicie o servidor: novos tokens passam a usar a chave nova, e os apps
+   atualizados trocam o token na próxima revalidação.
+4. **Chave vazada:** apague `data/keys/<kid>.key`, remova-a do `license-config.js`
+   e publique a build — tokens com essa chave deixam de valer.
+
+`node gerar-chaves.js --publicas` reimprime as chaves públicas existentes.
+
+## Backup
+
+Faça backup de **`data/`** inteiro (chaves + `licencas.db`) em local seguro e
+separado. Perder as chaves invalida as licenças; perder o banco perde a base
+de clientes. Para cópia consistente com o servidor ligado:
+
+```bash
+sqlite3 data/licencas.db ".backup data/backup-$(date +%F).db"
+```
+
+## Segurança
+
+- `data/`, `*.key` e `*.pem` estão no `.gitignore`, e o hook `.githooks/pre-commit`
+  bloqueia commits com chaves privadas.
+- Nunca coloque chaves privadas no app nem no repositório.
