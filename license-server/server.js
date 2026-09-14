@@ -1,21 +1,24 @@
 /**
- * Servidor de licenças do GSTI App — v2.
+ * Plataforma GSTI App — servidor de licenças, vendas, site e área administrativa.
  *
- * Endpoints do app (com rate limit):
- *   POST /v2/ativar     { chave, maquinaId, nomeMaquina, appVersao } -> { success, token, detalhes }
- *   POST /v2/validar    { token }                                    -> { valido, token?, detalhes?, motivo? }
- *   POST /v2/desativar  { token }                                    -> { success }
- *   POST /v2/trial      { email, maquinaId }                         -> { success, token }
- *   GET  /health                                                     -> { ok, versao, kids }
+ *   /              landing page, páginas legais, checkout e portal do cliente
+ *   /v2/*          API do aplicativo (ativação, validação, transferência, trial)
+ *   /webhooks/*    notificações do Mercado Pago
+ *   /admin         painel da equipe (SPA em public/admin) + /admin/api
+ *   /health        verificação de saúde
  *
- * Dados em data/ (fora do git): licencas.db (SQLite) e keys/<kid>.key.
- * Administração: node admin.js --help
+ * Dados em data/ (fora do git): licencas.db, keys/, uploads/ e .env opcional.
+ * Primeiro acesso ao painel: node admin.js criar-usuario --email voce@x.com --nome "Seu Nome" --papeis admin
  */
+const fs = require("fs");
+const path = require("path");
 const express = require("express");
 const cfg = require("./lib/config");
 const keys = require("./lib/keys");
-const licencas = require("./lib/licencas");
+const vendas = require("./lib/vendas");
+const tarefas = require("./lib/tarefas");
 const { abrir } = require("./lib/db");
+const { cabecalhosSeguranca, csp, tratadorErros } = require("./lib/http");
 const { version } = require("./package.json");
 
 try {
@@ -25,91 +28,50 @@ try {
   process.exit(1);
 }
 abrir();
+vendas.semearOfertas();
 
 const app = express();
 app.disable("x-powered-by");
 if (cfg.TRUST_PROXY) app.set("trust proxy", cfg.TRUST_PROXY);
-app.use(express.json({ limit: "10kb" }));
-
-// --- Rate limit simples em memória (janela fixa por IP + rota) ---
-const janelas = new Map();
-function limitar(max, janelaMin) {
-  const janelaMs = janelaMin * 60000;
-  return (req, res, next) => {
-    const chave = `${req.ip}|${req.path}`;
-    const agora = Date.now();
-    let j = janelas.get(chave);
-    if (!j || j.reinicia <= agora) {
-      j = { n: 0, reinicia: agora + janelaMs };
-      janelas.set(chave, j);
-    }
-    if (++j.n > max) {
-      res.set("Retry-After", String(Math.ceil((j.reinicia - agora) / 1000)));
-      return res.status(429).json({
-        success: false,
-        valido: false,
-        error: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
-      });
-    }
-    next();
-  };
-}
-setInterval(() => {
-  const agora = Date.now();
-  for (const [k, j] of janelas) if (j.reinicia <= agora) janelas.delete(k);
-}, 60000).unref();
-
-// Converte erros de negócio em respostas HTTP.
-const rota = (fn) => (req, res) => {
-  try {
-    res.json(fn(req.body || {}));
-  } catch (e) {
-    if (e instanceof licencas.LicencaErro) {
-      return res.status(e.status).json({ success: false, codigo: e.codigo, error: e.message });
-    }
-    console.error(`[erro] ${req.method} ${req.path}:`, e);
-    res.status(500).json({ success: false, error: "Erro interno no servidor de licenças." });
-  }
-};
+app.use(cabecalhosSeguranca);
+app.use(express.json({ limit: "200kb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true, versao: version, kids: keys.kids() }));
 
-app.post(
-  "/v2/ativar",
-  limitar(10, 15),
-  rota((b) => {
-    const r = licencas.ativar(b);
-    console.log(`[ativar] licença …${r.detalhes.chaveFinal} (${r.detalhes.maquinasAtivas}/${r.detalhes.maxMaquinas} máquinas)`);
-    return { success: true, ...r };
-  })
-);
-
-app.post("/v2/validar", limitar(60, 15), rota((b) => licencas.validar(b)));
-
-app.post("/v2/desativar", limitar(10, 15), rota((b) => licencas.desativar(b)));
-
-app.post(
-  "/v2/trial",
-  limitar(5, 60),
-  rota((b) => {
-    const r = licencas.iniciarTrial(b);
-    console.log("[trial] teste iniciado");
-    return { success: true, ...r };
-  })
-);
+// API do aplicativo
+app.use("/v2", require("./routes/app-api"));
 
 // Rotas da v1 (tokens assinados com a chave antiga, que foi vazada e descartada).
-app.post(["/ativar", "/trial", "/validar"], (_req, res) =>
-  res.status(410).json({
-    success: false,
-    valido: false,
-    error: "Esta versão do GSTI App está desatualizada. Instale a versão mais recente.",
-    motivo: "Esta versão do GSTI App está desatualizada. Instale a versão mais recente.",
-  })
-);
+app.post(["/ativar", "/trial", "/validar"], (_req, res) => {
+  const msg = "Esta versão do GSTI App está desatualizada. Instale a versão mais recente.";
+  res.status(410).json({ success: false, valido: false, error: msg, motivo: msg });
+});
 
-app.use((_req, res) => res.status(404).json({ success: false, error: "Rota não encontrada." }));
+app.use("/webhooks", require("./routes/webhooks"));
+
+// Área administrativa
+app.use("/admin/api", require("./routes/admin-api"));
+const ADMIN_DIR = path.join(__dirname, "public", "admin");
+app.use("/admin", csp, express.static(ADMIN_DIR, { index: false, maxAge: "1h" }));
+app.get(/^\/admin(\/.*)?$/, csp, (_req, res) => {
+  const index = path.join(ADMIN_DIR, "index.html");
+  if (!fs.existsSync(index)) {
+    return res.status(503).type("text").send("Painel não compilado. Rode: npm run build:admin");
+  }
+  res.set("Cache-Control", "no-store").sendFile(index);
+});
+
+// Site público (landing, checkout, portal do cliente)
+app.use("/", require("./routes/site"));
+
+app.use((req, res) => {
+  if (req.accepts("html")) return res.status(404).type("html").send(require("./views/paginas").naoEncontrada());
+  res.status(404).json({ success: false, error: "Rota não encontrada." });
+});
+app.use(tratadorErros);
+
+if (cfg.JOBS) tarefas.iniciar();
 
 app.listen(cfg.PORT, cfg.HOST, () => {
-  console.log(`Servidor de licenças GSTI v${version} em ${cfg.HOST}:${cfg.PORT} (chave ativa: ${keys.kidAtivo()})`);
+  console.log(`GSTI plataforma v${version} em ${cfg.HOST}:${cfg.PORT} — ${cfg.PUBLIC_URL} (chave ativa: ${keys.kidAtivo()})`);
 });

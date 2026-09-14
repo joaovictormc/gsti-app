@@ -5,6 +5,7 @@
  */
 const fs = require("fs");
 const L = require("./lib/licencas");
+const auth = require("./lib/auth");
 
 const AJUDA = `
 Uso: node admin.js <comando> [opções]
@@ -25,6 +26,13 @@ Licenças
 Testes (trial)
   trials [--email E]               Lista testes emitidos
   liberar-trial --email E | --maquina ID   Permite um novo teste
+
+Equipe (área admin)
+  criar-usuario --email E --nome N [--papeis admin,licencas,financeiro,conteudo]
+                                   Cria usuário do painel e imprime a senha temporária
+  usuarios                         Lista usuários do painel
+  redefinir-senha --email E        Gera nova senha temporária (desbloqueia o login)
+  resetar-2fa --email E            Remove a verificação em duas etapas
 
 Outros
   importar-clientes <clientes.json>  Emite licenças para os clientes ativos do formato v1
@@ -130,6 +138,25 @@ function executar() {
         const r = L.emitirLicenca({ email: c.email, ate: c.validade || undefined, observacao: "importado do clientes.json (v1)" });
         console.log(`${r.email}: ${r.chave}`);
       }
+      break;
+    }
+    case "criar-usuario": {
+      const r = auth.criarUsuario({ email: op.email, nome: op.nome, papeis: String(op.papeis || "admin").split(",").map((p) => p.trim()) }, "cli");
+      console.log(`
+Usuário criado: ${r.usuario.email} (${r.usuario.papeis.join(", ")})`);
+      console.log(`Senha temporária: ${r.senhaTemporaria}   <- troque no primeiro acesso (Minha conta)
+`);
+      break;
+    }
+    case "usuarios":
+      console.table(auth.listarUsuarios().map((u) => ({ id: u.id, nome: u.nome, email: u.email, papeis: u.papeis.join(","), ativo: u.ativo, "2fa": u.totpAtivo })));
+      break;
+    case "redefinir-senha":
+    case "resetar-2fa": {
+      const u = auth.listarUsuarios().find((x) => x.email === L.normEmail(op.email));
+      if (!u) throw new Error("Usuário não encontrado.");
+      if (cmd === "redefinir-senha") console.log(`Nova senha temporária: ${auth.redefinirSenha(u.id, "cli").senhaTemporaria}`);
+      else { auth.resetar2fa(u.id, "cli"); console.log("Verificação em duas etapas removida."); }
       break;
     }
     case "auditoria":

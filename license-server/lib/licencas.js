@@ -10,13 +10,7 @@ const DIA_MS = 86400000;
 const ALFABETO = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford Base32 (sem I, L, O, U)
 const PLANOS = ["mensal", "anual", "vitalicia", "cortesia"];
 
-class LicencaErro extends Error {
-  constructor(codigo, mensagem, status = 400) {
-    super(mensagem);
-    this.codigo = codigo;
-    this.status = status;
-  }
-}
+const { LicencaErro } = require("./erros");
 
 const agoraIso = () => new Date().toISOString();
 const normEmail = (e) => String(e || "").trim().toLowerCase();
@@ -336,6 +330,18 @@ function definirMaxMaquinas(ref, max, ator = "admin") {
   return licencaComCliente(lic.id);
 }
 
+// Gera uma nova chave para a licença (a anterior deixa de ativar; ativações atuais continuam).
+function regenerarChave(ref, ator = "admin") {
+  const lic = resolverLicenca(ref);
+  const chave = gerarChave();
+  const canonica = canonizarChave(chave);
+  abrir()
+    .prepare("UPDATE licencas SET chave_hash = ?, chave_final = ?, atualizado_em = ? WHERE id = ?")
+    .run(hashChave(canonica), canonica.slice(-4), agoraIso(), lic.id);
+  auditar(ator, "regenerar_chave", lic.id);
+  return { id: lic.id, chave };
+}
+
 function listarLicencas({ email } = {}) {
   const db = abrir();
   const sql = `SELECT l.id, c.email, l.plano, l.status, l.chave_final, l.valida_ate, l.max_maquinas,
@@ -402,4 +408,10 @@ module.exports = {
   listarTrials,
   liberarTrial,
   listarAuditoria,
+  regenerarChave,
+  licencaComCliente,
+  detalhes,
+  auditar,
+  normEmail,
+  emailValido,
 };

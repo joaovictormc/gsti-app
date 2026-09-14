@@ -65,6 +65,175 @@ const MIGRACOES = [
     criado_em TEXT NOT NULL
   );
   `,
+
+  // 2 — área admin, vendas (Mercado Pago), conteúdo do site e portal do cliente
+  `
+  ALTER TABLE clientes ADD COLUMN telefone TEXT;
+  CREATE INDEX ix_auditoria_alvo ON auditoria(alvo);
+
+  CREATE TABLE admin_usuarios (
+    id             INTEGER PRIMARY KEY,
+    nome           TEXT NOT NULL,
+    email          TEXT NOT NULL UNIQUE,
+    senha_hash     TEXT NOT NULL,
+    papeis         TEXT NOT NULL DEFAULT '[]',
+    ativo          INTEGER NOT NULL DEFAULT 1,
+    totp_secret    TEXT,
+    totp_ativo     INTEGER NOT NULL DEFAULT 0,
+    falhas_login   INTEGER NOT NULL DEFAULT 0,
+    bloqueado_ate  TEXT,
+    ultimo_login_em TEXT,
+    criado_em      TEXT NOT NULL,
+    atualizado_em  TEXT NOT NULL
+  );
+
+  -- Sessões de admin e de cliente (id = hash do token do cookie)
+  CREATE TABLE sessoes (
+    id          TEXT PRIMARY KEY,
+    tipo        TEXT NOT NULL CHECK (tipo IN ('admin', 'admin_2fa', 'cliente')),
+    usuario_id  INTEGER,
+    cliente_id  INTEGER,
+    csrf        TEXT NOT NULL,
+    ip          TEXT,
+    user_agent  TEXT,
+    criado_em   TEXT NOT NULL,
+    expira_em   TEXT NOT NULL
+  );
+  CREATE INDEX ix_sessoes_expira ON sessoes(expira_em);
+
+  CREATE TABLE links_magicos (
+    token_hash  TEXT PRIMARY KEY,
+    cliente_id  INTEGER NOT NULL REFERENCES clientes(id),
+    criado_em   TEXT NOT NULL,
+    expira_em   TEXT NOT NULL,
+    usado_em    TEXT
+  );
+
+  -- Ofertas exibidas no site (preços em centavos)
+  CREATE TABLE ofertas (
+    id              TEXT PRIMARY KEY,
+    plano           TEXT NOT NULL CHECK (plano IN ('anual', 'vitalicia')),
+    modalidade      TEXT NOT NULL CHECK (modalidade IN ('avulso', 'assinatura')),
+    nome            TEXT NOT NULL,
+    descricao       TEXT,
+    preco_centavos  INTEGER NOT NULL,
+    parcelas_max    INTEGER NOT NULL DEFAULT 1,
+    max_maquinas    INTEGER NOT NULL DEFAULT 1,
+    destaque        INTEGER NOT NULL DEFAULT 0,
+    ativo           INTEGER NOT NULL DEFAULT 1,
+    ordem           INTEGER NOT NULL DEFAULT 0,
+    atualizado_em   TEXT NOT NULL
+  );
+
+  CREATE TABLE pedidos (
+    id                TEXT PRIMARY KEY,
+    cliente_id        INTEGER NOT NULL REFERENCES clientes(id),
+    oferta_id         TEXT NOT NULL,
+    plano             TEXT NOT NULL,
+    modalidade        TEXT NOT NULL,
+    tipo              TEXT NOT NULL CHECK (tipo IN ('nova', 'renovacao')),
+    valor_centavos    INTEGER NOT NULL,
+    status            TEXT NOT NULL CHECK (status IN ('pendente', 'pago', 'cancelado', 'reembolsado', 'contestado', 'expirado')),
+    licenca_id        TEXT REFERENCES licencas(id),
+    mp_preference_id  TEXT,
+    mp_preapproval_id TEXT,
+    checkout_url      TEXT,
+    pago_em           TEXT,
+    criado_em         TEXT NOT NULL,
+    atualizado_em     TEXT NOT NULL
+  );
+  CREATE INDEX ix_pedidos_cliente ON pedidos(cliente_id);
+  CREATE INDEX ix_pedidos_status ON pedidos(status);
+  CREATE INDEX ix_pedidos_preapproval ON pedidos(mp_preapproval_id);
+
+  CREATE TABLE pagamentos (
+    id              INTEGER PRIMARY KEY,
+    pedido_id       TEXT NOT NULL REFERENCES pedidos(id),
+    mp_payment_id   TEXT NOT NULL UNIQUE,
+    origem          TEXT NOT NULL CHECK (origem IN ('checkout', 'assinatura')),
+    status          TEXT NOT NULL,
+    status_detail   TEXT,
+    valor_centavos  INTEGER,
+    metodo          TEXT,
+    parcelas        INTEGER,
+    aplicado_em     TEXT,
+    emitiu_licenca  INTEGER NOT NULL DEFAULT 0,
+    estornado_em    TEXT,
+    criado_em       TEXT NOT NULL,
+    atualizado_em   TEXT NOT NULL
+  );
+  CREATE INDEX ix_pagamentos_pedido ON pagamentos(pedido_id);
+
+  CREATE TABLE assinaturas (
+    id               TEXT PRIMARY KEY,
+    pedido_id        TEXT NOT NULL REFERENCES pedidos(id),
+    cliente_id       INTEGER NOT NULL REFERENCES clientes(id),
+    licenca_id       TEXT REFERENCES licencas(id),
+    status           TEXT NOT NULL,
+    valor_centavos   INTEGER NOT NULL,
+    proxima_cobranca TEXT,
+    criado_em        TEXT NOT NULL,
+    atualizado_em    TEXT NOT NULL
+  );
+  CREATE INDEX ix_assinaturas_licenca ON assinaturas(licenca_id);
+
+  CREATE TABLE eventos_webhook (
+    id            INTEGER PRIMARY KEY,
+    origem        TEXT NOT NULL,
+    tipo          TEXT,
+    acao          TEXT,
+    recurso_id    TEXT,
+    payload       TEXT,
+    recebido_em   TEXT NOT NULL,
+    processado_em TEXT,
+    tentativas    INTEGER NOT NULL DEFAULT 0,
+    erro          TEXT
+  );
+  CREATE INDEX ix_eventos_pendentes ON eventos_webhook(processado_em);
+
+  CREATE TABLE conteudo (
+    chave          TEXT PRIMARY KEY,
+    valor          TEXT NOT NULL,
+    atualizado_por TEXT,
+    atualizado_em  TEXT NOT NULL
+  );
+
+  CREATE TABLE conteudo_historico (
+    id        INTEGER PRIMARY KEY,
+    chave     TEXT NOT NULL,
+    valor     TEXT NOT NULL,
+    autor     TEXT,
+    criado_em TEXT NOT NULL
+  );
+  CREATE INDEX ix_conteudo_historico ON conteudo_historico(chave, id);
+
+  CREATE TABLE uploads (
+    id            TEXT PRIMARY KEY,
+    nome_original TEXT,
+    mime          TEXT NOT NULL,
+    tamanho       INTEGER NOT NULL,
+    enviado_por   TEXT,
+    criado_em     TEXT NOT NULL
+  );
+
+  CREATE TABLE emails_log (
+    id        INTEGER PRIMARY KEY,
+    para      TEXT NOT NULL,
+    assunto   TEXT NOT NULL,
+    modelo    TEXT,
+    status    TEXT NOT NULL,
+    erro      TEXT,
+    criado_em TEXT NOT NULL
+  );
+
+  CREATE TABLE avisos_renovacao (
+    licenca_id  TEXT NOT NULL,
+    valida_ate  TEXT NOT NULL,
+    marco       INTEGER NOT NULL,
+    enviado_em  TEXT NOT NULL,
+    PRIMARY KEY (licenca_id, valida_ate, marco)
+  );
+  `,
 ];
 
 let db = null;
@@ -85,14 +254,20 @@ function abrir() {
   return db;
 }
 
+// Transação síncrona; chamadas aninhadas usam SAVEPOINT.
+let profundidade = 0;
 function transacao(fn) {
-  db.exec("BEGIN IMMEDIATE");
+  const nome = `sp${profundidade}`;
+  db.exec(profundidade === 0 ? "BEGIN IMMEDIATE" : `SAVEPOINT ${nome}`);
+  profundidade++;
   try {
     const r = fn();
-    db.exec("COMMIT");
+    profundidade--;
+    db.exec(profundidade === 0 ? "COMMIT" : `RELEASE ${nome}`);
     return r;
   } catch (e) {
-    db.exec("ROLLBACK");
+    profundidade--;
+    db.exec(profundidade === 0 ? "ROLLBACK" : `ROLLBACK TO ${nome}; RELEASE ${nome}`);
     throw e;
   }
 }
