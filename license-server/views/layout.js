@@ -79,6 +79,7 @@ ${corpo}
       <li><a href="/cliente">Área do cliente</a></li>
       <li><a href="/termos">Termos de uso</a></li>
       <li><a href="/privacidade">Privacidade</a></li>
+      <li><a href="/admin" rel="nofollow">Acesso da equipe</a></li>
     </ul>
     <ul class="rodape__links">
       ${g.emailContato ? `<li><a href="mailto:${e(g.emailContato)}">${e(g.emailContato)}</a></li>` : ""}

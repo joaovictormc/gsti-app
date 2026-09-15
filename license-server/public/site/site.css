@@ -48,6 +48,10 @@ h3 { font-size: 1.2rem; font-weight: 700; letter-spacing: -.01em; }
 p { margin: 0 0 1em; text-wrap: pretty; }
 :focus-visible { outline: 3px solid var(--etiqueta); outline-offset: 3px; border-radius: 4px; }
 
+.passos.passos--teste { margin: 8px 0 56px; grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 720px) { .passos.passos--teste { grid-template-columns: 1fr; } }
+.teste__acoes { text-align: center; display: grid; justify-items: center; gap: .6rem; }
+.teste__acoes .aviso-claro { text-align: left; }
 .faixa-homologacao { margin: 0; background: #b91c1c; color: #fff; text-align: center; font: 700 .78rem/1.3 var(--f-mono); letter-spacing: .04em; padding: 7px 16px; }
 .pular { position: absolute; left: -999px; top: 8px; background: var(--tinta); color: var(--branco); padding: 8px 14px; border-radius: var(--raio-p); z-index: 100; }
 .pular:focus { left: 16px; }

@@ -2,6 +2,8 @@
 const { escapeHtml: e } = require("../lib/http");
 const { markdown } = require("../lib/markdown");
 const vendas = require("../lib/vendas");
+const conteudo = require("../lib/conteudo");
+const cfg = require("../lib/config");
 const { layout } = require("./layout");
 const { cartaoPlano, dialogoCheckout } = require("./componentes");
 
@@ -99,6 +101,36 @@ function portal({ logado }) {
   return layout({ titulo: "Área do cliente", pagina: "portal", semNav: true, corpo: `<section class="pagina">${logado ? painel : entrar}</section>` });
 }
 
+function testeGratis() {
+  const g = conteudo.obter("site.geral");
+  const baixar = g.linkDownload
+    ? `<a class="btn btn--grande" href="${e(g.linkDownload)}" download>Baixar o instalador</a>
+       <p class="rotulo-mono" style="margin-top:1rem">${e(g.requisitos)}${g.versaoApp ? ` · versão ${e(g.versaoApp)}` : ""}</p>`
+    : `<p class="aviso-claro">O instalador estará disponível para download em breve.${g.emailContato ? ` Enquanto isso, fale com a gente: <a href="mailto:${e(g.emailContato)}">${e(g.emailContato)}</a>` : ""}</p>`;
+  const passos = [
+    ["Baixe e instale", "Execute o instalador no computador da assistência. É necessário ter o PostgreSQL instalado (o guia de instalação explica em poucos passos)."],
+    ["Escolha “Testar grátis”", `Na primeira abertura, na tela de ativação, selecione “Testar ${cfg.TRIAL_DIAS} dias grátis” e informe seu e-mail. Não pedimos cartão.`],
+    ["Use à vontade", `Durante ${cfg.TRIAL_DIAS} dias todos os recursos ficam liberados. Gostou? Compre um plano e ative com a chave recebida por e-mail — seus dados continuam no banco.`],
+  ];
+  return layout({
+    titulo: "Teste grátis",
+    pagina: "teste",
+    corpo: `<section class="pagina">
+      <div class="secao__in">
+        <header class="secao__cabeca">
+          <p class="rotulo-mono">${cfg.TRIAL_DIAS} dias grátis · sem cartão</p>
+          <h1>Teste o ${e(g.nomeProduto)} na sua bancada</h1>
+          <p>O teste é feito no próprio sistema, no seu computador, com os seus dados.</p>
+        </header>
+        <ol class="passos passos--teste">
+          ${passos.map(([t, d], i) => `<li class="passo"><span class="passo__num">${i + 1}</span><h3>${e(t)}</h3><p>${e(d)}</p></li>`).join("")}
+        </ol>
+        <div class="teste__acoes">${baixar}<p><a href="/#planos">Prefiro ver os planos</a></p></div>
+      </div>
+    </section>`,
+  });
+}
+
 function linkInvalido() {
   return layout({
     titulo: "Link expirado",
@@ -117,4 +149,4 @@ function naoEncontrada() {
   });
 }
 
-module.exports = { legal, retornoCheckout, renovar, portal, linkInvalido, naoEncontrada };
+module.exports = { legal, retornoCheckout, renovar, portal, testeGratis, linkInvalido, naoEncontrada };

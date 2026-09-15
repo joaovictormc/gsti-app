@@ -50,6 +50,8 @@ r.get("/checkout/retorno", csp, (req, res) => {
   html(res, views.retornoCheckout({ pedido, falha: !!req.query.falha }));
 });
 
+r.get("/teste-gratis", csp, (req, res) => html(res, views.testeGratis()));
+
 r.get("/renovar/:licencaId", csp, (req, res) => {
   const lic = L.licencaComCliente(String(req.params.licencaId));
   if (!lic || lic.plano !== "anual" || lic.status === "revogada") return html(res, views.naoEncontrada(), 404);

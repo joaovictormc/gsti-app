@@ -40,7 +40,6 @@ function renderLanding({ ofertas, pagamentosAtivos }) {
     "site.planos", "site.depoimentos", "site.faq", "site.cta_final",
   ]);
   const g = c["site.geral"], h = c["site.hero"];
-  const download = g.linkDownload || "#planos";
 
   const hero = `<section class="hero">
     <div class="hero__in">
@@ -50,7 +49,7 @@ function renderLanding({ ofertas, pagamentosAtivos }) {
         <p class="hero__sub">${e(h.subtitulo)}</p>
         <div class="hero__acoes">
           <a class="btn" href="#planos">${e(h.ctaPrimario)}</a>
-          <a class="btn btn--contorno" href="${e(download)}"${g.linkDownload ? " download" : ""}>${e(h.ctaSecundario)}</a>
+          <a class="btn btn--contorno" href="/teste-gratis">${e(h.ctaSecundario)}</a>
         </div>
         <ul class="fatos">
           <li>Funciona sem internet no dia a dia</li>
@@ -144,7 +143,7 @@ function renderLanding({ ofertas, pagamentosAtivos }) {
     <div class="cta__in">
       <h2>${e(ct.titulo)}</h2>
       <p>${e(ct.texto)}</p>
-      <a class="btn btn--grande" href="${e(download)}"${g.linkDownload ? " download" : ""}>${e(ct.botao)}</a>
+      <a class="btn btn--grande" href="/teste-gratis">${e(ct.botao)}</a>
       <p class="cta__req">${e(g.requisitos)}${g.versaoApp ? ` · versão ${e(g.versaoApp)}` : ""}</p>
     </div>
   </section>`;
