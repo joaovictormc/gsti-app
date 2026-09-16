@@ -234,6 +234,16 @@ const MIGRACOES = [
     PRIMARY KEY (licenca_id, valida_ate, marco)
   );
   `,
+
+  // 3 — configurações sensíveis editáveis pelo painel (valores cifrados)
+  `
+  CREATE TABLE configuracoes (
+    chave          TEXT PRIMARY KEY,
+    valor          TEXT NOT NULL,
+    atualizado_por TEXT,
+    atualizado_em  TEXT NOT NULL
+  );
+  `,
 ];
 
 let db = null;

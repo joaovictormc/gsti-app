@@ -12,6 +12,7 @@ const uploads = require("../lib/uploads");
 const email = require("../lib/email");
 const mp = require("../lib/mercadopago");
 const keys = require("../lib/keys");
+const segredos = require("../lib/segredos");
 const cfg = require("../lib/config");
 const { abrir } = require("../lib/db");
 const { LicencaErro } = require("../lib/erros");
@@ -401,7 +402,7 @@ r.post("/usuarios/:id/resetar-2fa", eq("usuarios.gerenciar"), rota((req) => auth
 // Sistema e auditoria
 // ============================================================================
 
-r.get("/sistema", eq("sistema.ver"), rota(() => {
+r.get("/sistema", eq("sistema.ver"), rota((req) => {
   const db = abrir();
   return {
     success: true,
@@ -409,15 +410,35 @@ r.get("/sistema", eq("sistema.ver"), rota(() => {
     publicUrl: cfg.PUBLIC_URL,
     webhookUrl: `${cfg.PUBLIC_URL}/webhooks/mercadopago`,
     mercadoPago: {
-      configurado: mp.configurado(), sandbox: cfg.MP_SANDBOX, assinaturaWebhook: !!cfg.MP_WEBHOOK_SECRET,
+      configurado: mp.configurado(), sandbox: segredos.obterBool("MP_SANDBOX"), assinaturaWebhook: !!segredos.obter("MP_WEBHOOK_SECRET"),
       simulador: cfg.MP_API_BASE !== cfg.MP_API_OFICIAL ? cfg.MP_API_BASE : null,
     },
-    smtp: { configurado: email.smtpConfigurado(), remetente: cfg.EMAIL_FROM },
+    smtp: { configurado: email.smtpConfigurado(), remetente: email.remetente() },
+    podeConfigurar: auth.tem(req.equipe, "sistema.configurar"),
     chaves: keys.kids(),
     chaveAtiva: keys.kidAtivo(),
     eventos: db.prepare("SELECT id, tipo, acao, recurso_id, recebido_em, processado_em, tentativas, erro FROM eventos_webhook ORDER BY id DESC LIMIT 50").all(),
     emails: db.prepare("SELECT * FROM emails_log ORDER BY id DESC LIMIT 50").all(),
   };
+}));
+
+// --- Credenciais (Mercado Pago, SMTP) — somente Administrador ---
+r.get("/sistema/config", eq("sistema.configurar"), rota(() => ({ success: true, grupos: segredos.estado() })));
+
+r.put("/sistema/config", eq("sistema.configurar"), limitar(20, 15), rota((req) => {
+  const u = auth.obterUsuario(req.equipe.id);
+  if (!auth.conferirSenha(req.body?.senha || "", u.senha_hash)) {
+    throw new LicencaErro("SENHA_ATUAL", "Senha incorreta.", 403);
+  }
+  const alterados = segredos.salvar(req.body?.valores, ator(req));
+  email.reiniciarTransporte();
+  return { success: true, alterados, grupos: segredos.estado() };
+}));
+
+r.post("/sistema/email-teste", eq("sistema.configurar"), limitar(10, 10), rota(async (req) => {
+  const r2 = await email.enviarTeste(req.equipe.email);
+  if (!r2.success) throw new LicencaErro("SMTP", r2.error || "Falha ao enviar.", 400);
+  return { success: true, para: req.equipe.email };
 }));
 
 r.post("/sistema/eventos/:id/reprocessar", eq("sistema.ver"), rota(async (req) => {

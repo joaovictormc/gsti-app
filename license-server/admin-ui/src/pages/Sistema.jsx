@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { Alert, Box, Button, Chip, Grid, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
+import SettingsIcon from "@mui/icons-material/TuneOutlined";
+import ConfigCredenciais from "./ConfigCredenciais";
 import { get, post } from "../api";
 import { dataHora } from "../format";
 import { Cabecalho, Carregando, Erro, StatusChip, useAviso, useCarregar } from "../components/comum";
@@ -19,6 +22,8 @@ const mono = { fontFamily: "JetBrains Mono, monospace", fontSize: 13, wordBreak:
 
 export default function Sistema() {
   const [aviso, avisar] = useAviso();
+  const [config, setConfig] = useState(false);
+  const [testando, setTestando] = useState(false);
   const { dados: s, erro, carregando, recarregar } = useCarregar(() => get("/sistema"), []);
   if (carregando) return <Carregando />;
   if (erro) return <Erro erro={erro} onTentar={recarregar} />;
@@ -33,12 +38,33 @@ export default function Sistema() {
     }
   };
 
+  const enviarTeste = async () => {
+    setTestando(true);
+    try {
+      const r = await post("/sistema/email-teste");
+      avisar(`E-mail de teste enviado para ${r.para}.`);
+    } catch (e) {
+      avisar(e.message, "error");
+    } finally {
+      setTestando(false);
+    }
+  };
+
   return (
     <>
-      <Cabecalho titulo="Sistema" subtitulo={`Plataforma v${s.versao} · ${s.publicUrl}`} acoes={<Button variant="outlined" onClick={recarregar}>Atualizar</Button>} />
-      <Alert severity="info" sx={{ mb: 2 }}>
-        Credenciais (Mercado Pago, SMTP) ficam no arquivo de ambiente do servidor, não no painel. Veja o README do servidor.
-      </Alert>
+      <Cabecalho
+        titulo="Sistema"
+        subtitulo={`Plataforma v${s.versao} · ${s.publicUrl}`}
+        acoes={<>
+          {s.podeConfigurar && <Button variant="contained" startIcon={<SettingsIcon />} onClick={() => setConfig(true)}>Configurar credenciais</Button>}
+          <Button variant="outlined" onClick={recarregar}>Atualizar</Button>
+        </>}
+      />
+      {s.podeConfigurar && (
+        <Alert severity="info" sx={{ mb: 2 }} action={s.smtp.configurado && <Button color="inherit" size="small" onClick={enviarTeste} disabled={testando}>{testando ? "Enviando…" : "Enviar e-mail de teste"}</Button>}>
+          Mercado Pago e e-mail podem ser configurados aqui pelo painel (guardados cifrados no servidor) ou por variáveis de ambiente — nesse caso, o servidor tem prioridade.
+        </Alert>
+      )}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 6, lg: 3 }}>
           <Item
@@ -104,6 +130,7 @@ export default function Sistema() {
           </Table>
         </TableContainer>
       </Paper>
+      <ConfigCredenciais aberto={config} onFechar={() => setConfig(false)} onSalvo={recarregar} />
       {aviso}
     </>
   );

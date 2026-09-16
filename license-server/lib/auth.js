@@ -41,6 +41,7 @@ const PERMISSOES = {
   "emails.editar": ["conteudo"],
   "usuarios.gerenciar": [],
   "sistema.ver": [],
+  "sistema.configurar": [],
   "auditoria.ver": [],
 };
 

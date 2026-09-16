@@ -49,7 +49,7 @@ Visitante escolhe o plano no site
 
 | Papel | Pode |
 |-------|------|
-| **Administrador** | Tudo, incluindo equipe, sistema e auditoria |
+| **Administrador** | Tudo, incluindo equipe, credenciais (Mercado Pago/SMTP), sistema e auditoria |
 | **Licenças e clientes** | Ver/editar licenças, clientes, computadores e trials; ver pedidos |
 | **Financeiro** | Pedidos, pagamentos, reembolsos, cancelar renovação automática, preços |
 | **Conteúdo do site** | Textos da landing, páginas legais e modelos de e-mail |
@@ -220,17 +220,24 @@ No `data/.env`: `HOST=127.0.0.1`, `TRUST_PROXY=loopback`, `PUBLIC_URL=https://se
 | `HOST` / `PORT` | `127.0.0.1` atrás do Nginx |
 | `TRUST_PROXY` | `loopback` atrás do Nginx local |
 | `MP_ACCESS_TOKEN` / `MP_WEBHOOK_SECRET` / `MP_SANDBOX` | Mercado Pago |
-| `SMTP_*`, `EMAIL_FROM`, `EMAIL_SUPORTE` | E-mails (padrão: `nao-responda@` e `suporte@` o domínio de `PUBLIC_URL`) |
+| `SMTP_*`, `EMAIL_FROM`, `EMAIL_SUPORTE` | E-mails (padrão: `nao-responda@` e `suporte@` o domínio de `PUBLIC_URL`). Também configurável no painel |
 | `TRIAL_DIAS`, `REVALIDAR_DIAS`, `DIAS_ANUAL`, `MAX_MAQUINAS_PADRAO` | Regras de licença |
 
 > **Não** defina `MP_API_BASE` em produção — ele só existe para o simulador.
 
 ## 5. Mercado Pago
 
+> **Onde configurar:** *Painel → Sistema → Configurar credenciais* (só Administrador,
+> pedindo a senha) **ou** variáveis de ambiente. Quando a variável existe no servidor,
+> ela tem prioridade e o painel mostra "definido no servidor" — use isso para travar a
+> configuração de produção. Os valores salvos pelo painel ficam cifrados em
+> `data/licencas.db` com a chave `data/config.key` (inclua as duas no backup).
+
 1. **Credenciais**: [Suas integrações](https://www.mercadopago.com.br/developers/panel/app) → criar aplicação
    (Checkout Pro + Assinaturas) → copiar o *Access Token* para `MP_ACCESS_TOKEN`.
 2. **Webhook**: na aplicação → *Webhooks* → URL `https://seudominio.com.br/webhooks/mercadopago`,
-   eventos **Pagamentos** e **Planos e assinaturas** → copie a *assinatura secreta* para `MP_WEBHOOK_SECRET`.
+   eventos **Pagamentos** e **Planos e assinaturas** → copie a *assinatura secreta* para
+   `MP_WEBHOOK_SECRET` (ou para o campo correspondente no painel).
 3. **Teste com o Mercado Pago real** (antes de abrir as vendas): credenciais e **contas de
    teste** (comprador e vendedor) com `MP_SANDBOX=true`. Assinaturas exigem que o
    e-mail do comprador seja o da conta de teste compradora. Esse teste precisa de URL
@@ -271,10 +278,11 @@ Copie **`data/`** inteira diariamente para fora da VPS (cifrada). Instale o `sql
 
 ```bash
 sqlite3 data/licencas.db ".backup /caminho/backup/licencas-$(date +%F).db"
-tar czf /caminho/backup/gsti-data-$(date +%F).tgz -C data keys uploads .env
+tar czf /caminho/backup/gsti-data-$(date +%F).tgz -C data keys uploads .env config.key
 ```
 
-Perder `keys/` invalida as licenças; perder o banco perde clientes e pedidos.
+Perder `keys/` invalida as licenças; perder o banco perde clientes e pedidos; perder
+`config.key` torna ilegíveis as credenciais salvas pelo painel (basta cadastrá-las de novo).
 
 ## 9. Desenvolvimento do painel
 

@@ -5,21 +5,27 @@
  */
 const nodemailer = require("nodemailer");
 const cfg = require("./config");
+const segredos = require("./segredos");
 const conteudo = require("./conteudo");
 const { abrir } = require("./db");
 const { markdown, textoPuro } = require("./markdown");
 const { escapeHtml } = require("./http");
 
 let transporte = null;
-const smtpConfigurado = () => !!(cfg.SMTP_HOST && cfg.SMTP_USER && cfg.SMTP_PASS);
+const smtpConfigurado = () => !!(segredos.obter("SMTP_HOST") && segredos.obter("SMTP_USER") && segredos.obter("SMTP_PASS"));
+const remetente = () => segredos.obter("EMAIL_FROM") || cfg.EMAIL_FROM;
+const suporte = () => segredos.obter("EMAIL_SUPORTE") || cfg.EMAIL_SUPORTE;
+
+// Chamado quando as configurações mudam no painel.
+const reiniciarTransporte = () => { transporte = null; };
 
 function obterTransporte() {
   if (!transporte && smtpConfigurado()) {
     transporte = nodemailer.createTransport({
-      host: cfg.SMTP_HOST,
-      port: cfg.SMTP_PORT,
-      secure: cfg.SMTP_SECURE,
-      auth: { user: cfg.SMTP_USER, pass: cfg.SMTP_PASS },
+      host: segredos.obter("SMTP_HOST"),
+      port: segredos.obterNum("SMTP_PORT", 587),
+      secure: segredos.obterBool("SMTP_SECURE"),
+      auth: { user: segredos.obter("SMTP_USER"), pass: segredos.obter("SMTP_PASS") },
     });
   }
   return transporte;
@@ -38,7 +44,7 @@ function layoutHtml(corpoHtml, produto) {
 <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:10px" cellpadding="0" cellspacing="0">
 <tr><td style="padding:24px 32px;border-bottom:1px solid #e5e7eb;font-weight:700;font-size:18px;color:#1e3a8a">${escapeHtml(produto)}</td></tr>
 <tr><td style="padding:24px 32px;font-size:15px;line-height:1.6">${corpoHtml}</td></tr>
-<tr><td style="padding:16px 32px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">Mensagem automática. Suporte: ${escapeHtml(cfg.EMAIL_SUPORTE)}</td></tr>
+<tr><td style="padding:16px 32px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280">Mensagem automática. Suporte: ${escapeHtml(suporte())}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
@@ -58,7 +64,7 @@ async function enviar(modelo, para, vars = {}) {
   );
   const todas = {
     produto: nomeProduto,
-    suporte: cfg.EMAIL_SUPORTE,
+    suporte: suporte(),
     portal: `${cfg.PUBLIC_URL}/cliente`,
     email: para,
     ...seguros,
@@ -81,7 +87,7 @@ async function enviar(modelo, para, vars = {}) {
     return { success: true, simulado: true };
   }
   try {
-    await t.sendMail({ from: cfg.EMAIL_FROM, to: para, replyTo: cfg.EMAIL_SUPORTE, subject: assunto, text: texto, html });
+    await t.sendMail({ from: remetente(), to: para, replyTo: suporte(), subject: assunto, text: texto, html });
     log("enviado");
     return { success: true };
   } catch (e) {
@@ -91,4 +97,22 @@ async function enviar(modelo, para, vars = {}) {
   }
 }
 
-module.exports = { enviar, smtpConfigurado };
+// Envio direto (sem modelo) para validar a configuração de SMTP.
+async function enviarTeste(para) {
+  const t = obterTransporte();
+  if (!t) return { success: false, error: "SMTP não configurado." };
+  const { nomeProduto } = conteudo.obter("site.geral");
+  const texto = `Este é um e-mail de teste do ${nomeProduto}. Se você recebeu, o envio está funcionando.`;
+  try {
+    await t.sendMail({ from: remetente(), to: para, replyTo: suporte(), subject: `Teste de configuração · ${nomeProduto}`, text: texto, html: layoutHtml(`<p>${escapeHtml(texto)}</p>`, nomeProduto) });
+    abrir().prepare("INSERT INTO emails_log (para, assunto, modelo, status, criado_em) VALUES (?, ?, 'teste', 'enviado', ?)")
+      .run(para, "Teste de configuração", new Date().toISOString());
+    return { success: true };
+  } catch (e) {
+    abrir().prepare("INSERT INTO emails_log (para, assunto, modelo, status, erro, criado_em) VALUES (?, ?, 'teste', 'erro', ?, ?)")
+      .run(para, "Teste de configuração", e.message.slice(0, 500), new Date().toISOString());
+    return { success: false, error: e.message };
+  }
+}
+
+module.exports = { enviar, enviarTeste, smtpConfigurado, reiniciarTransporte, remetente };

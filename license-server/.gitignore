@@ -7,3 +7,4 @@ trials.json
 clientes.json
 public/admin/
 admin-ui/node_modules/
+.env

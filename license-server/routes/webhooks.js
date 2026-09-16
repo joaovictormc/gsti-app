@@ -6,7 +6,7 @@
  * e copie a "assinatura secreta" para MP_WEBHOOK_SECRET.
  */
 const express = require("express");
-const cfg = require("../lib/config");
+const segredos = require("../lib/segredos");
 const mp = require("../lib/mercadopago");
 const vendas = require("../lib/vendas");
 const { limitar } = require("../lib/http");
@@ -20,7 +20,7 @@ r.post("/mercadopago", limitar(300, 1), (req, res) => {
   const tipo = corpo.type || req.query.type || req.query.topic || corpo.topic;
   const recursoId = corpo.data?.id || req.query["data.id"] || req.query.id;
 
-  if (cfg.MP_WEBHOOK_SECRET) {
+  if (segredos.obter("MP_WEBHOOK_SECRET")) {
     const ok = mp.validarAssinaturaWebhook({
       xSignature: req.headers["x-signature"],
       xRequestId: req.headers["x-request-id"],

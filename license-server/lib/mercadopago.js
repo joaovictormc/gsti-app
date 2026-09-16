@@ -4,13 +4,14 @@
  */
 const crypto = require("crypto");
 const cfg = require("./config");
+const segredos = require("./segredos");
 const { LicencaErro } = require("./erros");
 
-const configurado = () => !!cfg.MP_ACCESS_TOKEN;
+const configurado = () => !!segredos.obter("MP_ACCESS_TOKEN");
 
 async function chamar(metodo, caminho, corpo, { idempotencia } = {}) {
   if (!configurado()) throw new LicencaErro("MP_NAO_CONFIGURADO", "Pagamentos indisponíveis no momento.", 503);
-  const headers = { Authorization: `Bearer ${cfg.MP_ACCESS_TOKEN}`, "Content-Type": "application/json" };
+  const headers = { Authorization: `Bearer ${segredos.obter("MP_ACCESS_TOKEN")}`, "Content-Type": "application/json" };
   if (idempotencia) headers["X-Idempotency-Key"] = idempotencia;
 
   const ctrl = new AbortController();
@@ -60,12 +61,12 @@ async function criarPreferencia({ pedidoId, titulo, valorCentavos, parcelasMax, 
       back_urls: { success: urls.sucesso, pending: urls.pendente, failure: urls.falha },
       auto_return: "approved",
       payment_methods: { installments: Math.max(1, parcelasMax || 1) },
-      statement_descriptor: cfg.MP_STATEMENT_DESCRIPTOR,
+      statement_descriptor: segredos.obter("MP_STATEMENT_DESCRIPTOR") || "GSTI APP",
       expiration_date_to: new Date(Date.now() + 3 * 86400000).toISOString(),
     },
     { idempotencia: `pref-${pedidoId}` }
   );
-  return { id: pref.id, url: cfg.MP_SANDBOX ? pref.sandbox_init_point || pref.init_point : pref.init_point };
+  return { id: pref.id, url: segredos.obterBool("MP_SANDBOX") ? pref.sandbox_init_point || pref.init_point : pref.init_point };
 }
 
 // Assinatura sem plano associado (renovação automática anual no cartão)
@@ -102,7 +103,8 @@ const reembolsar = (paymentId, chave) =>
  * HMAC-SHA256 com a "assinatura secreta" configurada no painel do Mercado Pago.
  */
 function validarAssinaturaWebhook({ xSignature, xRequestId, dataId }) {
-  if (!cfg.MP_WEBHOOK_SECRET) return false;
+  const segredo = segredos.obter("MP_WEBHOOK_SECRET");
+  if (!segredo) return false;
   const partes = Object.fromEntries(
     String(xSignature || "")
       .split(",")
@@ -114,7 +116,7 @@ function validarAssinaturaWebhook({ xSignature, xRequestId, dataId }) {
   if (dataId) manifesto += `id:${/^[a-z0-9]+$/i.test(dataId) ? String(dataId).toLowerCase() : dataId};`;
   if (xRequestId) manifesto += `request-id:${xRequestId};`;
   manifesto += `ts:${partes.ts};`;
-  const esperado = crypto.createHmac("sha256", cfg.MP_WEBHOOK_SECRET).update(manifesto).digest("hex");
+  const esperado = crypto.createHmac("sha256", segredo).update(manifesto).digest("hex");
   return esperado.length === partes.v1.length && crypto.timingSafeEqual(Buffer.from(esperado), Buffer.from(partes.v1));
 }
 
