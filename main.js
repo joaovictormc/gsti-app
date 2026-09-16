@@ -10,6 +10,7 @@ const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const { execFile, execSync } = require("child_process");
 const { Worker } = require("worker_threads");
+const comunicacao = require("./os-comunicacao");
 const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 const archiver = require("archiver");
@@ -77,7 +78,16 @@ const defaultConfig = {
   },
   branding: { companyName: "GSTI App", logoPath: null, backgroundPath: null },
   financeiro: { despesaFixaEstimada: 0 },
-  emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
+  emailNotifications: {
+    notifyOnFinalize: false,
+    notifyOnCreate: false,
+    technicianEmail: "",
+    notifyClientStatus: false,
+    clientStatuses: comunicacao.STATUS_AVISO_PADRAO,
+  },
+  empresa: { documento: "", telefone: "", email: "", endereco: "", site: "" },
+  documentos: { condicoesEntrada: "", termoGarantia: "" },
+  mensagensStatus: {},
   permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
   autoBackup: {
     enabled: false,
@@ -168,10 +178,17 @@ function initializeDbPool() {
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS custo NUMERIC(10,2) NULL",
         "ALTER TABLE os_itens ADD COLUMN IF NOT EXISTS observacao TEXT NULL",
         "ALTER TABLE os_itens ADD COLUMN IF NOT EXISTS custo_unitario NUMERIC(10,2) NULL",
-      ].forEach((sql) =>
-        dbPool.query(sql)
-          .then(() => console.log("[Migration] OK:", sql.slice(0, 60)))
-          .catch((e) => console.warn("[Migration]:", e.message))
+        // Histórico de mudanças de status da OS
+        "CREATE TABLE IF NOT EXISTS os_status_historico (id SERIAL PRIMARY KEY, id_os INT NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE, status_anterior VARCHAR(50), status_novo VARCHAR(50) NOT NULL, id_usuario INT NULL REFERENCES usuarios(id) ON DELETE SET NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())",
+        "CREATE INDEX IF NOT EXISTS ix_os_status_historico_os ON os_status_historico(id_os, criado_em)",
+      ].reduce(
+        (anterior, sql) =>
+          anterior.then(() =>
+            dbPool.query(sql)
+              .then(() => console.log("[Migration] OK:", sql.slice(0, 60)))
+              .catch((e) => console.warn("[Migration]:", e.message))
+          ),
+        Promise.resolve()
       );
       // Teste de conexão opcional aqui
     } catch (error) {
@@ -263,10 +280,10 @@ async function notifyOSCreated(osId, osData) {
         <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
         <table style="width:100%;border-collapse:collapse">
           <tr><td style="padding:6px 0;color:#555;width:140px"><strong>OS Nº</strong></td><td style="padding:6px 0">${osId}</td></tr>
-          <tr><td style="padding:6px 0;color:#555"><strong>Cliente</strong></td><td style="padding:6px 0">${customerName}</td></tr>
-          <tr><td style="padding:6px 0;color:#555"><strong>Equipamento</strong></td><td style="padding:6px 0">${equipment || "Não informado"}</td></tr>
-          ${osData.numero_serie ? `<tr><td style="padding:6px 0;color:#555"><strong>Nº de Série</strong></td><td style="padding:6px 0">${osData.numero_serie}</td></tr>` : ""}
-          ${osData.defeito_relatado ? `<tr><td style="padding:6px 0;color:#555"><strong>Defeito</strong></td><td style="padding:6px 0">${osData.defeito_relatado}</td></tr>` : ""}
+          <tr><td style="padding:6px 0;color:#555"><strong>Cliente</strong></td><td style="padding:6px 0">${comunicacao.escapeHtml(customerName)}</td></tr>
+          <tr><td style="padding:6px 0;color:#555"><strong>Equipamento</strong></td><td style="padding:6px 0">${comunicacao.escapeHtml(equipment || "Não informado")}</td></tr>
+          ${osData.numero_serie ? `<tr><td style="padding:6px 0;color:#555"><strong>Nº de Série</strong></td><td style="padding:6px 0">${comunicacao.escapeHtml(osData.numero_serie)}</td></tr>` : ""}
+          ${osData.defeito_relatado ? `<tr><td style="padding:6px 0;color:#555"><strong>Defeito</strong></td><td style="padding:6px 0">${comunicacao.escapeHtml(osData.defeito_relatado)}</td></tr>` : ""}
         </table>
         <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
         <p style="color:#9e9e9e;font-size:12px">Enviado automaticamente pelo ${companyName}</p>
@@ -307,13 +324,13 @@ async function notifyOSFinalized(osId, osData, total) {
         <h2 style="color:#3949ab;margin-bottom:4px">Equipamento pronto!</h2>
         <p style="color:#757575;margin-top:0">${companyName}</p>
         <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
-        <p>Olá, <strong>${customer.nome}</strong>!</p>
+        <p>Olá, <strong>${comunicacao.escapeHtml(customer.nome)}</strong>!</p>
         <p>Sua ordem de serviço foi concluída e o equipamento já está pronto para retirada.</p>
         <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
         <table style="width:100%;border-collapse:collapse">
           <tr><td style="padding:6px 0;color:#555;width:140px"><strong>OS Nº</strong></td><td style="padding:6px 0">${osId}</td></tr>
-          <tr><td style="padding:6px 0;color:#555"><strong>Equipamento</strong></td><td style="padding:6px 0">${equipment || "Não informado"}</td></tr>
-          ${osData.solucao_aplicada ? `<tr><td style="padding:6px 0;color:#555"><strong>Solução</strong></td><td style="padding:6px 0">${osData.solucao_aplicada}</td></tr>` : ""}
+          <tr><td style="padding:6px 0;color:#555"><strong>Equipamento</strong></td><td style="padding:6px 0">${comunicacao.escapeHtml(equipment || "Não informado")}</td></tr>
+          ${osData.solucao_aplicada ? `<tr><td style="padding:6px 0;color:#555"><strong>Solução</strong></td><td style="padding:6px 0">${comunicacao.escapeHtml(osData.solucao_aplicada)}</td></tr>` : ""}
           <tr><td style="padding:6px 0;color:#555"><strong>Valor Total</strong></td><td style="padding:6px 0">${valueFormatted}</td></tr>
           ${osData.garantia_dias > 0 ? `<tr><td style="padding:6px 0;color:#555"><strong>Garantia</strong></td><td style="padding:6px 0">${osData.garantia_dias} dias a partir da retirada</td></tr>` : ""}
         </table>
@@ -324,6 +341,65 @@ async function notifyOSFinalized(osId, osData, total) {
   });
   console.log(`[Email] OS finalizada #${osId} notificada para ${customer.email}`);
 }
+
+// Dados da OS usados nas mensagens ao cliente.
+async function dadosOSParaMensagem(osId) {
+  const { rows } = await dbPool.query(
+    `SELECT os.id, os.status, os.tipo_equipamento, os.marca, os.modelo, os.valor_total,
+            c.nome AS nome_cliente, c.email AS email_cliente, c.telefone AS telefone_cliente
+       FROM ordens_servico os JOIN clientes c ON c.id = os.id_cliente WHERE os.id = $1`,
+    [osId]
+  );
+  return rows[0] || null;
+}
+
+// E-mail ao cliente quando a OS muda para um dos status escolhidos em Configurações.
+async function notifyClientStatusChange(osId) {
+  const cfg = appConfig.emailNotifications || {};
+  if (!mailTransporter || !cfg.notifyClientStatus || !dbPool) return;
+  const os = await dadosOSParaMensagem(osId);
+  if (!os || !os.email_cliente) return;
+  const statusAviso = Array.isArray(cfg.clientStatuses) ? cfg.clientStatuses : comunicacao.STATUS_AVISO_PADRAO;
+  if (!statusAviso.includes(os.status)) return;
+  // "Finalizado" já tem e-mail próprio quando essa opção está ligada.
+  if (os.status === "Finalizado" && cfg.notifyOnFinalize) return;
+
+  const empresa = appConfig.branding?.companyName || "GSTI App";
+  const from = appConfig.email?.from || appConfig.email?.user;
+  const texto = comunicacao.mensagemStatus(appConfig, os);
+  const contato = comunicacao.linhaContatoEmpresa(appConfig);
+  await mailTransporter.sendMail({
+    from: `"${empresa.replace(/"/g, "")}" <${from}>`,
+    to: os.email_cliente,
+    subject: `OS #${os.id} — ${os.status}`,
+    text: `${texto}${contato ? `\n\n${empresa}\n${contato}` : ""}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+        <h2 style="color:#3949ab;margin-bottom:4px">OS nº ${os.id}: ${comunicacao.escapeHtml(os.status)}</h2>
+        <p style="color:#757575;margin-top:0">${comunicacao.escapeHtml(empresa)}</p>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+        <p style="font-size:15px;line-height:1.5">${comunicacao.escapeHtml(texto)}</p>
+        <hr style="border:none;border-top:1px solid #e0e0e0;margin:16px 0">
+        <p style="color:#9e9e9e;font-size:12px">${comunicacao.escapeHtml(contato || `Enviado automaticamente pelo ${empresa}`)}</p>
+      </div>`,
+  });
+  console.log(`[Email] Aviso de status (${os.status}) da OS #${os.id} enviado para ${os.email_cliente}`);
+}
+
+// Mensagem pronta para o WhatsApp do cliente, conforme o status atual da OS.
+ipcMain.handle("get-os-whatsapp-message", async (event, osId) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const os = await dadosOSParaMensagem(osId);
+    if (!os) return { success: false, error: "OS não encontrada." };
+    if (!String(os.telefone_cliente || "").replace(/\D/g, "")) {
+      return { success: false, error: "Cliente sem telefone cadastrado." };
+    }
+    return { success: true, telefone: os.telefone_cliente, mensagem: comunicacao.mensagemStatus(appConfig, os) };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 
 // --- BACKUP AUTOMÁTICO ---
 
@@ -734,7 +810,17 @@ ipcMain.handle("get-app-settings", async () => {
   if (settingsToSend.database) delete settingsToSend.database.password; // Não envia senha do DB
   if (settingsToSend.email) delete settingsToSend.email.pass; // Não envia senha do Email
   if (settingsToSend.license) delete settingsToSend.license.token; // Não expõe o token de licença
-  return { success: true, settings: settingsToSend };
+  return {
+    success: true,
+    settings: settingsToSend,
+    padroes: {
+      statusOS: comunicacao.STATUS_OS,
+      statusAviso: comunicacao.STATUS_AVISO_PADRAO,
+      mensagensStatus: comunicacao.MENSAGENS_STATUS_PADRAO,
+      condicoesEntrada: comunicacao.CONDICOES_ENTRADA_PADRAO,
+      termoGarantia: comunicacao.TERMO_GARANTIA_PADRAO,
+    },
+  };
 });
 
 // Handler para salvar as configurações (da tela de Settings)
@@ -761,6 +847,9 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
         },
       },
       autoBackup: { ...appConfig.autoBackup, ...(newSettings.autoBackup || {}) },
+      empresa: { ...(appConfig.empresa || {}), ...(newSettings.empresa || {}) },
+      documentos: { ...(appConfig.documentos || {}), ...(newSettings.documentos || {}) },
+      mensagensStatus: { ...(appConfig.mensagensStatus || {}), ...(newSettings.mensagensStatus || {}) },
       // Licença não é editável pelas Configurações (token/URL preservados).
       license: appConfig.license,
       database: currentDbConfig,
@@ -1320,13 +1409,32 @@ ipcMain.handle("get-os-details", async (event, osId) => {
       [osId]
     );
 
-    return { success: true, os: osRows[0], items: itemRows };
+    const { rows: historico } = await dbPool.query(
+      `SELECT h.id, h.status_anterior, h.status_novo, h.criado_em, u.nome AS usuario
+         FROM os_status_historico h LEFT JOIN usuarios u ON u.id = h.id_usuario
+        WHERE h.id_os = $1 ORDER BY h.criado_em DESC, h.id DESC`,
+      [osId]
+    ).catch(() => ({ rows: [] }));
+
+    return { success: true, os: osRows[0], items: itemRows, historico };
   } catch (error) {
     return { success: false, error: error.message };
   }
 });
 
-ipcMain.handle("add-os", async (event, { osData, total }) => {
+// Registra a mudança de status (best-effort: não impede salvar a OS).
+async function registrarStatusOS(osId, statusAnterior, statusNovo, usuarioId) {
+  try {
+    await dbPool.query(
+      "INSERT INTO os_status_historico (id_os, status_anterior, status_novo, id_usuario) VALUES ($1, $2, $3, $4)",
+      [osId, statusAnterior || null, statusNovo, usuarioId || null]
+    );
+  } catch (e) {
+    console.error(`[Histórico] OS #${osId}:`, e.message);
+  }
+}
+
+ipcMain.handle("add-os", async (event, { osData, total, usuarioId }) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   // Atualizado para os novos campos
@@ -1345,14 +1453,16 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
       total, garantia_dias, data_prevista || null, id_atendente || null,
     ]);
     const osId = rows[0].id;
+    await registrarStatusOS(osId, null, status, usuarioId);
     notifyOSCreated(osId, osData).catch((e) => console.error("[Email] notifyOSCreated:", e));
+    notifyClientStatusChange(osId).catch((e) => console.error("[Email] aviso de status:", e));
     return { success: true, osId };
   } catch (error) {
     return { success: false, error: error.message };
   }
 });
 
-ipcMain.handle("update-os", async (event, { osData, total }) => {
+ipcMain.handle("update-os", async (event, { osData, total, usuarioId }) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const {
@@ -1428,6 +1538,11 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
       } catch (stockErr) {
         console.error(`[Stock] Erro na baixa automática OS #${id}:`, stockErr.message);
       }
+    }
+
+    if (status !== osAtual.status) {
+      await registrarStatusOS(id, osAtual.status, status, usuarioId);
+      notifyClientStatusChange(id).catch((e) => console.error("[Email] aviso de status:", e));
     }
 
     if (status === "Finalizado" && osAtual.status !== "Finalizado") {
@@ -1550,6 +1665,9 @@ ipcMain.handle("generate-entry-receipt", async (event, osId) => {
       filePath,
       companyName: appConfig?.branding?.companyName || "GSTI App",
       logoPath: appConfig?.branding?.logoPath || null,
+      contatoEmpresa: comunicacao.linhaContatoEmpresa(appConfig),
+      enderecoEmpresa: appConfig?.empresa?.endereco || "",
+      textos: comunicacao.textosDocumentos(appConfig),
     });
     if (!result.success) return result;
     shell.openPath(filePath);
@@ -1608,6 +1726,9 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
       filePath,
       companyName: appConfig?.branding?.companyName || "GSTI App",
       logoPath: appConfig?.branding?.logoPath || null,
+      contatoEmpresa: comunicacao.linhaContatoEmpresa(appConfig),
+      enderecoEmpresa: appConfig?.empresa?.endereco || "",
+      textos: comunicacao.textosDocumentos(appConfig),
     });
     if (!result.success) return result;
     shell.openPath(filePath);
@@ -3039,8 +3160,9 @@ ipcMain.handle("open-license-site", async (event, { pagina } = {}) => {
 // Handler para abrir link do WhatsApp
 ipcMain.handle("open-whatsapp-link", async (event, { telefone, mensagem }) => {
   const digits = String(telefone || "").replace(/\D/g, "");
-  if (!digits) return { success: false, error: "Telefone inválido." };
-  const url = `https://wa.me/55${digits}?text=${encodeURIComponent(mensagem)}`;
+  if (digits.length < 10) return { success: false, error: "Telefone inválido." };
+  const numero = digits.length >= 12 && digits.startsWith("55") ? digits : `55${digits}`;
+  const url = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
   shell.openExternal(url);
   return { success: true };
 });

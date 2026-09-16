@@ -88,6 +88,17 @@ CREATE TABLE IF NOT EXISTS os_itens (
     FOREIGN KEY (id_produto_servico) REFERENCES produtos_servicos(id) ON DELETE RESTRICT
 );
 
+-- Histórico de mudanças de status da OS
+CREATE TABLE IF NOT EXISTS os_status_historico (
+    id              SERIAL PRIMARY KEY,
+    id_os           INT NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE,
+    status_anterior VARCHAR(50),
+    status_novo     VARCHAR(50) NOT NULL,
+    id_usuario      INT NULL REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ix_os_status_historico_os ON os_status_historico(id_os, criado_em);
+
 -- Tabela de Despesas
 CREATE TABLE IF NOT EXISTS despesas (
     id            SERIAL PRIMARY KEY,

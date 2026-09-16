@@ -21,7 +21,10 @@ function formatPhone(phone) {
 }
 
 // ── Comprovante de Entrada (duas vias) ─────────────────────────────────────
-function buildEntryPDF({ osData, filePath, companyName, logoPath }) {
+const preencher = (modelo, vars) =>
+  String(modelo || '').replace(/\{([a-z_]+)\}/g, (m, k) => (vars[k] !== undefined ? String(vars[k]) : m));
+
+function buildEntryPDF({ osData, filePath, companyName, logoPath, contatoEmpresa = '', enderecoEmpresa = '', textos = {} }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
     const stream = fs.createWriteStream(filePath);
@@ -31,7 +34,7 @@ function buildEntryPDF({ osData, filePath, companyName, logoPath }) {
     const M  = 38;
     const CW = doc.page.width - M * 2;
 
-    const CONDITIONS =
+    const CONDICOES_PADRAO =
       'LEIA COM ATENÇÃO! O prazo para orçamento é de até 7 (sete) dias úteis a partir da data de entrada, de acordo com a demanda de serviços. ' +
       'O orçamento é apresentado ao cliente para aprovação prévia - nenhum serviço é executado sem autorização expressa. ' +
       'Ao realizar diagnóstico em equipamentos eletrônicos, podem ser identificados defeitos adicionais além do informado, podendo inviabilizar o conserto total ou parcial. ' +
@@ -39,6 +42,7 @@ function buildEntryPDF({ osData, filePath, companyName, logoPath }) {
       'Não cobramos taxa de orçamento. Serviços em placa-mãe possuem taxa de bancada, independentemente do resultado. ' +
       'O cliente é o único responsável pelo backup de seus dados - a empresa não se responsabiliza por perda de informações durante o serviço. ' +
       'O equipamento deve ser retirado em até 90 (noventa) dias após conclusão ou recusa do serviço; após esse prazo, poderão ser aplicadas taxas de armazenamento conforme legislação vigente (Lei 8.078/90 - CDC).';
+    const CONDITIONS = textos.condicoesEntrada || CONDICOES_PADRAO;
 
     const labeledBox = (label, value, x, y, w, h = 26) => {
       doc.rect(x, y, w, h).lineWidth(0.4).strokeColor('#888').stroke();
@@ -65,7 +69,13 @@ function buildEntryPDF({ osData, filePath, companyName, logoPath }) {
       }
       const hTx = M + logoW, hTw = CW - logoW;
       doc.font('Helvetica-Bold').fontSize(13).fillColor('#000').text(companyName, hTx, y, { width: hTw, align: 'center' });
-      doc.font('Helvetica-Bold').fontSize(10).fillColor('#222').text('COMPROVANTE DE ENTRADA INTERNO', hTx, y + 17, { width: hTw, align: 'center' });
+      // Dados da empresa (Configurações → Dados da empresa)
+      const contato = [contatoEmpresa, enderecoEmpresa].filter(Boolean).join('  ·  ');
+      if (contato) {
+        doc.font('Helvetica').fontSize(7).fillColor('#444')
+           .text(contato, hTx, y + 15, { width: hTw, align: 'center', lineBreak: false, ellipsis: true });
+      }
+      doc.font('Helvetica-Bold').fontSize(10).fillColor('#222').text('COMPROVANTE DE ENTRADA INTERNO', hTx, y + (contato ? 26 : 17), { width: hTw, align: 'center' });
       doc.font('Helvetica-Bold').fontSize(10).fillColor('#000').text(`OS Nº ${String(osData.id).padStart(6, '0')}`, M, y, { width: CW, align: 'right' });
       doc.font('Helvetica').fontSize(8).fillColor('#444').text(via, M, y + 14, { width: CW, align: 'right' });
       y += 44;
@@ -154,7 +164,7 @@ function buildEntryPDF({ osData, filePath, companyName, logoPath }) {
 }
 
 // ── Recibo de Saída / Garantia ─────────────────────────────────────────────
-function buildExitPDF({ osData, itemsData, filePath, companyName, logoPath }) {
+function buildExitPDF({ osData, itemsData, filePath, companyName, logoPath, contatoEmpresa = '', enderecoEmpresa = '', textos = {} }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true });
     const stream = fs.createWriteStream(filePath);
@@ -174,6 +184,9 @@ function buildExitPDF({ osData, itemsData, filePath, companyName, logoPath }) {
     const tW = logoDrawn ? contentWidth - 100 : contentWidth;
     const al = logoDrawn ? 'left' : 'center';
     doc.font('Helvetica-Bold').fontSize(logoDrawn ? 15 : 18).text(companyName, tX, startY, { width: tW, align: al });
+    if (contatoEmpresa) doc.font('Helvetica').fontSize(8).fillColor('#444').text(contatoEmpresa, tX, doc.y, { width: tW, align: al });
+    if (enderecoEmpresa) doc.font('Helvetica').fontSize(8).fillColor('#444').text(enderecoEmpresa, tX, doc.y, { width: tW, align: al });
+    doc.fillColor('black');
     doc.font('Helvetica').fontSize(logoDrawn ? 12 : 14).text('Recibo de Entrega e Termo de Garantia', tX, doc.y, { width: tW, align: al });
     doc.fontSize(10).text(`OS Nº: ${osData.id}  ·  ${new Date().toLocaleDateString('pt-BR')}`, tX, doc.y, { width: tW, align: al });
     if (logoDrawn) doc.y = Math.max(doc.y, startY + 58);
@@ -263,11 +276,18 @@ function buildExitPDF({ osData, itemsData, filePath, companyName, logoPath }) {
     // Garantia
     const gDias = osData.garantia_dias || 0;
     const gExp = new Date(dataSaida); gExp.setDate(gExp.getDate() + gDias);
-    const gTxt = `Este serviço possui garantia de ${gDias} dias, válida a partir da data de entrega (${dataSaida.toLocaleDateString('pt-BR')}). A garantia expira em: ${gExp.toLocaleDateString('pt-BR')}.`;
+    const TERMO_PADRAO =
+      'Este serviço possui garantia de {dias} dias, válida a partir da data de entrega ({data_entrega}). A garantia expira em: {data_expiracao}.\n' +
+      'A garantia cobre defeitos de fabricação nas peças substituídas e/ou mão de obra referente ao serviço descrito em "Solução Aplicada". Não cobre mau uso, danos por software, acidentes ou defeitos não relacionados ao reparo original.';
+    const gTxt = preencher(textos.termoGarantia || TERMO_PADRAO, {
+      dias: gDias,
+      data_entrega: dataSaida.toLocaleDateString('pt-BR'),
+      data_expiracao: gExp.toLocaleDateString('pt-BR'),
+    });
+    doc.fontSize(9);
     y = checkPage(y, doc.heightOfString(gTxt, { width: contentWidth }) + 60);
     doc.fontSize(14).text('Termo de Garantia', margin, y, { underline: true }); y += 20;
-    doc.fontSize(9).text(gTxt, margin, y, { width: contentWidth, align: 'justify' }); y = doc.y + 5;
-    doc.text('A garantia cobre defeitos de fabricação nas peças substituídas e/ou mão de obra referente ao serviço descrito em "Solução Aplicada". Não cobre mau uso, danos por software, acidentes ou defeitos não relacionados ao reparo original.', margin, y, { width: contentWidth, align: 'justify' }); y = doc.y + 30;
+    doc.fontSize(9).text(gTxt, margin, y, { width: contentWidth, align: 'justify' }); y = doc.y + 30;
     doc.y = y;
 
     // Assinatura

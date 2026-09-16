@@ -44,10 +44,15 @@ function SettingsScreen() {
   const [settings, setSettings] = useState({
     email: { host: "", port: 587, secure: false, user: "", pass: "", from: "" },
     branding: { companyName: "", logoPath: null, backgroundPath: null },
-    emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" },
+    emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "", notifyClientStatus: false, clientStatuses: [] },
     permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
     autoBackup: { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 },
+    empresa: { documento: "", telefone: "", email: "", endereco: "", site: "" },
+    documentos: { condicoesEntrada: "", termoGarantia: "" },
+    mensagensStatus: {},
   });
+  const [padroes, setPadroes] = useState(null);
+  const [statusMensagem, setStatusMensagem] = useState("Finalizado");
   const [licenseStatus, setLicenseStatus] = useState(null);
   const [licenseBusy, setLicenseBusy] = useState(false);
   const [licenseMsg, setLicenseMsg] = useState({ type: "", text: "" });
@@ -77,7 +82,11 @@ function SettingsScreen() {
           // Mescla com um objeto padrão para garantir que todos os campos existam
           const defaultEmail = { host: "", port: 587, secure: false, user: "", pass: "", from: "" };
           const defaultBranding = { companyName: "GSTI App", logoPath: null, backgroundPath: null };
-          const defaultNotifications = { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "" };
+          const defaultNotifications = {
+            notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "",
+            notifyClientStatus: false, clientStatuses: result.padroes?.statusAviso || [],
+          };
+          setPadroes(result.padroes || null);
           const defaultPerms = { canSeeFinancial: false, canSeeReports: false };
           const defaultAutoBackup = { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 };
           setSettings({
@@ -88,6 +97,9 @@ function SettingsScreen() {
               funcionario: { ...defaultPerms, ...(result.settings.permissions?.funcionario || {}) },
             },
             autoBackup: { ...defaultAutoBackup, ...(result.settings.autoBackup || {}) },
+            empresa: { documento: "", telefone: "", email: "", endereco: "", site: "", ...(result.settings.empresa || {}) },
+            documentos: { condicoesEntrada: "", termoGarantia: "", ...(result.settings.documentos || {}) },
+            mensagensStatus: { ...(result.settings.mensagensStatus || {}) },
           });
         } else {
           console.error("Erro ao carregar configurações:", result?.error);
@@ -241,6 +253,9 @@ function SettingsScreen() {
         emailNotifications: settings.emailNotifications,
         permissions: settings.permissions,
         autoBackup: settings.autoBackup,
+        empresa: settings.empresa,
+        documentos: settings.documentos,
+        mensagensStatus: settings.mensagensStatus,
       };
       const result = await window.api.saveAppSettings(settingsToSave);
       if (result.success) {
@@ -611,6 +626,70 @@ function SettingsScreen() {
       </Paper>
       {/* --- FIM NOVA SEÇÃO --- */}
 
+      {/* --- Dados da empresa e textos dos documentos --- */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom>
+          Dados da Empresa nos Documentos
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Aparecem no cabeçalho do comprovante de entrada e do recibo de saída, e no rodapé dos avisos por e-mail.
+        </Typography>
+        <Grid container spacing={2}>
+          {[
+            ["documento", "CNPJ / CPF", 4],
+            ["telefone", "Telefone / WhatsApp", 4],
+            ["email", "E-mail", 4],
+            ["endereco", "Endereço", 8],
+            ["site", "Site ou Instagram", 4],
+          ].map(([campo, rotulo, largura]) => (
+            <Grid key={campo} size={{ xs: 12, md: largura }}>
+              <TextField
+                label={rotulo}
+                value={settings.empresa[campo] || ""}
+                onChange={(e) => handleInputChange("empresa", campo, e.target.value)}
+                fullWidth
+                size="small"
+                disabled={saving}
+              />
+            </Grid>
+          ))}
+        </Grid>
+
+        <Typography variant="subtitle1" sx={{ mt: 3, fontWeight: 600 }}>
+          Textos dos documentos
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Deixe em branco para usar o texto padrão.
+        </Typography>
+        <TextField
+          label="Condições de serviço (comprovante de entrada)"
+          value={settings.documentos.condicoesEntrada}
+          placeholder={padroes?.condicoesEntrada}
+          onChange={(e) => handleInputChange("documentos", "condicoesEntrada", e.target.value)}
+          fullWidth
+          multiline
+          minRows={4}
+          margin="normal"
+          disabled={saving}
+          inputProps={{ maxLength: 1200 }}
+          helperText={`${(settings.documentos.condicoesEntrada || "").length}/1200 — o quadro do comprovante comporta cerca de 1.100 caracteres`}
+        />
+        <TextField
+          label="Termo de garantia (recibo de saída)"
+          value={settings.documentos.termoGarantia}
+          placeholder={padroes?.termoGarantia}
+          onChange={(e) => handleInputChange("documentos", "termoGarantia", e.target.value)}
+          fullWidth
+          multiline
+          minRows={4}
+          margin="normal"
+          disabled={saving}
+          inputProps={{ maxLength: 3000 }}
+          helperText="Variáveis: {dias}, {data_entrega}, {data_expiracao}"
+        />
+      </Paper>
+      {/* --- FIM Dados da empresa --- */}
+
       {/* --- Licenciamento e Ativação --- */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
@@ -805,6 +884,75 @@ function SettingsScreen() {
           }
           label="Notificar cliente quando a OS for finalizada (requer e-mail cadastrado no cliente)"
         />
+
+        <Divider sx={{ my: 2 }} />
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          Aviso ao cliente sobre o andamento
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          As mensagens abaixo são usadas no e-mail automático e no botão de WhatsApp da lista de OS
+          (que abre a conversa com a mensagem pronta para você enviar).
+        </Typography>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={!!settings.emailNotifications.notifyClientStatus}
+              onChange={(e) => handleInputChange("emailNotifications", "notifyClientStatus", e.target.checked)}
+              disabled={saving}
+            />
+          }
+          label="Enviar e-mail ao cliente quando a OS mudar para um dos status marcados"
+        />
+        {settings.emailNotifications.notifyClientStatus && padroes?.statusOS && (
+          <Box sx={{ ml: 4, display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {padroes.statusOS.map((st) => {
+              const marcados = settings.emailNotifications.clientStatuses || [];
+              const ativo = marcados.includes(st);
+              return (
+                <Chip
+                  key={st}
+                  label={st}
+                  color={ativo ? "primary" : "default"}
+                  variant={ativo ? "filled" : "outlined"}
+                  onClick={() =>
+                    handleInputChange(
+                      "emailNotifications",
+                      "clientStatuses",
+                      ativo ? marcados.filter((x) => x !== st) : [...marcados, st]
+                    )
+                  }
+                  disabled={saving}
+                />
+              );
+            })}
+          </Box>
+        )}
+
+        {padroes?.statusOS && (
+          <Box sx={{ mt: 2 }}>
+            <MuiFormControl size="small" sx={{ minWidth: 260 }}>
+              <InputLabel>Mensagem para o status</InputLabel>
+              <Select value={statusMensagem} label="Mensagem para o status" onChange={(e) => setStatusMensagem(e.target.value)}>
+                {padroes.statusOS.map((st) => (
+                  <MenuItem key={st} value={st}>{st}</MenuItem>
+                ))}
+              </Select>
+            </MuiFormControl>
+            <TextField
+              label={`Mensagem — ${statusMensagem}`}
+              value={settings.mensagensStatus[statusMensagem] || ""}
+              placeholder={padroes.mensagensStatus[statusMensagem]}
+              onChange={(e) => handleInputChange("mensagensStatus", statusMensagem, e.target.value)}
+              fullWidth
+              multiline
+              minRows={2}
+              margin="normal"
+              disabled={saving}
+              inputProps={{ maxLength: 600 }}
+              helperText="Em branco = mensagem padrão. Variáveis: {cliente}, {os}, {equipamento}, {status}, {valor}, {empresa}, {telefone_empresa}"
+            />
+          </Box>
+        )}
       </Paper>
       {/* --- Fim Notificações --- */}
 

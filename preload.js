@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   revalidateLicense: () => ipcRenderer.invoke('revalidate-license'),
   deactivateLicense: () => ipcRenderer.invoke('deactivate-license'),
   openLicenseSite: (pagina) => ipcRenderer.invoke('open-license-site', { pagina }),
+  getOSWhatsappMessage: (osId) => ipcRenderer.invoke('get-os-whatsapp-message', osId),
   testEmailSettings: (emailConfig) => ipcRenderer.invoke('test-email-settings', emailConfig),
   selectLogoFile: () => ipcRenderer.invoke('select-logo-file'),
   loadLogoImage: (logoPath) => ipcRenderer.invoke('load-logo-image', logoPath),

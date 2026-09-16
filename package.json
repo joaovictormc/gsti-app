@@ -49,6 +49,7 @@
       "pdf-worker.js",
       "license-manager.js",
       "license-config.js",
+      "os-comunicacao.js",
       "package.json",
       "!node_modules/@types/",
       "!node_modules/.bin/",

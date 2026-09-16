@@ -491,6 +491,42 @@ function OSForm({ initialData, onSave, onClose }) {
         </Table>
       </Paper>
 
+      {isEditing && (
+        <>
+          <Typography variant="h6" sx={{ mt: 3 }}>
+            Histórico de status
+          </Typography>
+          {initialData.historico && initialData.historico.length > 0 ? (
+            <Box component="ol" sx={{ listStyle: "none", p: 0, m: 0, mt: 1, borderLeft: 2, borderColor: "divider", pl: 2 }}>
+              {initialData.historico.map((h) => (
+                <Box component="li" key={h.id} sx={{ mb: 1.5, position: "relative" }}>
+                  <Box sx={{ position: "absolute", left: -21, top: 6, width: 8, height: 8, borderRadius: "50%", bgcolor: "primary.main" }} />
+                  <Typography variant="body2">
+                    {h.status_anterior ? (
+                      <>
+                        {h.status_anterior} → <strong>{h.status_novo}</strong>
+                      </>
+                    ) : (
+                      <>
+                        OS aberta como <strong>{h.status_novo}</strong>
+                      </>
+                    )}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(h.criado_em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                    {h.usuario ? ` · ${h.usuario}` : ""}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Sem mudanças registradas. O histórico começa a ser gravado a partir desta versão.
+            </Typography>
+          )}
+        </>
+      )}
+
       {validationError && (
         <Alert severity="error" sx={{ mt: 2 }} onClose={() => setValidationError(null)}>
           {validationError}

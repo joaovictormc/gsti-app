@@ -23,7 +23,9 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PrintIcon from "@mui/icons-material/Print";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import ConfirmDialog from "./ConfirmDialog";
+import { useAuth } from "../contexts/AuthContext";
 
 const STATUS_LIST = [
   "Orçamento",
@@ -61,6 +63,7 @@ const modalStyle = {
 };
 
 function OSGrid() {
+  const { currentUser } = useAuth();
   const [osList, setOSList] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOS, setEditingOS] = useState(null);
@@ -153,12 +156,12 @@ function OSGrid() {
     const isEditing = !!osData.id;
     if (isEditing) {
       const [osResult] = await Promise.all([
-        window.api.updateOS({ osData, total }),
+        window.api.updateOS({ osData, total, usuarioId: currentUser?.id }),
         window.api.updateOSItems({ osId: osData.id, items }),
       ]);
       if (!osResult.success) showSnackbar(`Erro ao salvar OS: ${osResult.error}`);
     } else {
-      const osResult = await window.api.addOS({ osData, total });
+      const osResult = await window.api.addOS({ osData, total, usuarioId: currentUser?.id });
       if (osResult.success) {
         await window.api.addOSItems({ osId: osResult.osId, items });
       } else {
@@ -178,6 +181,14 @@ function OSGrid() {
     const result = await window.api.generateExitReceipt(osId);
     if (!result.success) showSnackbar(`Erro ao gerar PDF de Saída: ${result.error}`);
     else fetchOSList();
+  };
+
+  // Abre o WhatsApp do cliente com mensagem pronta conforme o status da OS
+  const handleWhatsApp = async (osId) => {
+    const r = await window.api.getOSWhatsappMessage(osId);
+    if (!r.success) return showSnackbar(r.error, "warning");
+    const aberto = await window.api.openWhatsappLink({ telefone: r.telefone, mensagem: r.mensagem });
+    if (aberto && aberto.success === false) showSnackbar(aberto.error, "warning");
   };
 
   const handleClearFilters = () => { setSearchTerm(""); setStatusFilter("Todos"); };
@@ -219,10 +230,13 @@ function OSGrid() {
     {
       field: "actions",
       headerName: "Ações",
-      width: 180,
+      width: 215,
       sortable: false,
       renderCell: (p) => (
         <>
+          <IconButton onClick={() => handleWhatsApp(p.row.id)} title="Avisar cliente pelo WhatsApp" size="small" sx={{ color: "#25D366" }}>
+            <WhatsAppIcon fontSize="small" />
+          </IconButton>
           <IconButton onClick={() => handlePrintReceipt(p.row.id)} title="Comprovante de Entrada" size="small">
             <PrintIcon fontSize="small" />
           </IconButton>
