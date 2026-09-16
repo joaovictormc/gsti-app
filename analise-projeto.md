@@ -153,7 +153,7 @@ Adicionar à tabela `produtos_servicos`:
 
 ### 4.3 Módulo Financeiro — Fase 3 (Esforço: Médio)
 
-Funcionalidades do `refinos-futuros.md`:
+Funcionalidades do `docs/PROXIMA-VERSAO.md` (antigo refinos-futuros.md):
 - **Fluxo de Caixa detalhado**: tabela com entradas/saídas dia a dia no período selecionado
 - **Gráfico de pizza** de despesas por categoria (já tem os dados, falta o componente)
 - **Relatório de despesas em Excel** (modelo similar ao `export-financial-report` já existente)
@@ -162,7 +162,7 @@ Funcionalidades do `refinos-futuros.md`:
 ### 4.4 Permissões Granulares por Role (Esforço: Alto)
 
 Atualmente há apenas "Admin" e "Funcionario". Implementar:
-- Funcionário não vê módulos Financeiro e Relatórios (já mapeado no `refinos-futuros.md`)
+- Funcionário não vê módulos Financeiro e Relatórios (já mapeado no `docs/PROXIMA-VERSAO.md` (antigo refinos-futuros.md))
 - Tabela `permissoes` com flags por módulo por role
 - UI de gerenciamento de permissões na tela de Usuários
 
