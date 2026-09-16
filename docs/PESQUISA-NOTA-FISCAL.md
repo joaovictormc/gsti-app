@@ -1,6 +1,7 @@
 # Emissão de nota fiscal no GSTI App — pesquisa e recomendação
 
 Pesquisa feita em 16/09/2026. Objetivo: emitir nota a partir de uma OS finalizada.
+Comparativo de emissores na seção 4; estratégia definida na seção 5.
 Regras fiscais mudam com frequência e dependem do município, do estado e do regime da
 empresa: **valide o enquadramento de cada cliente com o contador** antes de liberar a
 funcionalidade.
@@ -40,7 +41,8 @@ Como a API funciona:
 | Autenticação | mTLS com **certificado ICP-Brasil A1** da empresa (A3 exige token físico; inviável para automação) |
 | Envio | **DPS** (Declaração de Prestação de Serviço) em XML **assinado (XMLDSig)**, compactado em GZip e codificado em Base64 dentro de um JSON |
 | Resposta | Síncrona: devolve a NFS-e (XML) com chave de acesso de 50 caracteres |
-| Operações | `POST /nfse`, `GET /nfse/{chave}`, `GET /dps/{id}`, eventos (cancelamento/substituição) em `/nfse/{chave}/eventos`, DANFSe (PDF) em `/danfse/{chave}` |
+| Operações | `POST /nfse`, `GET /nfse/{chave}`, `GET /dps/{id}`, eventos (cancelamento/substituição) em `/nfse/{chave}/eventos` |
+| DANFSe (PDF) | **A API oficial do DANFSe foi descontinuada em 01/07/2026.** O próprio sistema emissor gera o PDF seguindo a Nota Técnica 008/2026 (A4, QR Code, campos iguais ao XML, incluindo IBS/CBS) |
 | Parâmetros do município | Alíquotas, códigos de tributação nacional, regimes e retenções consultáveis na API |
 | URLs | Produção: `sefin.nfse.gov.br` / `adn.nfse.gov.br` · Testes: `sefin.producaorestrita.nfse.gov.br` / `adn.producaorestrita.nfse.gov.br` (Swagger publicado) |
 
@@ -49,7 +51,7 @@ Custo: **zero por nota**. Esforço: **médio/alto**. É preciso:
 - montar e assinar o XML da DPS;
 - tratar erros de schema, duplicidade (409) e relógio;
 - implementar o cancelamento;
-- gerar ou baixar o DANFSe;
+- gerar o DANFSe (PDF) conforme a NT 008/2026;
 - acompanhar as mudanças de leiaute.
 
 ### 2.2 NF-e e NFC-e — não há API gratuita oficial
@@ -108,7 +110,71 @@ SaaS Pro nosso e revender, o que traz custo fixo e responsabilidade fiscal para 
 
 ---
 
-## 4. Recomendação
+## 4. Comparativo de emissores com API
+
+Critérios: **robustez** (tempo de mercado, volume, cobertura), **confiabilidade**
+(sandbox, webhooks, documentação) e **configuração universal** (NFS-e + NF-e + NFC-e numa
+integração só, em qualquer município/estado, com o cliente configurando a própria conta).
+
+Preços e números conforme os sites dos fornecedores em 09/2026; confirmar antes de
+contratar.
+
+| # | Emissor | Documentos | Cobertura | Entrada | Pontos fortes | Pontos de atenção |
+|---|---|---|---|---|---|---|
+| 1 | **Focus NFe** | NFS-e (municipal e **Nacional**), NF-e, NFC-e, CT-e, MDF-e | 3.000+ municípios; município novo em até 15 dias úteis (R$ 199) | Solo **R$ 89,90**/mês (1 CNPJ, 100 notas, R$ 0,10 extra); Retail NFC-e R$ 59,90 | 33 mil empresas e 860 mi de notas (segundo o site); API de empresas; webhooks; documentação pública com NFS-e Nacional; teste de 30 dias | Sem plano gratuito; URL de homologação e envio de certificado a confirmar na documentação detalhada |
+| 2 | **PlugNotas** (TecnoSpeed) | NFS-e (incl. Nacional), NF-e, NFC-e, NFCom, MDF-e | NFS-e 2.200+ municípios; NF-e/NFC-e todos os estados | Sob consulta (cobrança mensal por nota emitida) | 20 anos de mercado, 4.100 software houses; sandbox público sem cadastro; idempotência; webhooks | Feita para **software house** (conta do parceiro, multi-CNPJ): melhor para o modelo centralizado; preço não público |
+| 3 | **WebmaniaBR** | NF-e, NFC-e, NFS-e (incl. Nacional), CT-e, MDF-e | Nacional (número de municípios não confirmado) | A partir de **R$ 69,90**/mês | Painel + API, SDK npm, webhooks, suporte com contadores | Página de planos bloqueou a consulta; limites por plano a confirmar |
+| 4 | **Spedy** | NF-e, NFS-e, NFC-e | Nacional (segundo o site) | Essencial **R$ 79**/mês (200 documentos somados entre os tipos) | Volume compartilhado entre os tipos; webhooks; SDKs | Foco em negócios digitais; histórico/volume não informados |
+| 5 | **Notaas** | NFS-e, NF-e, NFC-e | 3.413 municípios (segundo o site) | **Grátis** (50 notas/mês, 1 CNPJ) | Plano gratuito real; sandbox; webhooks assinados | Empresa sem histórico público; documentação com lacunas; comparativos só do próprio blog |
+| 6 | NFE.io | NFS-e (páginas de preço não citam NF-e/NFC-e) | — | API só a partir do Growth, **R$ 265**/mês | Integrações prontas (gateways, Zapier/n8n); guarda 11 anos | Não é universal (produto) e caro para assistência pequena |
+| 7 | eNotas | NFS-e, NF-e | "Centenas" de prefeituras | Preços não confirmados no site oficial | Desde 2011 | Foco em infoprodutores (Hotmart); API não destacada |
+| — | ~~Nuvem Fiscal~~ | — | — | — | — | **Serviço desativado em 31/07/2026** (comunicado de 22/04/2026) — descartar |
+| — | Emissor Nacional (direto) | Só NFS-e | Todos os municípios | **Grátis** | Oficial, sem intermediário | Certificado no app, XML assinado, mTLS e **DANFSe gerado por nós** (NT 008/2026) |
+
+### Leitura do comparativo
+
+- **Mais universal para o cliente configurar sozinho:** **Focus NFe**. Cobre os três
+  documentos e a NFS-e Nacional, tem o maior histórico público e um plano de 1 CNPJ em que
+  cada assistência contrata e configura a própria conta.
+- **Mais robusto para um modelo centralizado (revenda):** **PlugNotas**. Faz sentido se no
+  futuro a plataforma contratar a emissão e repassar no plano; exige negociação comercial.
+- **Menor custo de entrada:** **Notaas** (grátis) e **WebmaniaBR / Spedy** (R$ 70–80).
+  Bons como segunda opção, depois de validados em sandbox.
+- **Opção sem mensalidade para NFS-e:** Emissor Nacional direto. Fica para depois, porque
+  exige gerar o PDF e manter a assinatura do XML.
+
+---
+
+## 5. Estratégia definida
+
+- **Emissores integrados, escolhidos e configurados pelo cliente no app.** Cada provedor é um
+  adaptador com as mesmas operações (validar configuração, emitir, consultar, cancelar,
+  baixar PDF/XML) e declara os campos de configuração; a tela é gerada a partir disso.
+  Não haverá cadastro genérico de "qualquer API".
+- **Modo "emito por fora"** disponível para todos: registrar na OS o número, a data, o valor e o
+  PDF/XML da nota emitida no portal da prefeitura, no Emissor Nacional ou pelo contador.
+- **Credenciais só no app** (cifradas, como as senhas do banco). O portal do cliente não
+  guarda chave de API nem certificado.
+- **Liberação por plano:** configurar um emissor integrado fica disponível a partir do
+  **plano anual com recorrência** (assinatura). A licença passa a carregar esse recurso; o
+  modo "emito por fora" continua disponível nos demais planos.
+- **Portal do cliente:** catálogo de emissores com guia passo a passo e formulário
+  "solicitar outro emissor". Os pedidos formam um ranking no painel admin, que orienta as próximas integrações.
+- **Aviso automático (opcional, avançado):** enviar os dados da OS finalizada para uma URL
+  (n8n, Zapier, sistema do contador).
+
+### Ordem de implementação sugerida
+
+1. Estrutura de adaptadores + tabela `notas_fiscais` + modo "emito por fora" + recurso
+   por plano na licença.
+2. Adaptador **Focus NFe** (NFS-e municipal/Nacional; depois NF-e/NFC-e).
+3. Adaptador **Notaas** (opção de entrada gratuita).
+4. Demais (PlugNotas, WebmaniaBR, Spedy) conforme o ranking de pedidos do portal.
+5. Emissor Nacional direto (NFS-e grátis), se houver demanda.
+
+---
+
+## 6. Recomendação inicial (antes do comparativo)
 
 **Arquitetura com "provedor de emissão" plugável** (`emissor-fiscal.js`), para não
 prender o app a um fornecedor:
@@ -151,4 +217,12 @@ prender o app a um fornecedor:
 - [Emissor de NF-e gratuito em 2026 — Inteligência Setorial](https://inteligenciasetorial.com.br/emissor-de-nfe-gratuito/)
 - [Notaas — site e planos](https://www.notaas.com.br/)
 - [Notaas — documentação (NFS-e)](https://docs.notaas.com.br/docs/endpoints) · [NF-e/NFC-e](https://docs.notaas.com.br/docs/nfe/endpoints)
+- [API do DANFSe descontinuada em julho de 2026 — Reforma Tributária](https://www.reformatributaria.com/tecnologia/api-do-danfse-sera-descontinuada-em-julho-de-2026-e-emissao-passa-a-ser-feita-pelos-sistemas-das-empresas/)
+- [Focus NFe — planos](https://focusnfe.com.br/precos/) · [documentação](https://doc.focusnfe.com.br/)
+- [PlugNotas — TecnoSpeed](https://tecnospeed.com.br/plugdfe/plugnotas/) · [como funciona a tabela de preço](https://atendimento.tecnospeed.com.br/hc/pt-br/articles/360019622493-Como-funciona-a-tabela-de-pre%C3%A7o)
+- [WebmaniaBR — planos](https://webmania.com.br/planos/) · [API NFS-e](https://webmania.com.br/docs/rest-api-nfse/)
+- [Spedy — API](https://lp.spedy.com.br/api)
+- [NFE.io — preços](https://nfe.io/precos/)
+- [eNotas](https://enotas.com.br/)
+- [Comunicado de desativação da Nuvem Fiscal](https://www.nuvemfiscal.com.br/suporte/) · [Projeto ACBr](https://www.projetoacbr.com.br/forum/topic/91922-comunicado-de-desativa%C3%A7%C3%A3o-do-servi%C3%A7o-nuvem-fiscal-22042026/)
 - [Comparativo de APIs de NFS-e Nacional — blog da Notaas (conteúdo do próprio fornecedor)](https://www.notaas.com.br/blog/post/api-nfse-nacional-melhor-provedor-emissao-nota-fiscal-de-servico-eletronica-nacional)
