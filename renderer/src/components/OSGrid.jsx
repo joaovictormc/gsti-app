@@ -25,6 +25,7 @@ import PrintIcon from "@mui/icons-material/Print";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import ConfirmDialog from "./ConfirmDialog";
+import { useAuth } from "../contexts/AuthContext";
 
 const STATUS_LIST = [
   "Orçamento",
@@ -62,6 +63,7 @@ const modalStyle = {
 };
 
 function OSGrid() {
+  const { permissoes } = useAuth();
   const [osList, setOSList] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOS, setEditingOS] = useState(null);
@@ -246,9 +248,11 @@ function OSGrid() {
           <IconButton onClick={() => handleOpenEditModal(p.row.id)} title="Editar OS" size="small">
             <EditIcon fontSize="small" />
           </IconButton>
-          <IconButton onClick={() => handleDeleteRequest(p.row.id)} title="Excluir OS" color="error" size="small">
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {permissoes.podeExcluir && (
+            <IconButton onClick={() => handleDeleteRequest(p.row.id)} title="Excluir OS" color="error" size="small">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </>
       ),
     },
@@ -258,7 +262,12 @@ function OSGrid() {
     <>
       {/* Cabeçalho */}
       <Box sx={{ mb: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h4" sx={{ mb: 0 }}>Ordens de Serviço</Typography>
+        <Box>
+          <Typography variant="h4" sx={{ mb: 0 }}>Ordens de Serviço</Typography>
+          {permissoes.somenteOSAtribuidas && (
+            <Typography variant="body2" color="text.secondary">Mostrando as OS em que você é o responsável.</Typography>
+          )}
+        </Box>
         <Button variant="contained" onClick={handleOpenAddModal}>Adicionar Nova OS</Button>
       </Box>
 

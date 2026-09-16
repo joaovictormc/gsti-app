@@ -17,6 +17,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
+import { useAuth } from "../contexts/AuthContext";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ConfirmDialog from "./ConfirmDialog";
@@ -46,6 +47,7 @@ const lerMoeda = (v) => {
 const paraCampo = (v) => (v === null || v === undefined ? "" : String(v).replace(".", ","));
 
 function ProductServiceGrid() {
+  const { permissoes } = useAuth();
   const [products, setProducts] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -139,6 +141,8 @@ function ProductServiceGrid() {
     }
   };
 
+  const podeEditar = !!permissoes.editarProdutos;
+  const podeExcluir = !!permissoes.podeExcluir;
   const columns = [
     { field: "id", headerName: "ID", width: 90 },
     { field: "descricao", headerName: "Descrição", flex: 1, minWidth: 250 },
@@ -149,13 +153,13 @@ function ProductServiceGrid() {
       width: 120,
       renderCell: (params) => formatarMoeda(params.row.valor),
     },
-    {
+    permissoes.verCusto && {
       field: "custo",
       headerName: "Custo",
       width: 120,
       renderCell: (params) => (params.row.custo === null || params.row.custo === undefined ? "—" : formatarMoeda(params.row.custo)),
     },
-    {
+    permissoes.verCusto && {
       field: "margem",
       headerName: "Margem",
       width: 110,
@@ -174,23 +178,27 @@ function ProductServiceGrid() {
       width: 100,
       renderCell: (params) => (params.row.tipo === "Produto" ? params.row.estoque_atual : "—"),
     },
-    {
+    (podeEditar || podeExcluir) && {
       field: "actions",
       headerName: "Ações",
       width: 100,
       sortable: false,
       renderCell: (params) => (
         <>
-          <IconButton onClick={() => handleOpenEditModal(params.row)}>
-            <EditIcon />
-          </IconButton>
-          <IconButton onClick={() => handleDeleteRequest(params.row.id)} color="error">
-            <DeleteIcon />
-          </IconButton>
+          {podeEditar && (
+            <IconButton onClick={() => handleOpenEditModal(params.row)} title="Editar">
+              <EditIcon />
+            </IconButton>
+          )}
+          {podeExcluir && (
+            <IconButton onClick={() => handleDeleteRequest(params.row.id)} color="error" title="Excluir">
+              <DeleteIcon />
+            </IconButton>
+          )}
         </>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <>
@@ -198,9 +206,11 @@ function ProductServiceGrid() {
         <Typography variant="h4" gutterBottom>
           Gestão de Produtos e Serviços
         </Typography>
-        <Button variant="contained" onClick={handleOpenAddModal}>
-          Adicionar Novo
-        </Button>
+        {podeEditar && (
+          <Button variant="contained" onClick={handleOpenAddModal}>
+            Adicionar Novo
+          </Button>
+        )}
       </Box>
       <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
@@ -240,17 +250,19 @@ function ProductServiceGrid() {
                 value={editingProduct.valor}
                 onChange={handleInputChange}
               />
-              <TextField
-                margin="normal"
-                fullWidth
-                name="custo"
-                label="Custo (R$)"
-                type="text"
-                inputMode="decimal"
-                value={editingProduct.custo}
-                onChange={handleInputChange}
-                helperText="Opcional — usado na margem"
-              />
+              {permissoes.verCusto && (
+                <TextField
+                  margin="normal"
+                  fullWidth
+                  name="custo"
+                  label="Custo (R$)"
+                  type="text"
+                  inputMode="decimal"
+                  value={editingProduct.custo}
+                  onChange={handleInputChange}
+                  helperText="Opcional — usado na margem"
+                />
+              )}
             </Stack>
             <FormControl fullWidth margin="normal">
               <InputLabel>Tipo</InputLabel>

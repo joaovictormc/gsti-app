@@ -10,18 +10,23 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
+  const carregarSessao = async () => {
+    try {
+      const result = await window.api.getCurrentSession();
+      setCurrentUser(result?.user || null);
+    } catch (e) {
+      console.error("Erro ao consultar a sessão:", e);
+      setCurrentUser(null);
+    } finally {
+      setLoadingAuth(false); // Marca que a verificação inicial terminou
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const result = await window.api.getCurrentSession();
-        setCurrentUser(result?.user || null);
-      } catch (e) {
-        console.error("Erro ao consultar a sessão:", e);
-        setCurrentUser(null);
-      } finally {
-        setLoadingAuth(false); // Marca que a verificação inicial terminou
-      }
-    })();
+    carregarSessao();
+    // Permissões podem mudar ao salvar Configurações
+    window.addEventListener("gsti:configuracoes-salvas", carregarSessao);
+    return () => window.removeEventListener("gsti:configuracoes-salvas", carregarSessao);
   }, []);
 
   // Chamada após login bem-sucedido (o processo principal já registrou a sessão)
@@ -41,6 +46,8 @@ export function AuthProvider({ children }) {
   // O valor que será compartilhado com os componentes filhos
   const value = {
     currentUser,
+    // Permissões efetivas calculadas no processo principal (Admin: todas)
+    permissoes: currentUser?.permissoes || {},
     login,
     logout,
     loadingAuth, // Exporta o estado de loading inicial

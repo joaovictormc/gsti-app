@@ -8,9 +8,40 @@
 //   setup       — sem login só enquanto a configuração inicial não foi concluída; depois, Admin
 //   sessao      — qualquer usuário logado
 //   admin       — somente Admin
-//   financeiro  — Admin ou Funcionário com "Financeiro" liberado em Configurações
-//   relatorios  — Admin ou Funcionário com "Relatórios" liberado em Configurações
+// Os demais níveis dependem das permissões do perfil (Configurações > Permissões);
+// o Admin sempre tem todas:
+//   financeiro  — canSeeFinancial      relatorios — canSeeReports
+//   excluir     — podeExcluir          custo      — verCusto
+//   produtos    — editarProdutos       estoque    — ajustarEstoque
+//   cadastros   — editarCadastros (clientes e equipamentos)
+// "Só OS atribuídas" (somenteOSAtribuidas) não é um nível: é aplicado nos handlers de OS.
 // Um canal pode aceitar mais de um nível (lista): basta atender a um deles.
+
+// Perfis configuráveis (chave usada em config.permissions)
+const PERFIS = { Funcionario: "funcionario", Tecnico: "tecnico" };
+
+// Permissões de cada perfil quando ainda não foram ajustadas em Configurações.
+// Funcionário mantém o comportamento anterior; Técnico começa restrito às OS dele.
+const PERMISSOES_PADRAO = {
+  funcionario: {
+    somenteOSAtribuidas: false, podeExcluir: true, verCusto: true, editarProdutos: true,
+    ajustarEstoque: true, editarCadastros: true, canSeeFinancial: false, canSeeReports: false,
+  },
+  tecnico: {
+    somenteOSAtribuidas: true, podeExcluir: false, verCusto: false, editarProdutos: false,
+    ajustarEstoque: false, editarCadastros: false, canSeeFinancial: false, canSeeReports: false,
+  },
+};
+
+const PERMISSOES_ADMIN = {
+  somenteOSAtribuidas: false, podeExcluir: true, verCusto: true, editarProdutos: true,
+  ajustarEstoque: true, editarCadastros: true, canSeeFinancial: true, canSeeReports: true,
+};
+
+const NIVEL_PERMISSAO = {
+  financeiro: "canSeeFinancial", relatorios: "canSeeReports", excluir: "podeExcluir",
+  custo: "verCusto", produtos: "editarProdutos", estoque: "ajustarEstoque", cadastros: "editarCadastros",
+};
 const POLITICAS_IPC = {
   // Configuração inicial e licença
   "is-initial-setup-needed": "publico",
@@ -51,19 +82,19 @@ const POLITICAS_IPC = {
   "search-cep": "sessao",
   "validate-cnpj": "sessao",
   "get-customers": "sessao",
-  "add-customer": "sessao",
-  "update-customer": "sessao",
-  "delete-customer": "sessao",
+  "add-customer": "cadastros",
+  "update-customer": "cadastros",
+  "delete-customer": "excluir",
   "get-customer-timeline": "sessao",
   "get-equipments": "sessao",
-  "add-equipment": "sessao",
-  "update-equipment": "sessao",
-  "delete-equipment": "sessao",
+  "add-equipment": "cadastros",
+  "update-equipment": "cadastros",
+  "delete-equipment": "excluir",
   "get-equipment-history": "sessao",
   "get-products": "sessao",
-  "add-product": "sessao",
-  "update-product": "sessao",
-  "delete-product": "sessao",
+  "add-product": "produtos",
+  "update-product": "produtos",
+  "delete-product": "excluir",
   "get-os-list": "sessao",
   "get-active-data": "sessao",
   "get-os-details": "sessao",
@@ -71,7 +102,7 @@ const POLITICAS_IPC = {
   "update-os": "sessao",
   "add-os-items": "sessao",
   "update-os-items": "sessao",
-  "delete-os": "sessao",
+  "delete-os": "excluir",
   "generate-entry-receipt": "sessao",
   "generate-exit-receipt": "sessao",
   "get-os-whatsapp-message": "sessao",
@@ -79,8 +110,8 @@ const POLITICAS_IPC = {
   "get-dashboard-stats": "sessao", // valores financeiros só com permissão (filtrado no handler)
   "get-os-agenda": "sessao",
   "get-stock": "sessao",
-  "adjust-stock": "sessao",
-  "update-stock-min": "sessao",
+  "adjust-stock": "estoque",
+  "update-stock-min": "estoque",
   "get-warranty-panel": "sessao",
   "send-warranty-email": "sessao",
   "get-most-used-services": "sessao", // também aparece na tela inicial
@@ -113,12 +144,12 @@ const POLITICAS_IPC = {
   "get-os-by-status": "relatorios",
   "get-os-by-attendant": "relatorios",
   "get-open-os-aging": "relatorios",
-  "get-profitability-report": "relatorios",
+  "get-profitability-report": "relatorios", // também exige "custo" (verificado no handler)
   "search-os-by-serial": "relatorios",
   "get-detailed-revenue-report": "relatorios",
 };
 
-const NIVEIS = new Set(["publico", "setup", "sessao", "admin", "financeiro", "relatorios"]);
+const NIVEIS = new Set(["publico", "setup", "sessao", "admin", ...Object.keys(NIVEL_PERMISSAO)]);
 
 function criarControleAcesso({ obterConfig, politicas = POLITICAS_IPC }) {
   const sessoes = new Map(); // id do webContents -> { id, nome, role }
@@ -129,18 +160,31 @@ function criarControleAcesso({ obterConfig, politicas = POLITICAS_IPC }) {
     }
   }
 
+  // Permissões efetivas do usuário (padrão do perfil + ajustes salvos em Configurações)
+  function permissoesDe(usuario) {
+    if (!usuario) return null;
+    if (usuario.role === "Admin") return { ...PERMISSOES_ADMIN };
+    const perfil = PERFIS[usuario.role];
+    if (!perfil) return { ...PERMISSOES_PADRAO.tecnico }; // papel desconhecido: o mais restrito
+    return { ...PERMISSOES_PADRAO[perfil], ...(obterConfig()?.permissions?.[perfil] || {}) };
+  }
+
   function pode(usuario, nivel) {
     return [].concat(nivel).some((n) => {
       if (n === "publico") return true;
       if (n === "setup" && !obterConfig()?.setupComplete) return true;
       if (!usuario) return false;
       if (usuario.role === "Admin") return true;
-      const perms = obterConfig()?.permissions?.funcionario || {};
       if (n === "sessao") return true;
-      if (n === "financeiro") return !!perms.canSeeFinancial;
-      if (n === "relatorios") return !!perms.canSeeReports;
-      return false;
+      const chave = NIVEL_PERMISSAO[n];
+      return chave ? !!permissoesDe(usuario)[chave] : false;
     });
+  }
+
+  // Usuário restrito às OS em que é o responsável (id_atendente)? Devolve o id ou null.
+  function restricaoOS(event) {
+    const usuario = usuarioDe(event);
+    return usuario && permissoesDe(usuario).somenteOSAtribuidas ? usuario.id : null;
   }
 
   function iniciarSessao(event, usuario) {
@@ -180,7 +224,7 @@ function criarControleAcesso({ obterConfig, politicas = POLITICAS_IPC }) {
     };
   }
 
-  return { pode, iniciarSessao, encerrarSessao, usuarioDe, protegerIpc };
+  return { pode, permissoesDe, restricaoOS, iniciarSessao, encerrarSessao, usuarioDe, protegerIpc };
 }
 
-module.exports = { criarControleAcesso, POLITICAS_IPC };
+module.exports = { criarControleAcesso, POLITICAS_IPC, PERFIS, PERMISSOES_PADRAO };

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "../contexts/AuthContext";
 import {
   Alert,
   Box,
@@ -56,6 +57,9 @@ const nullToString = (value) =>
   value === null || value === undefined ? "" : String(value);
 
 function OSForm({ initialData, onSave, onClose }) {
+  const { currentUser, permissoes } = useAuth();
+  // Perfil com "Só OS atribuídas": o responsável é sempre o próprio usuário
+  const responsavelFixo = !!permissoes.somenteOSAtribuidas;
   const [osData, setOsData] = useState(BLANK_OS);
   const [activeData, setActiveData] = useState({ customers: [], products: [], users: [] });
   const [selectedItems, setSelectedItems] = useState([]);
@@ -270,7 +274,8 @@ function OSForm({ initialData, onSave, onClose }) {
       />
 
       <Autocomplete
-        value={selectedAtendente}
+        value={responsavelFixo ? activeData.users.find((u) => u.id === currentUser?.id) || null : selectedAtendente}
+        disabled={responsavelFixo}
         options={activeData.users}
         getOptionLabel={(option) => (option ? option.nome : "")}
         isOptionEqualToValue={(option, value) => option?.id === value?.id}
@@ -279,7 +284,12 @@ function OSForm({ initialData, onSave, onClose }) {
           setOsData((prev) => ({ ...prev, id_atendente: newValue ? newValue.id : null }));
         }}
         renderInput={(params) => (
-          <TextField {...params} label="Atendente / Técnico Responsável" margin="normal" />
+          <TextField
+            {...params}
+            label="Atendente / Técnico Responsável"
+            margin="normal"
+            helperText={responsavelFixo ? "As OS que você abre ficam com você como responsável." : undefined}
+          />
         )}
       />
 

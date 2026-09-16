@@ -10,6 +10,7 @@ import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import EditIcon from "@mui/icons-material/Edit";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import { useAuth } from "../contexts/AuthContext";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 
@@ -35,6 +36,7 @@ function StatCard({ icon: Icon, label, value, color }) {
 }
 
 export default function StockControl() {
+  const { permissoes } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -135,7 +137,7 @@ export default function StockControl() {
       align: "center",
       headerAlign: "center",
     },
-    {
+    permissoes.ajustarEstoque && {
       field: "actions",
       headerName: "Ajustar",
       width: 130,
@@ -165,7 +167,7 @@ export default function StockControl() {
         </>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <Box>

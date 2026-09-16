@@ -32,6 +32,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import HistoryIcon from "@mui/icons-material/History";
 import ConfirmDialog from "./ConfirmDialog";
+import { useAuth } from "../contexts/AuthContext";
 import { TIPOS_EQUIPAMENTO, tiposCom, descreverEquipamento } from "../constants/equipamentos";
 
 const VAZIO = { id: null, cliente_id: null, tipo: "Notebook", marca: "", modelo: "", numero_serie: "", observacoes: "" };
@@ -40,6 +41,7 @@ const dataCurta = (v) => (v ? new Date(v).toLocaleDateString("pt-BR") : "—");
 const moeda = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
 
 function EquipmentGrid() {
+  const { permissoes } = useAuth();
   const [equipamentos, setEquipamentos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -142,10 +144,14 @@ function EquipmentGrid() {
       renderCell: (p) => (
         <>
           <IconButton size="small" title="Histórico de OS" onClick={() => abrirHistorico(p.row)}><HistoryIcon fontSize="small" /></IconButton>
-          <IconButton size="small" title="Editar" onClick={() => abrirEdicao(p.row)}><EditIcon fontSize="small" /></IconButton>
-          <IconButton size="small" title="Excluir" color="error" onClick={() => setConfirmar({ open: true, id: p.row.id, isDeleting: false })}>
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {permissoes.editarCadastros && (
+            <IconButton size="small" title="Editar" onClick={() => abrirEdicao(p.row)}><EditIcon fontSize="small" /></IconButton>
+          )}
+          {permissoes.podeExcluir && (
+            <IconButton size="small" title="Excluir" color="error" onClick={() => setConfirmar({ open: true, id: p.row.id, isDeleting: false })}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </>
       ),
     },
@@ -162,7 +168,9 @@ function EquipmentGrid() {
             Aparelhos de cada cliente. As OS novas são vinculadas automaticamente.
           </Typography>
         </Box>
-        <Button variant="contained" onClick={abrirNovo}>Cadastrar equipamento</Button>
+        {permissoes.editarCadastros && (
+          <Button variant="contained" onClick={abrirNovo}>Cadastrar equipamento</Button>
+        )}
       </Box>
 
       <Paper sx={{ p: 1.5, mb: 2, display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>

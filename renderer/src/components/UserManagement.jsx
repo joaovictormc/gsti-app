@@ -18,6 +18,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { useAuth } from "../contexts/AuthContext"; // Importa o hook de autenticação
+import { PAPEIS, rotuloPapel } from "../constants/perfis";
 
 // Estilo do Modal
 const modalStyle = {
@@ -41,7 +42,7 @@ const BLANK_USER = {
   role: "Funcionario", // Papel padrão
 };
 
-const USER_ROLES = ["Admin", "Funcionario"];
+// Papéis com rótulo (Admin, Funcionário, Técnico)
 
 function UserManagement() {
   const { currentUser } = useAuth(); // Pega o usuário logado atual
@@ -159,7 +160,7 @@ function UserManagement() {
     { field: "nome", headerName: "Nome", flex: 1, minWidth: 200 },
     { field: "email", headerName: "Email", flex: 1, minWidth: 200 },
     { field: "login", headerName: "Login", flex: 1, minWidth: 150 },
-    { field: "role", headerName: "Papel", width: 130 },
+    { field: "role", headerName: "Papel", width: 130, valueFormatter: (valor) => rotuloPapel(valor) },
     {
       field: "actions",
       headerName: "Ações",
@@ -289,9 +290,9 @@ function UserManagement() {
                 label="Papel"
                 onChange={handleInputChange}
               >
-                {USER_ROLES.map((role) => (
-                  <MenuItem key={role} value={role}>
-                    {role}
+                {PAPEIS.map((papel) => (
+                  <MenuItem key={papel.valor} value={papel.valor}>
+                    {papel.rotulo}
                   </MenuItem>
                 ))}
               </Select>

@@ -65,6 +65,12 @@ Atualizado em 2026-09-16.
 - [x] Conexão ociosa derrubada pelo servidor do banco não abre mais janela de erro.
 - [x] **Tabelas criadas automaticamente** na primeira instalação em banco vazio.
 - [x] Código de redefinição de senha: validade corrigida (10 min) e bloqueio após 5 erros.
+- [x] **Perfil Técnico e permissões por perfil** (Configurações > Permissões por perfil):
+      para Funcionário e Técnico, liga/desliga "Só OS atribuídas", editar clientes e
+      equipamentos, editar produtos, ajustar estoque, ver custo e margem, excluir
+      registros, Financeiro e Relatórios. Tudo verificado no processo principal; a
+      interface esconde botões e colunas sem permissão. Funcionário mantém o
+      comportamento anterior por padrão; Técnico começa restrito às OS dele.
 
 ---
 
@@ -110,12 +116,9 @@ um recorte viável:
 Com o sistema vendido por instância (cada cliente é dono do próprio app + banco):
 
 - **O comprador (cliente) deve ter acesso Admin total** da sua instância.
-- Adicionar um papel **Técnico/Operador**, distinto do atual `Funcionario`, voltado
-  à operação (OS, clientes, estoque), sem acesso a configurações sensíveis.
-- Reavaliar a granularidade atual (`Admin` x `Funcionario` + `canSeeFinancial` /
-  `canSeeReports`).
-- O ENUM `user_role_enum ('Admin', 'Funcionario')` precisará de migração, além de
-  ajustes em Gerenciar Usuários e nos controles de acesso (`App.jsx`).
+- Papéis: **Admin**, **Funcionário** e **Técnico**. Admin tem acesso total; Funcionário e
+  Técnico seguem a tabela em Configurações > Permissões por perfil (ver seção 1).
+- Possível evolução: permissões por usuário (exceções) além das do perfil.
 
 ---
 

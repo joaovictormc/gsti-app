@@ -8,7 +8,7 @@
 DO $$ BEGIN CREATE TYPE tipo_pessoa_enum AS ENUM ('Física', 'Jurídica'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE os_status_enum AS ENUM ('Orçamento', 'Aguardando Autorização', 'Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE tipo_despesa_enum AS ENUM ('Fixa', 'Variável'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE user_role_enum AS ENUM ('Admin', 'Funcionario'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE user_role_enum AS ENUM ('Admin', 'Funcionario', 'Tecnico'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Tabela de Usuários
 CREATE TABLE IF NOT EXISTS usuarios (

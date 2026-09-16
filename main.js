@@ -11,7 +11,7 @@ const crypto = require("crypto");
 const { execFile, execSync } = require("child_process");
 const { Worker } = require("worker_threads");
 const comunicacao = require("./os-comunicacao");
-const { criarControleAcesso } = require("./controle-acesso");
+const { criarControleAcesso, PERFIS, PERMISSOES_PADRAO } = require("./controle-acesso");
 const { protegerSegredos, abrirSegredos } = require("./config-segredos");
 const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
@@ -114,7 +114,7 @@ const defaultConfig = {
   empresa: { documento: "", telefone: "", email: "", endereco: "", site: "" },
   documentos: { condicoesEntrada: "", termoGarantia: "" },
   mensagensStatus: {},
-  permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
+  permissions: JSON.parse(JSON.stringify(PERMISSOES_PADRAO)), // por perfil (controle-acesso.js)
   autoBackup: {
     enabled: false,
     scheduledDays: [1, 2, 3, 4, 5],
@@ -210,6 +210,8 @@ function initializeDbPool() {
       console.log("[DB] Pool de conexão inicializado com sucesso.");
       // Migrações automáticas de schema
       [
+        // Perfil Técnico (permissões configuráveis em Configurações > Permissões)
+        "ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'Tecnico'",
         "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP NULL",
         "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS estoque_baixado BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_atual INT NOT NULL DEFAULT 0",
@@ -444,10 +446,23 @@ async function notifyClientStatusChange(osId) {
   console.log(`[Email] Aviso de status (${os.status}) da OS #${os.id} enviado para ${os.email_cliente}`);
 }
 
+// Perfis com "Só OS atribuídas": recusa OS de outro responsável (null = liberado).
+async function negarOSAlheia(event, osId) {
+  const restrito = acesso.restricaoOS(event);
+  if (!restrito) return null;
+  const { rows } = await dbPool.query("SELECT id_atendente FROM ordens_servico WHERE id = $1", [osId]);
+  if (rows[0] && rows[0].id_atendente !== restrito) {
+    return { success: false, acessoNegado: true, error: "Esta OS está atribuída a outro responsável." };
+  }
+  return null;
+}
+
 // Mensagem pronta para o WhatsApp do cliente, conforme o status atual da OS.
 ipcMain.handle("get-os-whatsapp-message", async (event, osId) => {
   if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
   try {
+    const negado = await negarOSAlheia(event, osId);
+    if (negado) return negado;
     const os = await dadosOSParaMensagem(osId);
     if (!os) return { success: false, error: "OS não encontrada." };
     if (!String(os.telefone_cliente || "").replace(/\D/g, "")) {
@@ -827,7 +842,10 @@ ipcMain.handle(
       scheduleAutoBackup();
 
       acesso.iniciarSessao(event, user);
-      return { success: true, user: { id: user.id, nome: user.nome, role: user.role } };
+      return {
+        success: true,
+        user: { id: user.id, nome: user.nome, role: user.role, permissoes: acesso.permissoesDe(user) },
+      };
     } catch (error) {
       if (tempPool) await tempPool.end().catch(() => {});
       console.error("[Setup] Erro ao vincular banco existente:", error);
@@ -876,6 +894,16 @@ ipcMain.handle("deactivate-license", async () => {
   return await licenseManager.deactivate();
 });
 
+// Permissões salvas de cada perfil, completadas com os padrões.
+function permissoesConfiguradas() {
+  return Object.fromEntries(
+    Object.values(PERFIS).map((perfil) => [
+      perfil,
+      { ...PERMISSOES_PADRAO[perfil], ...(appConfig.permissions?.[perfil] || {}) },
+    ])
+  );
+}
+
 // Handler para buscar as configurações atuais (para a tela de Settings)
 ipcMain.handle("get-app-settings", async (event) => {
   // Sem Admin (tela de login, Funcionário): só o necessário para marca e menu.
@@ -886,12 +914,12 @@ ipcMain.handle("get-app-settings", async (event) => {
       appVersion: app.getVersion(),
       settings: {
         branding,
-        permissions: { funcionario: { ...appConfig.permissions?.funcionario } },
+        permissions: permissoesConfiguradas(),
       },
     };
   }
   // Retorna uma cópia, excluindo senhas por segurança se necessário
-  const settingsToSend = JSON.parse(JSON.stringify({ ...appConfig, branding }));
+  const settingsToSend = JSON.parse(JSON.stringify({ ...appConfig, branding, permissions: permissoesConfiguradas() }));
   if (settingsToSend.database) delete settingsToSend.database.password; // Não envia senha do DB
   if (settingsToSend.email) delete settingsToSend.email.pass; // Não envia senha do Email
   if (settingsToSend.license) delete settingsToSend.license.token; // Não expõe o token de licença
@@ -926,12 +954,16 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
       email: { ...appConfig.email, ...novoEmail },
       branding: { ...appConfig.branding, ...newSettings.branding },
       emailNotifications: { ...appConfig.emailNotifications, ...(newSettings.emailNotifications || {}) },
-      permissions: {
-        funcionario: {
-          ...appConfig.permissions?.funcionario,
-          ...(newSettings.permissions?.funcionario || {}),
-        },
-      },
+      permissions: Object.fromEntries(
+        Object.values(PERFIS).map((perfil) => [
+          perfil,
+          {
+            ...PERMISSOES_PADRAO[perfil],
+            ...(appConfig.permissions?.[perfil] || {}),
+            ...(newSettings.permissions?.[perfil] || {}),
+          },
+        ])
+      ),
       autoBackup: { ...appConfig.autoBackup, ...(newSettings.autoBackup || {}) },
       empresa: { ...(appConfig.empresa || {}), ...(newSettings.empresa || {}) },
       documentos: { ...(appConfig.documentos || {}), ...(newSettings.documentos || {}) },
@@ -993,6 +1025,7 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
           id: user.id,
           nome: user.nome,
           role: user.role,
+          permissoes: acesso.permissoesDe(user),
         },
       };
     } else {
@@ -1007,7 +1040,8 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
 
 // Sessão atual guardada no processo principal (a interface consulta ao abrir/recarregar).
 ipcMain.handle("get-current-session", async (event) => {
-  return { success: true, user: acesso.usuarioDe(event) };
+  const user = acesso.usuarioDe(event);
+  return { success: true, user: user && { ...user, permissoes: acesso.permissoesDe(user) } };
 });
 
 ipcMain.handle("logout", async (event) => {
@@ -1042,7 +1076,7 @@ ipcMain.handle("add-user", async (event, userData) => {
     return { success: false, error: "Todos os campos são obrigatórios." };
   }
   // TODO: Adicionar validação de formato de email
-  if (!["Admin", "Funcionario"].includes(role)) {
+  if (!PAPEIS_USUARIO.includes(role)) {
     return { success: false, error: "Papel inválido." };
   }
 
@@ -1076,6 +1110,8 @@ ipcMain.handle("add-user", async (event, userData) => {
 });
 
 // Atualizar usuário (ATUALIZADO com email, sem alterar senha aqui)
+const PAPEIS_USUARIO = ["Admin", ...Object.keys(PERFIS)];
+
 // Quantos Admins restariam se o usuário `id` deixasse de ser Admin.
 async function adminsRestantesSem(id) {
   const { rows } = await dbPool.query(
@@ -1096,7 +1132,7 @@ ipcMain.handle("update-user", async (event, userData) => {
       error: "ID, Nome, Email, Login e Papel são obrigatórios.",
     };
   }
-  if (!["Admin", "Funcionario"].includes(role)) {
+  if (!PAPEIS_USUARIO.includes(role)) {
     return { success: false, error: "Papel inválido." };
   }
 
@@ -1501,9 +1537,9 @@ ipcMain.handle("get-equipment-history", async (event, id) => {
       `SELECT os.id, os.status, os.data_entrada, os.data_saida, os.valor_total, os.defeito_relatado,
               os.solucao_aplicada, os.garantia_dias, u.nome AS nome_atendente
          FROM ordens_servico os LEFT JOIN usuarios u ON u.id = os.id_atendente
-        WHERE os.id_equipamento = $1
+        WHERE os.id_equipamento = $1 AND ($2::int IS NULL OR os.id_atendente = $2)
         ORDER BY os.data_entrada DESC`,
-      [id]
+      [id, acesso.restricaoOS(event)]
     );
     return { success: true, data: rows };
   } catch (error) {
@@ -1512,12 +1548,12 @@ ipcMain.handle("get-equipment-history", async (event, id) => {
 });
 
 // Listener para buscar todos os produtos e serviços
-ipcMain.handle("get-products", async () => {
+ipcMain.handle("get-products", async (event) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
     const { rows } = await dbPool.query("SELECT * FROM produtos_servicos");
-    return rows;
+    return semCusto(event, rows);
   } catch (error) {
     console.error("Erro ao buscar produtos/serviços:", error);
     return [];
@@ -1529,7 +1565,7 @@ ipcMain.handle("add-product", async (event, productData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const { descricao, valor, tipo } = productData;
-  const custo = parseMoney(productData.custo);
+  const custo = acesso.pode(acesso.usuarioDe(event), "custo") ? parseMoney(productData.custo) : null;
   // Estoque só faz sentido para produtos; serviços ficam com zero.
   const ehProduto = tipo === "Produto";
   const estoqueAtual = ehProduto ? Math.max(0, parseInt(productData.estoque_atual, 10) || 0) : 0;
@@ -1553,13 +1589,15 @@ ipcMain.handle("update-product", async (event, productData) => {
   const { id, descricao, valor, tipo } = productData;
   const custo = parseMoney(productData.custo);
   const estoqueMinimo = tipo === "Produto" ? Math.max(0, parseInt(productData.estoque_minimo, 10) || 0) : 0;
+  // Sem "Ver custo e margem" a tela não mostra o custo: mantém o valor gravado.
+  const alteraCusto = acesso.pode(acesso.usuarioDe(event), "custo");
   // O estoque atual é ajustado pela tela de Controle de Estoque (entradas/saídas).
-  const sql = pgQuery(
-    "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ?, custo = ?, estoque_minimo = ? WHERE id = ?"
-  );
+  const sql = alteraCusto
+    ? "UPDATE produtos_servicos SET descricao = $1, valor = $2, tipo = $3, estoque_minimo = $4, custo = $6 WHERE id = $5"
+    : "UPDATE produtos_servicos SET descricao = $1, valor = $2, tipo = $3, estoque_minimo = $4 WHERE id = $5";
 
   try {
-    await dbPool.query(sql, [descricao, valor, tipo, custo, estoqueMinimo, id]);
+    await dbPool.query(sql, [descricao, valor, tipo, estoqueMinimo, id, ...(alteraCusto ? [custo] : [])]);
     return { success: true };
   } catch (error) {
     console.error("Erro ao atualizar produto/serviço:", error);
@@ -1582,7 +1620,17 @@ ipcMain.handle("delete-product", async (event, productId) => {
   }
 });
 
-ipcMain.handle("get-os-list", async () => {
+// Remove o custo das linhas para perfis sem "Ver custo e margem".
+function semCusto(event, linhas, campos = ["custo"]) {
+  if (acesso.pode(acesso.usuarioDe(event), "custo")) return linhas;
+  return linhas.map((linha) => {
+    const copia = { ...linha };
+    for (const campo of campos) delete copia[campo];
+    return copia;
+  });
+}
+
+ipcMain.handle("get-os-list", async (event) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const sql = `
@@ -1595,16 +1643,17 @@ ipcMain.handle("get-os-list", async () => {
     FROM ordens_servico AS os
     JOIN clientes AS c ON os.id_cliente = c.id
     LEFT JOIN usuarios u ON u.id = os.id_atendente
+    WHERE ($1::int IS NULL OR os.id_atendente = $1)
     ORDER BY os.id DESC`;
   try {
-    const { rows } = await dbPool.query(sql);
+    const { rows } = await dbPool.query(sql, [acesso.restricaoOS(event)]);
     return rows;
   } catch (error) {
     return [];
   }
 });
 
-ipcMain.handle("get-active-data", async () => {
+ipcMain.handle("get-active-data", async (event) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
@@ -1617,7 +1666,7 @@ ipcMain.handle("get-active-data", async () => {
     const { rows: users } = await dbPool.query(
       "SELECT id, nome FROM usuarios ORDER BY nome ASC"
     );
-    return { success: true, customers, products, users };
+    return { success: true, customers, products: semCusto(event, products), users };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1628,6 +1677,8 @@ ipcMain.handle("get-os-details", async (event, osId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
+    const negado = await negarOSAlheia(event, osId);
+    if (negado) return negado;
     const { rows: osRows } = await dbPool.query(
       pgQuery("SELECT * FROM ordens_servico WHERE id = ?"),
       [osId]
@@ -1653,7 +1704,7 @@ ipcMain.handle("get-os-details", async (event, osId) => {
       [osId]
     ).catch(() => ({ rows: [] }));
 
-    return { success: true, os: osRows[0], items: itemRows, historico };
+    return { success: true, os: osRows[0], items: semCusto(event, itemRows, ["custo_unitario"]), historico };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1727,8 +1778,10 @@ ipcMain.handle("add-os", async (event, { osData, total }) => {
   const {
     id_cliente, tipo_equipamento, marca, modelo, numero_serie,
     defeito_relatado, observacoes_entrada, status, data_entrada,
-    garantia_dias, data_prevista, id_atendente,
+    garantia_dias, data_prevista,
   } = osData;
+  // Perfil com "Só OS atribuídas" sempre fica como responsável pela OS que abre.
+  const id_atendente = acesso.restricaoOS(event) || osData.id_atendente;
   const sql = pgQuery(`INSERT INTO ordens_servico
     (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias, data_prevista, id_atendente, id_equipamento)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
@@ -1760,9 +1813,12 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
   const {
     id, id_cliente, tipo_equipamento, marca, modelo, numero_serie,
     defeito_relatado, observacoes_entrada, laudo_tecnico, solucao_aplicada,
-    status, data_entrada, garantia_dias, data_prevista, id_atendente,
+    status, data_entrada, garantia_dias, data_prevista,
   } = osData;
+  const id_atendente = acesso.restricaoOS(event) || osData.id_atendente;
   try {
+    const negado = await negarOSAlheia(event, id);
+    if (negado) return negado;
     const { rows } = await dbPool.query(
       pgQuery("SELECT status, data_saida, garantia_dias, estoque_baixado FROM ordens_servico WHERE id = ?"),
       [id]
@@ -1885,19 +1941,34 @@ ipcMain.handle("add-os-items", async (event, { osId, items }) => {
     return { success: false, error: "Banco de dados não configurado." };
   if (items.length === 0) return { success: true };
   try {
-    await inserirItensOS(dbPool, osId, items);
+    const negado = await negarOSAlheia(event, osId);
+    if (negado) return negado;
+    const podeCusto = acesso.pode(acesso.usuarioDe(event), "custo");
+    await inserirItensOS(dbPool, osId, podeCusto ? items : items.map((i) => ({ ...i, custo_unitario: null })));
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }
 });
 
-ipcMain.handle("update-os-items", async (event, { osId, items }) => {
+ipcMain.handle("update-os-items", async (event, { osId, items: itensRecebidos }) => {
+  let items = itensRecebidos;
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
+  const negado = await negarOSAlheia(event, osId);
+  if (negado) return negado;
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    // Sem "Ver custo": mantém o custo gravado na venda (a tela não recebe o custo).
+    if (!acesso.pode(acesso.usuarioDe(event), "custo")) {
+      const { rows: anteriores } = await client.query(
+        "SELECT id_produto_servico, custo_unitario FROM os_itens WHERE id_os = $1",
+        [osId]
+      );
+      const custoAnterior = new Map(anteriores.map((r) => [r.id_produto_servico, r.custo_unitario]));
+      items = items.map((i) => ({ ...i, custo_unitario: custoAnterior.get(i.id) ?? null }));
+    }
     await client.query(pgQuery("DELETE FROM os_itens WHERE id_os = ?"), [osId]);
     if (items.length > 0) {
       await inserirItensOS(client, osId, items);
@@ -1916,6 +1987,8 @@ ipcMain.handle("delete-os", async (event, osId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   try {
+    const negado = await negarOSAlheia(event, osId);
+    if (negado) return negado;
     await dbPool.query(pgQuery("DELETE FROM ordens_servico WHERE id = ?"), [osId]);
     return { success: true };
   } catch (error) {
@@ -1926,6 +1999,8 @@ ipcMain.handle("delete-os", async (event, osId) => {
 // --- PDF COMPROVANTE DE ENTRADA (assíncrono via worker thread) ---
 ipcMain.handle("generate-entry-receipt", async (event, osId) => {
   if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  const negado = await negarOSAlheia(event, osId).catch(() => null);
+  if (negado) return negado;
 
   let osData;
   try {
@@ -1979,6 +2054,8 @@ ipcMain.handle("generate-entry-receipt", async (event, osId) => {
 // --- PDF RECIBO DE SAÍDA / GARANTIA (assíncrono via worker thread) ---
 ipcMain.handle("generate-exit-receipt", async (event, osId) => {
   if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  const negado = await negarOSAlheia(event, osId).catch(() => null);
+  if (negado) return negado;
 
   let osData, itemsData;
   try {
@@ -2187,6 +2264,7 @@ ipcMain.handle('get-dashboard-stats', async (event) => {
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
+    const restrito = acesso.restricaoOS(event);
 
     const { rows: countRows } = await dbPool.query(`
       SELECT
@@ -2195,7 +2273,8 @@ ipcMain.handle('get-dashboard-stats', async (event) => {
         COUNT(*) FILTER (WHERE status IN ('Finalizado','Entregue') AND data_saida IS NOT NULL
           AND EXTRACT(MONTH FROM data_saida)::int = $1 AND EXTRACT(YEAR FROM data_saida)::int = $2)::int AS finalizadas_mes
       FROM ordens_servico
-    `, [month, year]);
+      WHERE ($3::int IS NULL OR id_atendente = $3)
+    `, [month, year, restrito]);
 
     const { rows: osRevRows } = await dbPool.query(`
       SELECT COALESCE(SUM(valor_total),0) AS val FROM ordens_servico
@@ -2223,8 +2302,9 @@ ipcMain.handle('get-dashboard-stats', async (event) => {
       WHERE o.status='Entregue' AND o.data_saida IS NOT NULL AND o.garantia_dias > 0
         AND (o.data_saida + (o.garantia_dias||' days')::INTERVAL)::DATE
             BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+        AND ($1::int IS NULL OR o.id_atendente = $1)
       ORDER BY data_garantia ASC LIMIT 10
-    `);
+    `, [restrito]);
 
     const { rows: recentRows } = await dbPool.query(`
       SELECT o.id, c.nome AS nome_cliente,
@@ -2232,8 +2312,9 @@ ipcMain.handle('get-dashboard-stats', async (event) => {
         o.status, o.data_entrada, o.defeito_relatado
       FROM ordens_servico o JOIN clientes c ON c.id=o.id_cliente
       WHERE o.status IN ('Orçamento','Em Aberto','Aguardando Autorização','Aguardando Peça','Em Andamento')
+        AND ($1::int IS NULL OR o.id_atendente = $1)
       ORDER BY o.data_entrada DESC LIMIT 5
-    `);
+    `, [restrito]);
 
     const receita_os = Number(osRevRows[0].val);
     const receita_avulsa = Number(miscRevRows[0].val);
@@ -3306,8 +3387,11 @@ ipcMain.handle('update-stock-min', async (event, { productId, estoque_minimo }) 
 });
 
 // Relatório de Lucratividade por Serviço
-ipcMain.handle('get-profitability-report', async () => {
+ipcMain.handle('get-profitability-report', async (event) => {
   if (!dbPool) return { success: false, error: 'Banco não configurado.' };
+  if (!acesso.pode(acesso.usuarioDe(event), 'custo')) {
+    return { success: false, acessoNegado: true, error: 'Seu perfil não tem acesso a custos e margens.' };
+  }
   try {
     const { rows } = await dbPool.query(`
       SELECT
@@ -3343,14 +3427,15 @@ ipcMain.handle('get-customer-timeline', async (event, clientId) => {
         COUNT(*) FILTER (WHERE status NOT IN ('Finalizado','Entregue','Cancelado'))::int AS os_abertas,
         COUNT(*) FILTER (WHERE status IN ('Finalizado','Entregue'))::int AS os_finalizadas,
         COALESCE(SUM(CASE WHEN status IN ('Finalizado','Entregue') THEN valor_total ELSE 0 END),0) AS total_gasto
-      FROM ordens_servico WHERE id_cliente = $1
-    `, [clientId]);
+      FROM ordens_servico WHERE id_cliente = $1 AND ($2::int IS NULL OR id_atendente = $2)
+    `, [clientId, acesso.restricaoOS(event)]);
     const { rows: osRows } = await dbPool.query(`
       SELECT id, status, data_entrada, data_saida, valor_total,
         TRIM(CONCAT(tipo_equipamento,' ',COALESCE(marca,''),' ',COALESCE(modelo,''))) AS equipamento,
         defeito_relatado, solucao_aplicada
-      FROM ordens_servico WHERE id_cliente = $1 ORDER BY data_entrada DESC
-    `, [clientId]);
+      FROM ordens_servico WHERE id_cliente = $1 AND ($2::int IS NULL OR id_atendente = $2)
+      ORDER BY data_entrada DESC
+    `, [clientId, acesso.restricaoOS(event)]);
     return { success: true, stats: statsRows[0], os: osRows };
   } catch (err) {
     return { success: false, error: err.message };
@@ -3370,8 +3455,9 @@ ipcMain.handle('get-os-agenda', async (event, { month, year }) => {
         AND EXTRACT(MONTH FROM o.data_prevista)::int = $1
         AND EXTRACT(YEAR FROM o.data_prevista)::int = $2
         AND o.status NOT IN ('Entregue','Cancelado')
+        AND ($3::int IS NULL OR o.id_atendente = $3)
       ORDER BY o.data_prevista ASC
-    `, [month, year]);
+    `, [month, year, acesso.restricaoOS(event)]);
     return { success: true, data: rows };
   } catch (err) {
     return { success: false, error: err.message };
@@ -3379,7 +3465,7 @@ ipcMain.handle('get-os-agenda', async (event, { month, year }) => {
 });
 
 // Painel de Garantias
-ipcMain.handle('get-warranty-panel', async () => {
+ipcMain.handle('get-warranty-panel', async (event) => {
   if (!dbPool) return { success: false, error: 'Banco de dados não configurado.' };
   try {
     const { rows } = await dbPool.query(`
@@ -3400,8 +3486,9 @@ ipcMain.handle('get-warranty-panel', async () => {
       WHERE o.status = 'Entregue'
         AND o.data_saida IS NOT NULL
         AND o.garantia_dias > 0
+        AND ($1::int IS NULL OR o.id_atendente = $1)
       ORDER BY dias_restantes ASC
-    `);
+    `, [acesso.restricaoOS(event)]);
     return { success: true, data: rows };
   } catch (error) {
     console.error('[get-warranty-panel] Erro:', error);

@@ -27,6 +27,11 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Chip,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
 } from "@mui/material";
 import BackupIcon from "@mui/icons-material/Backup";
 import RestoreIcon from "@mui/icons-material/Restore";
@@ -38,6 +43,7 @@ import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import Switch from "@mui/material/Switch";
 import { useAuth } from "../contexts/AuthContext"; // Para verificar se é admin
+import { PERFIS_CONFIGURAVEIS, PERMISSOES } from "../constants/perfis";
 
 // Pré-visualização de uma imagem escolhida em Configurações (logo ou fundo do login)
 function MiniaturaImagem({ caminho, tipo, largura, altura, vazio }) {
@@ -82,7 +88,7 @@ function SettingsScreen() {
     email: { host: "", port: 587, secure: false, user: "", pass: "", from: "" },
     branding: { companyName: "", logoPath: null, backgroundPath: null, logoComoIcone: false, loginSubtitulo: "", creditoExibir: true, creditoNome: "" },
     emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "", notifyClientStatus: false, clientStatuses: [] },
-    permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
+    permissions: { funcionario: {}, tecnico: {} },
     autoBackup: { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 },
     empresa: { documento: "", telefone: "", email: "", endereco: "", site: "" },
     documentos: { condicoesEntrada: "", termoGarantia: "" },
@@ -124,15 +130,13 @@ function SettingsScreen() {
             notifyClientStatus: false, clientStatuses: result.padroes?.statusAviso || [],
           };
           setPadroes(result.padroes || null);
-          const defaultPerms = { canSeeFinancial: false, canSeeReports: false };
           const defaultAutoBackup = { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 };
           setSettings({
             email: { ...defaultEmail, ...(result.settings.email || {}) },
             branding: { ...defaultBranding, ...(result.settings.branding || {}) },
             emailNotifications: { ...defaultNotifications, ...(result.settings.emailNotifications || {}) },
-            permissions: {
-              funcionario: { ...defaultPerms, ...(result.settings.permissions?.funcionario || {}) },
-            },
+            // O processo principal já completa as permissões com os padrões de cada perfil
+            permissions: { funcionario: {}, tecnico: {}, ...(result.settings.permissions || {}) },
             autoBackup: { ...defaultAutoBackup, ...(result.settings.autoBackup || {}) },
             empresa: { documento: "", telefone: "", email: "", endereco: "", site: "", ...(result.settings.empresa || {}) },
             documentos: { condicoesEntrada: "", termoGarantia: "", ...(result.settings.documentos || {}) },
@@ -300,8 +304,8 @@ function SettingsScreen() {
           type: "success",
           text: "Configurações salvas com sucesso!",
         });
-        // Menu lateral e título da janela recarregam a marca
-        window.dispatchEvent(new Event("gsti:marca-atualizada"));
+        // Menu, título da janela e permissões da sessão são recarregados
+        window.dispatchEvent(new Event("gsti:configuracoes-salvas"));
       } else {
         setSaveStatus({
           type: "error",
@@ -857,41 +861,50 @@ function SettingsScreen() {
       </Dialog>
       {/* --- FIM Licenciamento --- */}
 
-      {/* --- Permissões de Funcionário --- */}
+      {/* --- Permissões por perfil --- */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
           <LockPersonIcon color="primary" />
-          <Typography variant="h6">Permissões de Funcionário</Typography>
+          <Typography variant="h6">Permissões por perfil</Typography>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Controle quais módulos são visíveis para usuários com perfil Funcionário.
-          Administradores sempre têm acesso completo.
+          Defina o que cada perfil pode fazer. O perfil de cada pessoa é escolhido em
+          Gerenciar Usuários. Administradores sempre têm acesso completo.
         </Typography>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={settings.permissions.funcionario.canSeeFinancial}
-              onChange={(e) =>
-                handlePermChange("funcionario", "canSeeFinancial", e.target.checked)
-              }
-              disabled={saving}
-            />
-          }
-          label="Pode visualizar Módulo Financeiro (Despesas, Receitas, Dashboard)"
-        />
-        <FormControlLabel
-          sx={{ display: "block", mt: 0.5 }}
-          control={
-            <Switch
-              checked={settings.permissions.funcionario.canSeeReports}
-              onChange={(e) =>
-                handlePermChange("funcionario", "canSeeReports", e.target.checked)
-              }
-              disabled={saving}
-            />
-          }
-          label="Pode visualizar Relatórios"
-        />
+        <Box sx={{ overflowX: "auto" }}>
+          <Table size="small" sx={{ minWidth: 520 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Permissão</TableCell>
+                {PERFIS_CONFIGURAVEIS.map((perfil) => (
+                  <TableCell key={perfil.chave} align="center" sx={{ fontWeight: 600, width: 120 }}>
+                    {perfil.rotulo}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {PERMISSOES.map((permissao) => (
+                <TableRow key={permissao.chave} hover>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight={500}>{permissao.rotulo}</Typography>
+                    <Typography variant="caption" color="text.secondary">{permissao.descricao}</Typography>
+                  </TableCell>
+                  {PERFIS_CONFIGURAVEIS.map((perfil) => (
+                    <TableCell key={perfil.chave} align="center">
+                      <Switch
+                        checked={!!settings.permissions[perfil.chave]?.[permissao.chave]}
+                        onChange={(e) => handlePermChange(perfil.chave, permissao.chave, e.target.checked)}
+                        disabled={saving}
+                        inputProps={{ "aria-label": `${permissao.rotulo} — ${perfil.rotulo}` }}
+                      />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
       </Paper>
       {/* --- Fim Permissões --- */}
 

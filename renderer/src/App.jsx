@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import {
   Alert,
   Avatar,
@@ -130,9 +130,8 @@ function AppSidebar({
   logoData,
   isOpen,
   onToggle,
-  funcionarioPerms,
 }) {
-  const { logout, currentUser } = useAuth();
+  const { logout, currentUser, permissoes } = useAuth();
   const [reportsOpen, setReportsOpen] = useState(false);
   const st = getSidebarTheme(currentThemeMode);
 
@@ -140,8 +139,8 @@ function AppSidebar({
   React.useEffect(() => { if (!isOpen) setReportsOpen(false); }, [isOpen]);
 
   const isAdmin = userRole === "Admin";
-  const canSeeFinancial = isAdmin || funcionarioPerms?.canSeeFinancial;
-  const canSeeReports = isAdmin || funcionarioPerms?.canSeeReports;
+  const canSeeFinancial = !!permissoes.canSeeFinancial;
+  const canSeeReports = !!permissoes.canSeeReports;
 
   const menuItems = [
     { label: "Início", component: "HomeScreen", icon: <HomeIcon /> },
@@ -166,7 +165,7 @@ function AppSidebar({
           { label: "OS por Status", component: "OSReportStatus" },
           { label: "OS Abertas por Tempo", component: "OSReportOpenAging" },
           { label: "OS por Atendente", component: "OSReportAttendant" },
-          { label: "Lucratividade", component: "ProfitabilityReport" },
+          ...(permissoes.verCusto ? [{ label: "Lucratividade", component: "ProfitabilityReport" }] : []),
           { label: "Serviços Mais Usados", component: "MostUsedServicesReport" },
           { label: "Histórico Equipamento", component: "EquipmentHistoryReport" },
           { label: "Receitas Detalhadas", component: "DetailedRevenueReport" },
@@ -354,7 +353,7 @@ function AppSidebar({
 }
 
 function App() {
-  const { currentUser, login } = useAuth();
+  const { currentUser, login, permissoes } = useAuth();
   const [activeComponent, setActiveComponent] = useState("HomeScreen"); // Inicia na HomeScreen
   const [themeMode, setThemeMode] = useState(
     () => localStorage.getItem("themeMode") || "light"
@@ -378,16 +377,15 @@ function App() {
     companyName: "GSTI App",
     logoData: null,
   });
-  const [funcionarioPerms, setFuncionarioPerms] = useState({
-    canSeeFinancial: false,
-    canSeeReports: false,
-  });
   const [loadingBranding, setLoadingBranding] = useState(false);
   const [marcaRevisao, setMarcaRevisao] = useState(0);
+  // Tela de carregamento só na primeira carga após o login (não ao salvar Configurações)
+  const marcaCarregada = useRef(false);
+  if (!currentUser) marcaCarregada.current = false;
   useEffect(() => {
     const recarregar = () => setMarcaRevisao((n) => n + 1);
-    window.addEventListener("gsti:marca-atualizada", recarregar);
-    return () => window.removeEventListener("gsti:marca-atualizada", recarregar);
+    window.addEventListener("gsti:configuracoes-salvas", recarregar);
+    return () => window.removeEventListener("gsti:configuracoes-salvas", recarregar);
   }, []);
   // --- EFEITO PARA VERIFICAR SETUP INICIAL (Roda 1x) ---
   useEffect(() => {
@@ -448,21 +446,12 @@ function App() {
       // Só executa se o setup estiver completo E houver um usuário logado
       if (needsSetup === false && currentUser) {
         console.log("[App] Carregando configurações de branding...");
-        if (marcaRevisao === 0) setLoadingBranding(true);
+        if (!marcaCarregada.current) setLoadingBranding(true);
         let currentCompanyName = "GSTI App"; // Padrão
         let currentLogoData = null;
 
         try {
           const result = await window.api.getAppSettings();
-          if (result.success && result.settings) {
-            const perms = result.settings.permissions?.funcionario;
-            if (perms) {
-              setFuncionarioPerms({
-                canSeeFinancial: perms.canSeeFinancial ?? false,
-                canSeeReports: perms.canSeeReports ?? false,
-              });
-            }
-          }
           if (result.success && result.settings?.branding) {
             currentCompanyName =
               result.settings.branding.companyName || "GSTI App";
@@ -494,6 +483,7 @@ function App() {
             logoData: currentLogoData,
           });
           document.title = currentCompanyName;
+          marcaCarregada.current = true;
           setLoadingBranding(false);
           console.log("[App] Configuração de branding definida:", {
             companyName: currentCompanyName,
@@ -674,8 +664,10 @@ function App() {
     const reportComponents = ["OSReportClient", "OSReportStatus", "OSReportAttendant", "OSReportOpenAging", "ProfitabilityReport", "MostUsedServicesReport", "EquipmentHistoryReport", "DetailedRevenueReport"];
     const isAccessDenied =
       !isAdmin &&
-      ((financialComponents.includes(activeComponent) && !funcionarioPerms.canSeeFinancial) ||
-       (reportComponents.includes(activeComponent) && !funcionarioPerms.canSeeReports));
+      ((financialComponents.includes(activeComponent) && !permissoes.canSeeFinancial) ||
+       (reportComponents.includes(activeComponent) && !permissoes.canSeeReports) ||
+       (activeComponent === "ProfitabilityReport" && !permissoes.verCusto) ||
+       ["UserManagement", "SettingsScreen"].includes(activeComponent));
 
     // Aviso de vencimento (15, 7 e 1 dia) ou de revalidação pendente
     let licenseWarning = null;
@@ -732,7 +724,6 @@ function App() {
             logoData={brandingConfig.logoData}
             isOpen={sidebarOpen}
             onToggle={toggleSidebar}
-            funcionarioPerms={funcionarioPerms}
           />
           <Box
             component="main"

@@ -6,6 +6,7 @@ import {
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import CustomerForm from "./CustomerForm";
+import { useAuth } from "../contexts/AuthContext";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import HistoryIcon from "@mui/icons-material/History";
@@ -76,6 +77,7 @@ const BLANK_CUSTOMER = {
 };
 
 function CustomerGrid() {
+  const { permissoes } = useAuth();
   const [customers, setCustomers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
@@ -173,12 +175,16 @@ function CustomerGrid() {
           <IconButton onClick={() => handleOpenTimeline(params.row)} title="Histórico de OS" size="small">
             <HistoryIcon fontSize="small" />
           </IconButton>
-          <IconButton onClick={() => handleOpenEditModal(params.row)} title="Editar" size="small">
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton onClick={() => handleDeleteRequest(params.row.id)} color="error" title="Excluir" size="small">
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          {permissoes.editarCadastros && (
+            <IconButton onClick={() => handleOpenEditModal(params.row)} title="Editar" size="small">
+              <EditIcon fontSize="small" />
+            </IconButton>
+          )}
+          {permissoes.podeExcluir && (
+            <IconButton onClick={() => handleDeleteRequest(params.row.id)} color="error" title="Excluir" size="small">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          )}
         </>
       ),
     },
@@ -189,7 +195,9 @@ function CustomerGrid() {
   return (
     <>
       <Box sx={{ mb: 2 }}>
-        <Button variant="contained" onClick={handleOpenAddModal}>Adicionar Novo Cliente</Button>
+        {permissoes.editarCadastros && (
+          <Button variant="contained" onClick={handleOpenAddModal}>Adicionar Novo Cliente</Button>
+        )}
       </Box>
       <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
