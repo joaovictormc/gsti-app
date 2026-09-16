@@ -11,7 +11,7 @@
  * Nunca coloque chaves PRIVADAS neste arquivo.
  */
 module.exports = {
-  serverUrl: "http://joaosrv:3030",
+  serverUrl: "http://localhost:3030",
   // Site de vendas / área do cliente (padrão: o mesmo endereço do servidor).
   siteUrl: "",
 
@@ -19,5 +19,8 @@ module.exports = {
     // "2026-09-13": `-----BEGIN PUBLIC KEY-----
     // MCowBQYDK2VwAyEA...
     // -----END PUBLIC KEY-----`,
+    "homologacao": `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAmlxZ+e9/FTGIC+LxqPfMo19sWl8csPP5li9XDQ/9dZ8=
+-----END PUBLIC KEY-----`,
   },
 };
