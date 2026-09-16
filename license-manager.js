@@ -199,8 +199,14 @@ function createLicenseManager({ getConfig, saveConfig, appVersion }) {
   }
 
   function erroDeRede(err, padrao) {
-    if (err.response && err.response.data) {
-      return err.response.data.error || err.response.data.motivo || padrao;
+    if (err.response) {
+      const dados = err.response.data;
+      if (dados && typeof dados === "object" && (dados.error || dados.motivo)) return dados.error || dados.motivo;
+      // Respondeu, mas não é o servidor de licenças v2 (endereço errado ou servidor desatualizado).
+      if (err.response.status === 404 || typeof dados !== "object") {
+        return `O servidor de licenças em ${serverUrl()} não reconheceu a ativação. Confira o endereço configurado ou se o servidor está atualizado.`;
+      }
+      return padrao;
     }
     return "Não foi possível contatar o servidor de licenças. Verifique sua conexão com a internet.";
   }
