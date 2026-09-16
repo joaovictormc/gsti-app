@@ -42,6 +42,11 @@ export const PERMISSOES = [
     descricao: "Custo dos produtos, margem e relatório de Lucratividade.",
   },
   {
+    chave: "emitirNotaFiscal",
+    rotulo: "Registrar e emitir nota fiscal",
+    descricao: "Registrar a nota da OS finalizada (ou emitir pelo emissor configurado) e marcá-la como cancelada.",
+  },
+  {
     chave: "podeExcluir",
     rotulo: "Excluir registros",
     descricao: "OS, clientes, equipamentos e produtos.",

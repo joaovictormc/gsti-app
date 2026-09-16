@@ -107,6 +107,33 @@ CREATE TABLE IF NOT EXISTS os_status_historico (
 );
 CREATE INDEX IF NOT EXISTS ix_os_status_historico_os ON os_status_historico(id_os, criado_em);
 
+-- Notas fiscais registradas/emitidas por OS
+CREATE TABLE IF NOT EXISTS notas_fiscais (
+    id SERIAL PRIMARY KEY,
+    id_os INT NOT NULL REFERENCES ordens_servico(id) ON DELETE RESTRICT,
+    tipo VARCHAR(10) NOT NULL,
+    origem VARCHAR(40) NOT NULL DEFAULT 'manual',
+    numero VARCHAR(30) NOT NULL,
+    serie VARCHAR(10),
+    chave_acesso VARCHAR(60),
+    data_emissao DATE NOT NULL,
+    valor NUMERIC(12,2) NOT NULL DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'emitida',
+    observacao TEXT,
+    motivo_cancelamento TEXT,
+    cancelada_em TIMESTAMP,
+    pdf BYTEA,
+    pdf_nome VARCHAR(255),
+    xml TEXT,
+    xml_nome VARCHAR(255),
+    id_externo VARCHAR(100),
+    mensagem_erro TEXT,
+    id_usuario INT REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ix_notas_fiscais_os ON notas_fiscais(id_os);
+
 -- Tabela de Despesas
 CREATE TABLE IF NOT EXISTS despesas (
     id            SERIAL PRIMARY KEY,

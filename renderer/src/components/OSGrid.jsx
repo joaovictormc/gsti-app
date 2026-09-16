@@ -25,6 +25,9 @@ import PrintIcon from "@mui/icons-material/Print";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import ConfirmDialog from "./ConfirmDialog";
+import NotasFiscaisOS from "./NotasFiscaisOS";
+import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
+import Badge from "@mui/material/Badge";
 import { useAuth } from "../contexts/AuthContext";
 
 const STATUS_LIST = [
@@ -191,6 +194,8 @@ function OSGrid() {
     if (aberto && aberto.success === false) showSnackbar(aberto.error, "warning");
   };
 
+  const [osNotas, setOsNotas] = useState(null);
+
   const handleClearFilters = () => { setSearchTerm(""); setStatusFilter("Todos"); };
 
   const hasActiveFilters = searchTerm || statusFilter !== "Todos";
@@ -230,7 +235,7 @@ function OSGrid() {
     {
       field: "actions",
       headerName: "Ações",
-      width: 215,
+      width: 250,
       sortable: false,
       renderCell: (p) => (
         <>
@@ -240,6 +245,18 @@ function OSGrid() {
           <IconButton onClick={() => handlePrintReceipt(p.row.id)} title="Comprovante de Entrada" size="small">
             <PrintIcon fontSize="small" />
           </IconButton>
+          {["Finalizado", "Entregue"].includes(p.row.status) && (
+            <IconButton
+              onClick={() => setOsNotas(p.row)}
+              title={p.row.notas ? `Nota fiscal (${p.row.notas} registrada${p.row.notas > 1 ? "s" : ""})` : "Nota fiscal"}
+              size="small"
+              color={p.row.notas ? "success" : "default"}
+            >
+              <Badge badgeContent={p.row.notas} color="success" invisible={!p.row.notas} max={9}>
+                <RequestQuoteIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+          )}
           {["Finalizado", "Entregue"].includes(p.row.status) && (
             <IconButton onClick={() => handlePrintExitReceipt(p.row.id)} title="Recibo de Saída/Garantia" size="small">
               <ReceiptLongIcon fontSize="small" />
@@ -336,6 +353,8 @@ function OSGrid() {
           />
         </Box>
       </Modal>
+
+      <NotasFiscaisOS os={osNotas} onClose={() => setOsNotas(null)} onAlterado={fetchOSList} />
 
       <ConfirmDialog
         open={confirmDialog.open}

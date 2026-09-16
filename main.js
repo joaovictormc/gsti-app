@@ -13,6 +13,8 @@ const { Worker } = require("worker_threads");
 const comunicacao = require("./os-comunicacao");
 const { criarControleAcesso, PERFIS, PERMISSOES_PADRAO } = require("./controle-acesso");
 const { protegerSegredos, abrirSegredos } = require("./config-segredos");
+const fiscalEmissores = require("./fiscal-emissores");
+const { lerCertificadoA1, CertificadoErro } = require("./fiscal-certificado");
 const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 const archiver = require("archiver");
@@ -135,8 +137,28 @@ const defaultConfig = {
     revogadaMotivo: "",
     serverUrl: "",
   },
+  // Nota fiscal (Configurações > Nota fiscal). Credenciais e senha do certificado
+  // ficam cifradas no config.json; o certificado A1 fica cifrado em certificado-a1.bin.
+  fiscal: {
+    emissor: "manual",
+    credenciais: {},
+    empresa: {
+      cnpj: "", inscricaoMunicipal: "", inscricaoEstadual: "", regimeTributario: "",
+      codigoMunicipioIbge: "", codigoTributacao: "", aliquotaIss: "",
+    },
+    termo: null, // { versao, aceitoEm, usuario }
+    certificado: null, // { titular, documento, emissor, validoDe, validoAte, arquivoNome, cadastradoEm, cadastradoPor }
+    certificadoSenha: "",
+  },
   setupComplete: false,
 };
+
+// Garante todos os campos da seção fiscal (configs antigas não têm a seção).
+function normalizarFiscal(fiscal) {
+  const padrao = JSON.parse(JSON.stringify(defaultConfig.fiscal));
+  const atual = fiscal && typeof fiscal === "object" ? fiscal : {};
+  return { ...padrao, ...atual, empresa: { ...padrao.empresa, ...(atual.empresa || {}) } };
+}
 
 // Função para carregar a configuração
 function loadConfig() {
@@ -147,6 +169,7 @@ function loadConfig() {
       appConfig = JSON.parse(rawData);
       // Mescla com o padrão para garantir que todos os campos existam
       appConfig = { ...defaultConfig, ...appConfig };
+      appConfig.fiscal = normalizarFiscal(appConfig.fiscal);
       const { falhas, precisaRegravar } = abrirSegredos(appConfig, cofreSegredos);
       if (falhas.includes("database") && appConfig.setupComplete) {
         // Senha gravada por outro usuário do Windows/computador: pede a conexão de novo.
@@ -155,6 +178,9 @@ function loadConfig() {
           "Informe novamente a conexão com o banco",
           "Não foi possível ler a senha do banco salva neste computador (a configuração pode ter sido copiada de outra máquina ou de outro usuário do Windows).\n\nNa próxima tela, informe os dados do banco e entre com seu usuário em \"Já tenho cadastro\"."
         );
+      }
+      if (falhas.includes("fiscal")) {
+        console.warn("[Config] Credenciais fiscais não puderam ser lidas; cadastre-as novamente em Configurações > Nota fiscal.");
       }
       if (falhas.includes("email")) {
         console.warn("[Config] Senha do e-mail não pôde ser lida; informe-a novamente em Configurações.");
@@ -212,6 +238,9 @@ function initializeDbPool() {
       [
         // Perfil Técnico (permissões configuráveis em Configurações > Permissões)
         "ALTER TYPE user_role_enum ADD VALUE IF NOT EXISTS 'Tecnico'",
+        // Notas fiscais registradas/emitidas por OS (não some ao excluir a OS: RESTRICT)
+        "CREATE TABLE IF NOT EXISTS notas_fiscais (id SERIAL PRIMARY KEY, id_os INT NOT NULL REFERENCES ordens_servico(id) ON DELETE RESTRICT, tipo VARCHAR(10) NOT NULL, origem VARCHAR(40) NOT NULL DEFAULT 'manual', numero VARCHAR(30) NOT NULL, serie VARCHAR(10), chave_acesso VARCHAR(60), data_emissao DATE NOT NULL, valor NUMERIC(12,2) NOT NULL DEFAULT 0, status VARCHAR(20) NOT NULL DEFAULT 'emitida', observacao TEXT, motivo_cancelamento TEXT, cancelada_em TIMESTAMP, pdf BYTEA, pdf_nome VARCHAR(255), xml TEXT, xml_nome VARCHAR(255), id_externo VARCHAR(100), mensagem_erro TEXT, id_usuario INT REFERENCES usuarios(id) ON DELETE SET NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW(), atualizado_em TIMESTAMP NOT NULL DEFAULT NOW())",
+        "CREATE INDEX IF NOT EXISTS ix_notas_fiscais_os ON notas_fiscais(id_os)",
         "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS data_prevista TIMESTAMP NULL",
         "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS estoque_baixado BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS estoque_atual INT NOT NULL DEFAULT 0",
@@ -923,6 +952,7 @@ ipcMain.handle("get-app-settings", async (event) => {
   if (settingsToSend.database) delete settingsToSend.database.password; // Não envia senha do DB
   if (settingsToSend.email) delete settingsToSend.email.pass; // Não envia senha do Email
   if (settingsToSend.license) delete settingsToSend.license.token; // Não expõe o token de licença
+  delete settingsToSend.fiscal; // tem tela própria (get-fiscal-settings), sem segredos
   return {
     success: true,
     appVersion: app.getVersion(),
@@ -1639,7 +1669,8 @@ ipcMain.handle("get-os-list", async (event) => {
       CONCAT(os.tipo_equipamento, ' ', os.marca, ' ', os.modelo) AS equipamento,
       os.numero_serie, os.status, os.data_entrada, os.valor_total,
       c.nome AS nome_cliente, c.telefone AS telefone_cliente,
-      u.nome AS nome_atendente
+      u.nome AS nome_atendente,
+      (SELECT COUNT(*) FROM notas_fiscais nf WHERE nf.id_os = os.id AND nf.status <> 'cancelada')::int AS notas
     FROM ordens_servico AS os
     JOIN clientes AS c ON os.id_cliente = c.id
     LEFT JOIN usuarios u ON u.id = os.id_atendente
@@ -1992,6 +2023,9 @@ ipcMain.handle("delete-os", async (event, osId) => {
     await dbPool.query(pgQuery("DELETE FROM ordens_servico WHERE id = ?"), [osId]);
     return { success: true };
   } catch (error) {
+    if (["23001", "23503"].includes(error.code) && /notas_fiscais/.test(error.constraint || error.detail || "")) {
+      return { success: false, error: "Esta OS tem nota fiscal registrada e não pode ser excluída." };
+    }
     return { success: false, error: error.message };
   }
 });
@@ -4220,6 +4254,373 @@ ipcMain.handle("load-background-image", async (event, bgPath) => {
       success: false,
       error: `Erro ao ler o arquivo de imagem: ${error.message}`,
     };
+  }
+});
+
+// --- NOTA FISCAL ---
+// O app não é emissor: registra notas emitidas por fora ou (plano anual com renovação
+// automática) usa o emissor que o cliente configurar com as próprias credenciais.
+
+const TERMO_FISCAL_VERSAO = 1;
+const ARQUIVO_CERTIFICADO = path.join(userDataPath, "certificado-a1.bin");
+const RECURSO_EMISSOR_FISCAL = "emissorFiscal";
+
+const recursoLiberado = (nome) => {
+  const status = licenseManager.evaluate();
+  return !!status.active && (status.recursos || []).includes(nome);
+};
+
+// Arquivos escolhidos no diálogo: a tela recebe só um identificador, nunca lê caminhos livres.
+const arquivosEscolhidos = new Map();
+function guardarArquivoEscolhido(caminho) {
+  const id = crypto.randomUUID();
+  arquivosEscolhidos.set(id, caminho);
+  setTimeout(() => arquivosEscolhidos.delete(id), 30 * 60 * 1000).unref?.();
+  return id;
+}
+
+function dadosFiscaisParaTela() {
+  const fiscal = appConfig.fiscal;
+  const credenciais = {};
+  for (const emissor of fiscalEmissores.EMISSORES) {
+    const salvas = fiscal.credenciais?.[emissor.id] || {};
+    credenciais[emissor.id] = {};
+    for (const campo of emissor.credenciais) {
+      const valor = salvas[campo.chave];
+      // Segredo nunca volta para a tela: só informa se está preenchido
+      credenciais[emissor.id][campo.chave] =
+        campo.tipo === "segredo" ? { preenchido: !!valor } : valor ?? "";
+    }
+  }
+  return {
+    emissor: fiscal.emissor,
+    empresa: { ...fiscal.empresa },
+    termo: fiscal.termo,
+    termoVersaoAtual: TERMO_FISCAL_VERSAO,
+    certificado: fs.existsSync(ARQUIVO_CERTIFICADO) ? fiscal.certificado : null,
+    credenciais,
+  };
+}
+
+const termoFiscalAceito = () => appConfig.fiscal.termo?.versao === TERMO_FISCAL_VERSAO;
+
+ipcMain.handle("get-fiscal-settings", async () => {
+  const status = licenseManager.evaluate();
+  return {
+    success: true,
+    emissores: fiscalEmissores.EMISSORES,
+    fiscal: dadosFiscaisParaTela(),
+    recursoEmissorIntegrado: recursoLiberado(RECURSO_EMISSOR_FISCAL),
+    plano: status.plano || null,
+    tipoLicenca: status.tipo || null,
+  };
+});
+
+// Emissor atual e o que a tela de OS pode oferecer
+ipcMain.handle("get-fiscal-status", async () => {
+  const emissor = fiscalEmissores.buscarEmissor(appConfig.fiscal.emissor) || fiscalEmissores.buscarEmissor("manual");
+  const integradoAtivo =
+    emissor.integrado && emissor.status === "disponivel" && recursoLiberado(RECURSO_EMISSOR_FISCAL) && termoFiscalAceito();
+  return {
+    success: true,
+    emissor: { id: emissor.id, nome: emissor.nome, integrado: emissor.integrado, status: emissor.status },
+    integradoAtivo,
+    tiposNota: fiscalEmissores.TIPOS_NOTA,
+  };
+});
+
+const soDigitos = (v, max) => String(v ?? "").replace(/\D/g, "").slice(0, max);
+const textoCurto = (v, max) => String(v ?? "").trim().slice(0, max);
+
+ipcMain.handle("save-fiscal-settings", async (event, dados = {}) => {
+  const fiscal = appConfig.fiscal;
+  const usuario = acesso.usuarioDe(event);
+
+  if (dados.aceitarTermo === true) {
+    fiscal.termo = { versao: TERMO_FISCAL_VERSAO, aceitoEm: new Date().toISOString(), usuario: usuario?.nome || "" };
+  }
+
+  if (dados.empresa) {
+    const e = dados.empresa;
+    const aliquota = String(e.aliquotaIss ?? "").replace(",", ".").trim();
+    if (aliquota !== "" && (!Number.isFinite(Number(aliquota)) || Number(aliquota) < 0 || Number(aliquota) > 5)) {
+      return { success: false, error: "Alíquota do ISS inválida (use um valor entre 0 e 5%)." };
+    }
+    const ibge = soDigitos(e.codigoMunicipioIbge, 7);
+    if (ibge && ibge.length !== 7) return { success: false, error: "O código IBGE do município tem 7 dígitos." };
+    const cnpj = soDigitos(e.cnpj, 14);
+    if (cnpj && cnpj.length !== 14 && cnpj.length !== 11) return { success: false, error: "Informe um CNPJ (14 dígitos) ou CPF (11 dígitos)." };
+    fiscal.empresa = {
+      cnpj,
+      inscricaoMunicipal: textoCurto(e.inscricaoMunicipal, 30),
+      inscricaoEstadual: textoCurto(e.inscricaoEstadual, 30),
+      regimeTributario: textoCurto(e.regimeTributario, 40),
+      codigoMunicipioIbge: ibge,
+      codigoTributacao: textoCurto(e.codigoTributacao, 20),
+      aliquotaIss: aliquota,
+    };
+  }
+
+  if (dados.emissor !== undefined) {
+    const emissor = fiscalEmissores.buscarEmissor(dados.emissor);
+    if (!emissor) return { success: false, error: "Emissor desconhecido." };
+    if (emissor.integrado) {
+      if (!recursoLiberado(RECURSO_EMISSOR_FISCAL)) {
+        return { success: false, error: "Emissor integrado disponível no plano Anual com renovação automática." };
+      }
+      if (emissor.status !== "disponivel") {
+        return { success: false, error: `A integração com ${emissor.nome} ainda está em desenvolvimento.` };
+      }
+      if (!termoFiscalAceito()) {
+        return { success: false, error: "Leia e aceite \"Como funciona a emissão\" antes de escolher um emissor integrado." };
+      }
+    }
+    fiscal.emissor = emissor.id;
+  }
+
+  if (dados.credenciais && typeof dados.credenciais === "object") {
+    if (!termoFiscalAceito()) {
+      return { success: false, error: "Leia e aceite \"Como funciona a emissão\" antes de cadastrar credenciais." };
+    }
+    for (const [emissorId, valores] of Object.entries(dados.credenciais)) {
+      const emissor = fiscalEmissores.buscarEmissor(emissorId);
+      if (!emissor || !valores) continue;
+      const atuais = { ...(fiscal.credenciais?.[emissorId] || {}) };
+      for (const campo of emissor.credenciais) {
+        const valor = valores[campo.chave];
+        if (campo.tipo === "segredo") {
+          if (valores[campo.chave + "Remover"] === true) delete atuais[campo.chave];
+          else if (typeof valor === "string" && valor.trim()) atuais[campo.chave] = valor.trim(); // em branco = manter
+        } else if (campo.tipo === "selecao") {
+          if (valor !== undefined && campo.opcoes.some(([v]) => v === valor)) atuais[campo.chave] = valor;
+        } else if (valor !== undefined) {
+          atuais[campo.chave] = textoCurto(valor, 200);
+        }
+      }
+      fiscal.credenciais = { ...(fiscal.credenciais || {}), [emissorId]: atuais };
+    }
+  }
+
+  salvarConfig();
+  return { success: true, fiscal: dadosFiscaisParaTela() };
+});
+
+ipcMain.handle("select-certificate-file", async (event) => {
+  const janela = BrowserWindow.fromWebContents(event.sender);
+  const { canceled, filePaths } = await dialog.showOpenDialog(janela, {
+    title: "Selecionar certificado digital A1",
+    properties: ["openFile"],
+    filters: [{ name: "Certificado A1 (.pfx, .p12)", extensions: ["pfx", "p12"] }],
+  });
+  if (canceled || !filePaths?.length) return { success: false, canceled: true };
+  return { success: true, arquivo: guardarArquivoEscolhido(filePaths[0]), nome: path.basename(filePaths[0]) };
+});
+
+ipcMain.handle("save-certificate", async (event, { arquivo, senha } = {}) => {
+  if (!termoFiscalAceito()) {
+    return { success: false, error: "Leia e aceite \"Como funciona a emissão\" antes de cadastrar o certificado." };
+  }
+  const caminho = arquivosEscolhidos.get(arquivo);
+  if (!caminho) return { success: false, error: "Selecione o arquivo do certificado novamente." };
+  if (!cofreSegredos.disponivel()) {
+    return { success: false, error: "Não foi possível proteger o certificado neste computador (cofre do sistema indisponível)." };
+  }
+  try {
+    const conteudo = fs.readFileSync(caminho);
+    const info = lerCertificadoA1(conteudo, senha);
+    fs.writeFileSync(ARQUIVO_CERTIFICADO, cofreSegredos.cifrar(conteudo.toString("base64")));
+    appConfig.fiscal.certificado = {
+      ...info,
+      arquivoNome: path.basename(caminho),
+      cadastradoEm: new Date().toISOString(),
+      cadastradoPor: acesso.usuarioDe(event)?.nome || "",
+    };
+    appConfig.fiscal.certificadoSenha = String(senha ?? "");
+    salvarConfig();
+    arquivosEscolhidos.delete(arquivo);
+    const cnpjEmpresa = appConfig.fiscal.empresa.cnpj;
+    const aviso =
+      cnpjEmpresa && info.documento && info.documento.numero !== cnpjEmpresa
+        ? "O CPF/CNPJ do certificado é diferente do cadastrado nos dados fiscais da empresa."
+        : null;
+    return { success: true, certificado: appConfig.fiscal.certificado, aviso };
+  } catch (error) {
+    if (error instanceof CertificadoErro) return { success: false, error: error.message };
+    console.error("[Certificado] Erro ao cadastrar:", error);
+    return { success: false, error: "Não foi possível ler o certificado." };
+  }
+});
+
+ipcMain.handle("remove-certificate", async () => {
+  try {
+    if (fs.existsSync(ARQUIVO_CERTIFICADO)) fs.unlinkSync(ARQUIVO_CERTIFICADO);
+  } catch (error) {
+    return { success: false, error: "Não foi possível remover o arquivo do certificado." };
+  }
+  appConfig.fiscal.certificado = null;
+  appConfig.fiscal.certificadoSenha = "";
+  salvarConfig();
+  return { success: true };
+});
+
+// Notas da OS (sem o conteúdo dos arquivos)
+ipcMain.handle("get-os-notas", async (event, osId) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const negado = await negarOSAlheia(event, osId);
+    if (negado) return negado;
+    const { rows } = await dbPool.query(
+      `SELECT nf.id, nf.tipo, nf.origem, nf.numero, nf.serie, nf.chave_acesso, nf.data_emissao, nf.valor,
+              nf.status, nf.observacao, nf.motivo_cancelamento, nf.cancelada_em, nf.pdf_nome, nf.xml_nome,
+              (nf.pdf IS NOT NULL) AS tem_pdf, (nf.xml IS NOT NULL) AS tem_xml, nf.criado_em, u.nome AS usuario
+         FROM notas_fiscais nf LEFT JOIN usuarios u ON u.id = nf.id_usuario
+        WHERE nf.id_os = $1 ORDER BY nf.criado_em DESC`,
+      [osId]
+    );
+    return { success: true, data: rows };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("select-nota-arquivo", async (event, tipo) => {
+  const janela = BrowserWindow.fromWebContents(event.sender);
+  const filtro = tipo === "xml"
+    ? { name: "XML da nota", extensions: ["xml"] }
+    : { name: "PDF da nota", extensions: ["pdf"] };
+  const { canceled, filePaths } = await dialog.showOpenDialog(janela, {
+    title: tipo === "xml" ? "Anexar XML da nota" : "Anexar PDF da nota",
+    properties: ["openFile"],
+    filters: [filtro],
+  });
+  if (canceled || !filePaths?.length) return { success: false, canceled: true };
+  return { success: true, arquivo: guardarArquivoEscolhido(filePaths[0]), nome: path.basename(filePaths[0]) };
+});
+
+function lerAnexoNota(arquivo, tipo) {
+  if (!arquivo) return null;
+  const caminho = arquivosEscolhidos.get(arquivo);
+  if (!caminho) throw new Error("Anexe o arquivo novamente.");
+  const conteudo = fs.readFileSync(caminho);
+  if (tipo === "pdf") {
+    if (conteudo.length > 10 * 1024 * 1024) throw new Error("O PDF deve ter no máximo 10 MB.");
+    if (conteudo.subarray(0, 5).toString("latin1") !== "%PDF-") throw new Error("O arquivo anexado não é um PDF.");
+    return { dados: conteudo, nome: path.basename(caminho) };
+  }
+  if (conteudo.length > 2 * 1024 * 1024) throw new Error("O XML deve ter no máximo 2 MB.");
+  const texto = conteudo.toString("utf8").replace(/^\uFEFF/, "");
+  if (!texto.trimStart().startsWith("<")) throw new Error("O arquivo anexado não é um XML.");
+  return { dados: texto, nome: path.basename(caminho) };
+}
+
+ipcMain.handle("add-nota-manual", async (event, dados = {}) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const osId = parseInt(dados.osId, 10);
+    const { rows: osRows } = await dbPool.query("SELECT status FROM ordens_servico WHERE id = $1", [osId]);
+    if (!osRows[0]) return { success: false, error: "OS não encontrada." };
+    const negado = await negarOSAlheia(event, osId);
+    if (negado) return negado;
+    if (!["Finalizado", "Entregue"].includes(osRows[0].status)) {
+      return { success: false, error: "Registre a nota depois de finalizar a OS." };
+    }
+    if (!fiscalEmissores.TIPOS_NOTA.includes(dados.tipo)) return { success: false, error: "Tipo de nota inválido." };
+    const numero = textoCurto(dados.numero, 30);
+    if (!numero) return { success: false, error: "Informe o número da nota." };
+    const dataEmissao = String(dados.dataEmissao || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataEmissao) || Number.isNaN(Date.parse(dataEmissao))) {
+      return { success: false, error: "Informe a data de emissão." };
+    }
+    const valor = Number(String(dados.valor ?? "").replace(",", "."));
+    if (!Number.isFinite(valor) || valor < 0) return { success: false, error: "Valor da nota inválido." };
+    const chave = soDigitos(dados.chaveAcesso, 50);
+    if (chave && ![44, 50].includes(chave.length)) {
+      return { success: false, error: "A chave de acesso tem 44 dígitos (NF-e/NFC-e) ou 50 (NFS-e Nacional)." };
+    }
+    let pdf, xml;
+    try {
+      pdf = lerAnexoNota(dados.pdfArquivo, "pdf");
+      xml = lerAnexoNota(dados.xmlArquivo, "xml");
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+    const { rows } = await dbPool.query(
+      `INSERT INTO notas_fiscais (id_os, tipo, origem, numero, serie, chave_acesso, data_emissao, valor, observacao,
+                                  pdf, pdf_nome, xml, xml_nome, id_usuario)
+       VALUES ($1, $2, 'manual', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      [osId, dados.tipo, numero, textoCurto(dados.serie, 10) || null, chave || null, dataEmissao, valor,
+       textoCurto(dados.observacao, 500) || null, pdf?.dados || null, pdf?.nome || null, xml?.dados || null,
+       xml?.nome || null, acesso.usuarioDe(event)?.id || null]
+    );
+    if (dados.pdfArquivo) arquivosEscolhidos.delete(dados.pdfArquivo);
+    if (dados.xmlArquivo) arquivosEscolhidos.delete(dados.xmlArquivo);
+    return { success: true, id: rows[0].id };
+  } catch (error) {
+    console.error("[Nota fiscal] Erro ao registrar:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+async function notaDoUsuario(event, id) {
+  const { rows } = await dbPool.query("SELECT id, id_os, origem, status FROM notas_fiscais WHERE id = $1", [id]);
+  if (!rows[0]) return { erro: { success: false, error: "Nota não encontrada." } };
+  const negado = await negarOSAlheia(event, rows[0].id_os);
+  if (negado) return { erro: negado };
+  return { nota: rows[0] };
+}
+
+// Nota manual: marca como cancelada (o cancelamento fiscal é feito onde foi emitida)
+ipcMain.handle("cancelar-nota", async (event, { id, motivo } = {}) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const { nota, erro } = await notaDoUsuario(event, id);
+    if (erro) return erro;
+    if (nota.origem !== "manual") return { success: false, error: "Cancelamento pelo emissor integrado ainda não disponível." };
+    if (nota.status === "cancelada") return { success: false, error: "A nota já está cancelada." };
+    const texto = textoCurto(motivo, 255);
+    if (texto.length < 5) return { success: false, error: "Informe o motivo do cancelamento." };
+    await dbPool.query(
+      "UPDATE notas_fiscais SET status = 'cancelada', motivo_cancelamento = $2, cancelada_em = NOW(), atualizado_em = NOW() WHERE id = $1",
+      [id, texto]
+    );
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("delete-nota", async (event, id) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  if (!acesso.pode(acesso.usuarioDe(event), "notas")) {
+    return { success: false, acessoNegado: true, error: "Você não tem permissão para esta ação. Solicite ao administrador." };
+  }
+  try {
+    const { nota, erro } = await notaDoUsuario(event, id);
+    if (erro) return erro;
+    if (nota.origem !== "manual") return { success: false, error: "Notas emitidas pelo emissor integrado não podem ser excluídas; cancele-as." };
+    await dbPool.query("DELETE FROM notas_fiscais WHERE id = $1", [id]);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("open-nota-arquivo", async (event, { id, tipo } = {}) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const { erro } = await notaDoUsuario(event, id);
+    if (erro) return erro;
+    const coluna = tipo === "xml" ? "xml" : "pdf";
+    const { rows } = await dbPool.query(`SELECT numero, ${coluna} AS conteudo FROM notas_fiscais WHERE id = $1`, [id]);
+    if (!rows[0]?.conteudo) return { success: false, error: "Arquivo não anexado." };
+    const pasta = path.join(app.getPath("temp"), "gsti-notas");
+    fs.mkdirSync(pasta, { recursive: true });
+    const destino = path.join(pasta, `nota-${id}-${String(rows[0].numero).replace(/[^\w-]/g, "")}.${coluna}`);
+    fs.writeFileSync(destino, rows[0].conteudo);
+    const falha = await shell.openPath(destino);
+    return falha ? { success: false, error: falha } : { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 

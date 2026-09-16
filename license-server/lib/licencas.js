@@ -58,9 +58,21 @@ function maquinasAtivas(licencaId) {
     .get(licencaId).n;
 }
 
+// Recursos extras levados no token. Emissor fiscal integrado: só com assinatura anual
+// ativa (renovação automática) ou licença de cortesia emitida pela equipe.
+function recursosDaLicenca(lic) {
+  const recursos = [];
+  const assinaturaAtiva = abrir()
+    .prepare("SELECT 1 FROM assinaturas WHERE licenca_id = ? AND status = 'authorized'")
+    .get(lic.id);
+  if (assinaturaAtiva || lic.plano === "cortesia") recursos.push("emissorFiscal");
+  return recursos;
+}
+
 function detalhes(lic) {
   return {
     plano: lic.plano,
+    recursos: recursosDaLicenca(lic),
     chaveFinal: lic.chave_final,
     validade: lic.valida_ate || null,
     maxMaquinas: lic.max_maquinas,
@@ -94,6 +106,7 @@ function tokenCompleto(lic, maquinaId) {
     lic: lic.id,
     email: lic.email,
     plano: lic.plano,
+    recursos: recursosDaLicenca(lic),
     maquina: maquinaId,
     emitidoEm: agoraIso(),
     validade: lic.valida_ate || null,
@@ -107,6 +120,7 @@ function tokenTrial(email, maquinaId, expiraEm) {
     lic: null,
     email,
     plano: "trial",
+    recursos: [],
     maquina: maquinaId,
     emitidoEm: agoraIso(),
     validade: expiraEm,

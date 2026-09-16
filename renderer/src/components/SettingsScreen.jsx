@@ -44,6 +44,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import Switch from "@mui/material/Switch";
 import { useAuth } from "../contexts/AuthContext"; // Para verificar se é admin
 import { PERFIS_CONFIGURAVEIS, PERMISSOES } from "../constants/perfis";
+import ConfigNotaFiscal from "./ConfigNotaFiscal";
 
 // Pré-visualização de uma imagem escolhida em Configurações (logo ou fundo do login)
 function MiniaturaImagem({ caminho, tipo, largura, altura, vazio }) {
@@ -756,6 +757,9 @@ function SettingsScreen() {
         />
       </Paper>
       {/* --- FIM Dados da empresa --- */}
+
+      {/* --- Nota fiscal (salva pelos próprios botões da seção) --- */}
+      <ConfigNotaFiscal />
 
       {/* --- Licenciamento e Ativação --- */}
       <Paper sx={{ p: 3, mb: 3 }}>

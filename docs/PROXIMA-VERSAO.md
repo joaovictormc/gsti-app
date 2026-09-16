@@ -55,6 +55,19 @@ Atualizado em 2026-09-16.
 - [x] Plataforma de vendas (site, Mercado Pago, área do cliente, painel da equipe) —
       ver [PLANO-LICENCIAMENTO-E-VENDAS.md](./PLANO-LICENCIAMENTO-E-VENDAS.md).
 
+### Nota fiscal
+- [x] **Configurações > Nota fiscal**: quadro "Como funciona" com aceite registrado (o
+      cliente é responsável por credenciais, certificado e dados fiscais), catálogo de
+      emissores com filtro de gratuitos, credenciais por emissor (segredos cifrados e nunca
+      devolvidos à tela), dados fiscais da empresa e **certificado digital A1** (.pfx:
+      valida senha, chave privada e validade; mostra titular, CNPJ/CPF e vencimento; fica
+      cifrado só neste computador).
+- [x] **Registro manual de nota na OS finalizada** (NFS-e, NF-e, NFC-e): número, série,
+      data, valor, chave, PDF e XML guardados no banco; marcar como cancelada; OS com nota
+      não pode ser excluída; permissão "Registrar e emitir nota fiscal" por perfil.
+- [x] **Emissor integrado liberado por plano**: recurso `emissorFiscal` no token só com
+      assinatura anual ativa (renovação automática) ou licença cortesia.
+
 ### Segurança
 - [x] **Permissões checadas no processo principal** (`controle-acesso.js`): cada canal IPC
       declara quem pode chamá-lo (Admin, Financeiro, Relatórios, usuário logado, público);
@@ -80,9 +93,15 @@ Atualizado em 2026-09-16.
 
 ## 2. Fila — próximas funcionalidades
 
-- **Emissão de NFS-e / NF-e após finalizar a OS** — botão nas OS finalizadas.
-  Pesquisa e recomendação em [PESQUISA-NOTA-FISCAL.md](./PESQUISA-NOTA-FISCAL.md)
-  (provedor plugável: Notaas primeiro; Emissor Nacional direto como opção gratuita).
+- **Emissores de nota fiscal integrados** — estrutura, registro manual, certificado A1 e
+  liberação por plano já entregues (ver seção 1). Próximo: adaptadores Focus NFe e Notaas
+  (aguardando contas de teste), depois Emissor Nacional direto. Detalhes em
+  [PESQUISA-NOTA-FISCAL.md](./PESQUISA-NOTA-FISCAL.md).
+- **Portal do cliente: catálogo de emissores** com guias e "solicitar outro emissor"
+  (ranking de pedidos no painel admin).
+- **Telas antigas com `<Grid item xs=…>`** — no MUI 7 essas props são ignoradas (layout
+  em colunas não se aplica). Migrar para `<Grid size={{ xs, md }}>`: tela inicial,
+  Financeiro, Configurações, Estoque, relatórios e Clientes.
 - **Aviso automático também pelo WhatsApp** — hoje o botão abre a conversa com a
   mensagem pronta. Envio automático exige API paga (WhatsApp Business Cloud API,
   Z-API, Twilio); reavaliar se houver demanda.

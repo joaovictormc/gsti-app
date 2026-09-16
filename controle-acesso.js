@@ -14,6 +14,7 @@
 //   excluir     — podeExcluir          custo      — verCusto
 //   produtos    — editarProdutos       estoque    — ajustarEstoque
 //   cadastros   — editarCadastros (clientes e equipamentos)
+//   notas       — emitirNotaFiscal (registrar/emitir e cancelar notas da OS)
 // "Só OS atribuídas" (somenteOSAtribuidas) não é um nível: é aplicado nos handlers de OS.
 // Um canal pode aceitar mais de um nível (lista): basta atender a um deles.
 
@@ -26,21 +27,25 @@ const PERMISSOES_PADRAO = {
   funcionario: {
     somenteOSAtribuidas: false, podeExcluir: true, verCusto: true, editarProdutos: true,
     ajustarEstoque: true, editarCadastros: true, canSeeFinancial: false, canSeeReports: false,
+    emitirNotaFiscal: true,
   },
   tecnico: {
     somenteOSAtribuidas: true, podeExcluir: false, verCusto: false, editarProdutos: false,
     ajustarEstoque: false, editarCadastros: false, canSeeFinancial: false, canSeeReports: false,
+    emitirNotaFiscal: false,
   },
 };
 
 const PERMISSOES_ADMIN = {
   somenteOSAtribuidas: false, podeExcluir: true, verCusto: true, editarProdutos: true,
   ajustarEstoque: true, editarCadastros: true, canSeeFinancial: true, canSeeReports: true,
+  emitirNotaFiscal: true,
 };
 
 const NIVEL_PERMISSAO = {
   financeiro: "canSeeFinancial", relatorios: "canSeeReports", excluir: "podeExcluir",
   custo: "verCusto", produtos: "editarProdutos", estoque: "ajustarEstoque", cadastros: "editarCadastros",
+  notas: "emitirNotaFiscal",
 };
 const POLITICAS_IPC = {
   // Configuração inicial e licença
@@ -139,6 +144,20 @@ const POLITICAS_IPC = {
   "add-financial-goal": "financeiro",
   "delete-financial-goal": "financeiro",
   "get-detailed-cashflow": "financeiro",
+
+  // Nota fiscal
+  "get-fiscal-settings": "admin",
+  "save-fiscal-settings": "admin",
+  "select-certificate-file": "admin",
+  "save-certificate": "admin",
+  "remove-certificate": "admin",
+  "get-fiscal-status": "sessao",
+  "get-os-notas": "sessao",
+  "open-nota-arquivo": "sessao",
+  "select-nota-arquivo": "notas",
+  "add-nota-manual": "notas",
+  "cancelar-nota": "notas",
+  "delete-nota": "excluir", // também exige "notas" (verificado no handler)
 
   // Relatórios
   "get-os-by-client": "relatorios",

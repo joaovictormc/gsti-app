@@ -21,6 +21,20 @@ contextBridge.exposeInMainWorld('api', {
   selectBackgroundFile: () => ipcRenderer.invoke('select-background-file'),
   loadBackgroundImage: (bgPath) => ipcRenderer.invoke('load-background-image', bgPath),
 
+  // Nota fiscal
+  getFiscalSettings: () => ipcRenderer.invoke('get-fiscal-settings'),
+  saveFiscalSettings: (dados) => ipcRenderer.invoke('save-fiscal-settings', dados),
+  selectCertificateFile: () => ipcRenderer.invoke('select-certificate-file'),
+  saveCertificate: (dados) => ipcRenderer.invoke('save-certificate', dados),
+  removeCertificate: () => ipcRenderer.invoke('remove-certificate'),
+  getFiscalStatus: () => ipcRenderer.invoke('get-fiscal-status'),
+  getOSNotas: (osId) => ipcRenderer.invoke('get-os-notas', osId),
+  selectNotaArquivo: (tipo) => ipcRenderer.invoke('select-nota-arquivo', tipo),
+  addNotaManual: (dados) => ipcRenderer.invoke('add-nota-manual', dados),
+  cancelarNota: (dados) => ipcRenderer.invoke('cancelar-nota', dados),
+  deleteNota: (id) => ipcRenderer.invoke('delete-nota', id),
+  openNotaArquivo: (dados) => ipcRenderer.invoke('open-nota-arquivo', dados),
+
   // Barra de título própria
   plataforma: process.platform,
   definirTemaBarraTitulo: (modo) => ipcRenderer.invoke('set-title-bar-theme', modo),

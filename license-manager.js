@@ -126,6 +126,7 @@ function createLicenseManager({ getConfig, saveConfig, appVersion }) {
     const base = {
       tipo: p.tipo,
       plano: p.plano,
+      recursos: Array.isArray(p.recursos) ? p.recursos : [], // ex.: "emissorFiscal"
       email: p.email,
       validade: p.validade || null,
       revalidarAte: p.revalidarAte || null,

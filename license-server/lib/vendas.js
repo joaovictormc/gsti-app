@@ -29,7 +29,7 @@ const NOME_PLANO = { anual: "Anual", vitalicia: "Vitalícia", cortesia: "Cortesi
 
 const OFERTAS_PADRAO = [
   { id: "anual-avulso", plano: "anual", modalidade: "avulso", nome: "Anual", descricao: "12 meses de uso\nPix, boleto ou cartão em até 12x\nRenove quando quiser", preco_centavos: 49700, parcelas_max: 12, destaque: 0, ordem: 1 },
-  { id: "anual-assinatura", plano: "anual", modalidade: "assinatura", nome: "Anual com renovação automática", descricao: "12 meses de uso\nRenovação automática no cartão\nCancele quando quiser", preco_centavos: 44700, parcelas_max: 1, destaque: 1, ordem: 2 },
+  { id: "anual-assinatura", plano: "anual", modalidade: "assinatura", nome: "Anual com renovação automática", descricao: "12 meses de uso\nRenovação automática no cartão\nEmissor de nota fiscal integrado\nCancele quando quiser", preco_centavos: 44700, parcelas_max: 1, destaque: 1, ordem: 2 },
   { id: "vitalicia-avulso", plano: "vitalicia", modalidade: "avulso", nome: "Vitalícia", descricao: "Pague uma vez, use para sempre\nPix, boleto ou cartão em até 12x", preco_centavos: 129700, parcelas_max: 12, destaque: 0, ordem: 3 },
 ];
 
