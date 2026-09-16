@@ -80,8 +80,9 @@ Atualizado em 2026-09-16.
 
 ## 2. Fila — próximas funcionalidades
 
-- **Emissão de NFS-e / NF-e após finalizar a OS** — botão nas OS finalizadas;
-  avaliar APIs de prefeitura/SEFAZ ou emissores de terceiros.
+- **Emissão de NFS-e / NF-e após finalizar a OS** — botão nas OS finalizadas.
+  Pesquisa e recomendação em [PESQUISA-NOTA-FISCAL.md](./PESQUISA-NOTA-FISCAL.md)
+  (provedor plugável: Notaas primeiro; Emissor Nacional direto como opção gratuita).
 - **Aviso automático também pelo WhatsApp** — hoje o botão abre a conversa com a
   mensagem pronta. Envio automático exige API paga (WhatsApp Business Cloud API,
   Z-API, Twilio); reavaliar se houver demanda.
