@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS produtos_servicos (
     valor           DECIMAL(10, 2) NOT NULL,
     tipo            VARCHAR(50) NOT NULL,
     estoque_atual   INT NOT NULL DEFAULT 0,
-    estoque_minimo  INT NOT NULL DEFAULT 0
+    estoque_minimo  INT NOT NULL DEFAULT 0,
+    custo           DECIMAL(10, 2)
 );
 
 -- Tabela Principal das Ordens de Serviço
@@ -81,6 +82,8 @@ CREATE TABLE IF NOT EXISTS os_itens (
     id_produto_servico  INT NOT NULL,
     quantidade          INT NOT NULL DEFAULT 1,
     valor_unitario      DECIMAL(10, 2) NOT NULL,
+    observacao          TEXT,
+    custo_unitario      DECIMAL(10, 2),
     FOREIGN KEY (id_os) REFERENCES ordens_servico(id) ON DELETE CASCADE,
     FOREIGN KEY (id_produto_servico) REFERENCES produtos_servicos(id) ON DELETE RESTRICT
 );

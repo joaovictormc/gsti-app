@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import {
   Box,
   Button,
+  Chip,
+  Stack,
   Modal,
   TextField,
   Typography,
@@ -30,7 +32,18 @@ const modalStyle = {
   p: 4,
 };
 
-const BLANK_PRODUCT = { descricao: "", valor: "", tipo: "Serviço" };
+const BLANK_PRODUCT = { descricao: "", valor: "", custo: "", tipo: "Serviço", estoque_atual: "", estoque_minimo: "" };
+
+const formatarMoeda = (v) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
+// "1.234,56" / "12,5" / "12.5" -> número (ou null quando vazio)
+const lerMoeda = (v) => {
+  if (v === null || v === undefined || String(v).trim() === "") return null;
+  let t = String(v).trim();
+  if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+  const n = Number(t);
+  return Number.isFinite(n) ? n : NaN;
+};
+const paraCampo = (v) => (v === null || v === undefined ? "" : String(v).replace(".", ","));
 
 function ProductServiceGrid() {
   const [products, setProducts] = useState([]);
@@ -61,7 +74,12 @@ function ProductServiceGrid() {
   };
 
   const handleOpenEditModal = (product) => {
-    setEditingProduct({ ...product, valor: String(product.valor) });
+    setEditingProduct({
+      ...product,
+      valor: paraCampo(product.valor),
+      custo: paraCampo(product.custo),
+      estoque_minimo: String(product.estoque_minimo ?? ""),
+    });
     setIsModalOpen(true);
   };
 
@@ -96,9 +114,17 @@ function ProductServiceGrid() {
       return;
     }
 
-    const valorString = String(editingProduct.valor).replace(",", ".");
-    const valorNumerico = parseFloat(valorString) || 0;
-    const dataToSend = { ...editingProduct, valor: valorNumerico };
+    const valorNumerico = lerMoeda(editingProduct.valor);
+    const custoNumerico = lerMoeda(editingProduct.custo);
+    if (!Number.isFinite(valorNumerico) || valorNumerico < 0) {
+      showSnackbar("Informe um valor de venda válido.");
+      return;
+    }
+    if (Number.isNaN(custoNumerico) || (custoNumerico !== null && custoNumerico < 0)) {
+      showSnackbar("Informe um custo válido (ou deixe em branco).");
+      return;
+    }
+    const dataToSend = { ...editingProduct, valor: valorNumerico, custo: custoNumerico };
 
     setIsSaving(true);
     const apiCall = dataToSend.id ? window.api.updateProduct : window.api.addProduct;
@@ -116,16 +142,37 @@ function ProductServiceGrid() {
   const columns = [
     { field: "id", headerName: "ID", width: 90 },
     { field: "descricao", headerName: "Descrição", flex: 1, minWidth: 250 },
-    { field: "tipo", headerName: "Tipo", width: 150 },
+    { field: "tipo", headerName: "Tipo", width: 110 },
     {
       field: "valor",
-      headerName: "Valor (R$)",
-      width: 150,
-      renderCell: (params) => {
-        const value = Number(params.row.valor);
-        if (isNaN(value)) return "R$ 0,00";
-        return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+      headerName: "Venda",
+      width: 120,
+      renderCell: (params) => formatarMoeda(params.row.valor),
+    },
+    {
+      field: "custo",
+      headerName: "Custo",
+      width: 120,
+      renderCell: (params) => (params.row.custo === null || params.row.custo === undefined ? "—" : formatarMoeda(params.row.custo)),
+    },
+    {
+      field: "margem",
+      headerName: "Margem",
+      width: 110,
+      valueGetter: (_v, row) => {
+        if (row.custo === null || row.custo === undefined || !Number(row.valor)) return null;
+        return ((Number(row.valor) - Number(row.custo)) / Number(row.valor)) * 100;
       },
+      renderCell: (params) =>
+        params.value === null ? "—" : (
+          <Chip size="small" label={`${params.value.toFixed(0)}%`} color={params.value < 0 ? "error" : params.value < 20 ? "warning" : "success"} variant="outlined" />
+        ),
+    },
+    {
+      field: "estoque_atual",
+      headerName: "Estoque",
+      width: 100,
+      renderCell: (params) => (params.row.tipo === "Produto" ? params.row.estoque_atual : "—"),
     },
     {
       field: "actions",
@@ -181,17 +228,30 @@ function ProductServiceGrid() {
               value={editingProduct.descricao}
               onChange={handleInputChange}
             />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="valor"
-              label="Valor (R$)"
-              type="text"
-              inputMode="decimal"
-              value={editingProduct.valor}
-              onChange={handleInputChange}
-            />
+            <Stack direction="row" spacing={2}>
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="valor"
+                label="Valor de venda (R$)"
+                type="text"
+                inputMode="decimal"
+                value={editingProduct.valor}
+                onChange={handleInputChange}
+              />
+              <TextField
+                margin="normal"
+                fullWidth
+                name="custo"
+                label="Custo (R$)"
+                type="text"
+                inputMode="decimal"
+                value={editingProduct.custo}
+                onChange={handleInputChange}
+                helperText="Opcional — usado na margem"
+              />
+            </Stack>
             <FormControl fullWidth margin="normal">
               <InputLabel>Tipo</InputLabel>
               <Select
@@ -204,6 +264,42 @@ function ProductServiceGrid() {
                 <MenuItem value="Produto">Produto</MenuItem>
               </Select>
             </FormControl>
+            {editingProduct.tipo === "Produto" && (
+              <Stack direction="row" spacing={2}>
+                {editingProduct.id ? (
+                  <TextField
+                    margin="normal"
+                    fullWidth
+                    label="Estoque atual"
+                    value={editingProduct.estoque_atual ?? 0}
+                    disabled
+                    helperText="Ajuste em Controle de Estoque"
+                  />
+                ) : (
+                  <TextField
+                    margin="normal"
+                    fullWidth
+                    name="estoque_atual"
+                    label="Quantidade em estoque"
+                    type="number"
+                    value={editingProduct.estoque_atual}
+                    onChange={handleInputChange}
+                    inputProps={{ min: 0 }}
+                  />
+                )}
+                <TextField
+                  margin="normal"
+                  fullWidth
+                  name="estoque_minimo"
+                  label="Estoque mínimo"
+                  type="number"
+                  value={editingProduct.estoque_minimo}
+                  onChange={handleInputChange}
+                  inputProps={{ min: 0 }}
+                  helperText="Alerta de estoque baixo"
+                />
+              </Stack>
+            )}
             <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
               <Button onClick={handleCloseModal} sx={{ mr: 1 }} disabled={isSaving}>
                 Cancelar

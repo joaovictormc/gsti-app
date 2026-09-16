@@ -236,10 +236,19 @@ function buildExitPDF({ osData, itemsData, filePath, companyName, logoPath }) {
 
     itemsData.forEach((item) => {
       const sub = item.quantidade * item.valor_unitario;
-      const dH = Math.max(15, doc.heightOfString(item.descricao, { width: qX - margin - 10 })) + 4;
-      y = checkPage(y, dH);
+      const larguraDesc = qX - margin - 10;
       doc.fontSize(9);
-      doc.text(item.descricao, margin, y, { width: qX - margin - 10 });
+      const hDesc = doc.heightOfString(item.descricao, { width: larguraDesc });
+      // Nota do item (opcional) em linha menor, abaixo da descrição
+      const nota = item.observacao ? String(item.observacao) : '';
+      doc.fontSize(8);
+      const hNota = nota ? doc.heightOfString(nota, { width: larguraDesc }) + 2 : 0;
+      const dH = Math.max(15, hDesc + hNota) + 4;
+      y = checkPage(y, dH);
+      doc.fontSize(9).fillColor('black');
+      doc.text(item.descricao, margin, y, { width: larguraDesc });
+      if (nota) doc.fontSize(8).fillColor('#555555').text(nota, margin, y + hDesc + 1, { width: larguraDesc });
+      doc.fontSize(9).fillColor('black');
       doc.text(String(item.quantidade), qX, y, { width: 40, align: 'right' });
       doc.text(Number(item.valor_unitario).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), uX, y, { width: 60, align: 'right' });
       doc.text(sub.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), sX, y, { width: 70, align: 'right' });

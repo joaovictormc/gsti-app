@@ -164,6 +164,10 @@ function initializeDbPool() {
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cidade VARCHAR(100)",
         "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS estado VARCHAR(2)",
         "CREATE TABLE IF NOT EXISTS metas_financeiras (id SERIAL PRIMARY KEY, descricao TEXT NOT NULL, valor NUMERIC(12,2) NOT NULL DEFAULT 0, criada_em TIMESTAMP NOT NULL DEFAULT NOW())",
+        // Custo do produto/serviço (margem) e notas/custo por item da OS
+        "ALTER TABLE produtos_servicos ADD COLUMN IF NOT EXISTS custo NUMERIC(10,2) NULL",
+        "ALTER TABLE os_itens ADD COLUMN IF NOT EXISTS observacao TEXT NULL",
+        "ALTER TABLE os_itens ADD COLUMN IF NOT EXISTS custo_unitario NUMERIC(10,2) NULL",
       ].forEach((sql) =>
         dbPool.query(sql)
           .then(() => console.log("[Migration] OK:", sql.slice(0, 60)))
@@ -1172,6 +1176,15 @@ ipcMain.handle("delete-customer", async (event, customerId) => {
   }
 });
 
+// Converte valor monetário vindo da tela ("1.234,56", "12.5", "") em número ou null.
+function parseMoney(v) {
+  if (v === null || v === undefined || String(v).trim() === "") return null;
+  let t = String(v).trim();
+  if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 // Listener para buscar todos os produtos e serviços
 ipcMain.handle("get-products", async () => {
   if (!dbPool)
@@ -1190,11 +1203,16 @@ ipcMain.handle("add-product", async (event, productData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const { descricao, valor, tipo } = productData;
+  const custo = parseMoney(productData.custo);
+  // Estoque só faz sentido para produtos; serviços ficam com zero.
+  const ehProduto = tipo === "Produto";
+  const estoqueAtual = ehProduto ? Math.max(0, parseInt(productData.estoque_atual, 10) || 0) : 0;
+  const estoqueMinimo = ehProduto ? Math.max(0, parseInt(productData.estoque_minimo, 10) || 0) : 0;
   const sql = pgQuery(
-    "INSERT INTO produtos_servicos (descricao, valor, tipo) VALUES (?, ?, ?) RETURNING id"
+    "INSERT INTO produtos_servicos (descricao, valor, tipo, custo, estoque_atual, estoque_minimo) VALUES (?, ?, ?, ?, ?, ?) RETURNING id"
   );
   try {
-    const { rows } = await dbPool.query(sql, [descricao, valor, tipo]);
+    const { rows } = await dbPool.query(sql, [descricao, valor, tipo, custo, estoqueAtual, estoqueMinimo]);
     return { success: true, id: rows[0].id };
   } catch (error) {
     console.error("Erro ao adicionar produto/serviço:", error);
@@ -1207,12 +1225,15 @@ ipcMain.handle("update-product", async (event, productData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const { id, descricao, valor, tipo } = productData;
+  const custo = parseMoney(productData.custo);
+  const estoqueMinimo = tipo === "Produto" ? Math.max(0, parseInt(productData.estoque_minimo, 10) || 0) : 0;
+  // O estoque atual é ajustado pela tela de Controle de Estoque (entradas/saídas).
   const sql = pgQuery(
-    "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ? WHERE id = ?"
+    "UPDATE produtos_servicos SET descricao = ?, valor = ?, tipo = ?, custo = ?, estoque_minimo = ? WHERE id = ?"
   );
 
   try {
-    await dbPool.query(sql, [descricao, valor, tipo, id]);
+    await dbPool.query(sql, [descricao, valor, tipo, custo, estoqueMinimo, id]);
     return { success: true };
   } catch (error) {
     console.error("Erro ao atualizar produto/serviço:", error);
@@ -1265,7 +1286,7 @@ ipcMain.handle("get-active-data", async () => {
       "SELECT id, nome FROM clientes ORDER BY nome ASC"
     );
     const { rows: products } = await dbPool.query(
-      "SELECT id, descricao, valor, tipo FROM produtos_servicos ORDER BY descricao ASC"
+      "SELECT id, descricao, valor, tipo, custo FROM produtos_servicos ORDER BY descricao ASC"
     );
     const { rows: users } = await dbPool.query(
       "SELECT id, nome FROM usuarios ORDER BY nome ASC"
@@ -1290,10 +1311,12 @@ ipcMain.handle("get-os-details", async (event, osId) => {
 
     // CORREÇÃO: Alterado de 'produtos_serviços' para 'produtos_servicos'
     const { rows: itemRows } = await dbPool.query(
-      pgQuery(`SELECT ps.id, ps.descricao, ps.valor, ps.tipo, oi.quantidade
+      pgQuery(`SELECT ps.id, ps.descricao, oi.valor_unitario AS valor, ps.tipo, oi.quantidade,
+              oi.observacao, COALESCE(oi.custo_unitario, ps.custo) AS custo_unitario
        FROM os_itens oi
        JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id
-       WHERE oi.id_os = ?`),
+       WHERE oi.id_os = ?
+       ORDER BY oi.id`),
       [osId]
     );
 
@@ -1420,19 +1443,35 @@ ipcMain.handle("update-os", async (event, { osData, total }) => {
   }
 });
 
+// Grava os itens da OS com nota e custo do momento (margem não muda se o custo do produto mudar depois).
+async function inserirItensOS(conexao, osId, items) {
+  const texto = (v) => {
+    const t = String(v ?? "").trim();
+    return t ? t.slice(0, 500) : null;
+  };
+  await conexao.query(
+    `INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario, observacao, custo_unitario)
+     SELECT $1, i.id, i.qtd, i.valor, i.obs, COALESCE(i.custo, ps.custo)
+       FROM unnest($2::int[], $3::int[], $4::numeric[], $5::text[], $6::numeric[])
+            AS i(id, qtd, valor, obs, custo)
+       JOIN produtos_servicos ps ON ps.id = i.id`,
+    [
+      osId,
+      items.map((i) => i.id),
+      items.map((i) => i.quantidade),
+      items.map((i) => i.valor),
+      items.map((i) => texto(i.observacao)),
+      items.map((i) => (i.custo_unitario === undefined || i.custo_unitario === null ? null : Number(i.custo_unitario))),
+    ]
+  );
+}
+
 ipcMain.handle("add-os-items", async (event, { osId, items }) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   if (items.length === 0) return { success: true };
   try {
-    const productIds = items.map((i) => i.id);
-    const quantities = items.map((i) => i.quantidade);
-    const prices = items.map((i) => i.valor);
-    await dbPool.query(
-      `INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario)
-       SELECT $1, unnest($2::int[]), unnest($3::int[]), unnest($4::numeric[])`,
-      [osId, productIds, quantities, prices]
-    );
+    await inserirItensOS(dbPool, osId, items);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -1447,14 +1486,7 @@ ipcMain.handle("update-os-items", async (event, { osId, items }) => {
     await client.query("BEGIN");
     await client.query(pgQuery("DELETE FROM os_itens WHERE id_os = ?"), [osId]);
     if (items.length > 0) {
-      const productIds = items.map((i) => i.id);
-      const quantities = items.map((i) => i.quantidade);
-      const prices = items.map((i) => i.valor);
-      await client.query(
-        `INSERT INTO os_itens (id_os, id_produto_servico, quantidade, valor_unitario)
-         SELECT $1, unnest($2::int[]), unnest($3::int[]), unnest($4::numeric[])`,
-        [osId, productIds, quantities, prices]
-      );
+      await inserirItensOS(client, osId, items);
     }
     await client.query("COMMIT");
     return { success: true };
@@ -1552,9 +1584,10 @@ ipcMain.handle("generate-exit-receipt", async (event, osId) => {
     }
 
     const { rows: itemRows } = await dbPool.query(pgQuery(`
-      SELECT ps.descricao, oi.quantidade, oi.valor_unitario
+      SELECT ps.descricao, oi.quantidade, oi.valor_unitario, oi.observacao
       FROM os_itens oi JOIN produtos_servicos ps ON oi.id_produto_servico = ps.id
-      WHERE oi.id_os = ?`), [osId]);
+      WHERE oi.id_os = ?
+      ORDER BY oi.id`), [osId]);
     itemsData = itemRows;
   } catch (err) {
     return { success: false, error: `Erro ao buscar dados: ${err.message}` };
@@ -2859,15 +2892,20 @@ ipcMain.handle('get-profitability-report', async () => {
       SELECT
         ps.id, ps.descricao, ps.tipo,
         ps.valor AS preco_tabela,
-        COUNT(oi.id)::int AS total_vendas,
-        COALESCE(SUM(oi.quantidade),0)::int AS total_quantidade,
-        COALESCE(SUM(oi.quantidade * oi.valor_unitario),0) AS receita_total,
-        COALESCE(AVG(oi.valor_unitario),0) AS preco_medio
+        ps.custo AS custo_tabela,
+        COUNT(v.id)::int AS total_vendas,
+        COALESCE(SUM(v.quantidade),0)::int AS total_quantidade,
+        COALESCE(SUM(v.quantidade * v.valor_unitario),0) AS receita_total,
+        COALESCE(AVG(v.valor_unitario),0) AS preco_medio,
+        COALESCE(SUM(v.quantidade * COALESCE(v.custo_unitario, ps.custo)),0) AS custo_total,
+        -- Itens vendidos sem custo informado (a margem fica incompleta)
+        COUNT(v.id) FILTER (WHERE COALESCE(v.custo_unitario, ps.custo) IS NULL)::int AS vendas_sem_custo
       FROM produtos_servicos ps
-      LEFT JOIN os_itens oi ON oi.id_produto_servico = ps.id
-      LEFT JOIN ordens_servico os ON os.id = oi.id_os
-        AND os.status IN ('Finalizado','Entregue')
-      GROUP BY ps.id, ps.descricao, ps.tipo, ps.valor
+      LEFT JOIN (
+        SELECT oi.* FROM os_itens oi
+        JOIN ordens_servico os ON os.id = oi.id_os AND os.status IN ('Finalizado','Entregue')
+      ) v ON v.id_produto_servico = ps.id
+      GROUP BY ps.id, ps.descricao, ps.tipo, ps.valor, ps.custo
       ORDER BY receita_total DESC
     `);
     return { success: true, data: rows };

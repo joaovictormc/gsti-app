@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import {
-  Box, Typography, Paper, Grid, CircularProgress,
+  Alert, Box, Typography, Paper, Grid, CircularProgress,
 } from "@mui/material";
+import SavingsIcon from "@mui/icons-material/Savings";
 import { DataGrid } from "@mui/x-data-grid";
 import { Bar } from "react-chartjs-2";
 import {
@@ -43,11 +44,18 @@ export default function ProfitabilityReport() {
     })();
   }, []);
 
-  const totals = useMemo(() => ({
-    receita: data.reduce((s, r) => s + Number(r.receita_total), 0),
-    vendas: data.reduce((s, r) => s + Number(r.total_vendas), 0),
-    itens: data.filter((r) => Number(r.total_vendas) > 0).length,
-  }), [data]);
+  const totals = useMemo(() => {
+    const receita = data.reduce((s, r) => s + Number(r.receita_total), 0);
+    const custo = data.reduce((s, r) => s + Number(r.custo_total), 0);
+    return {
+      receita,
+      custo,
+      lucro: receita - custo,
+      vendas: data.reduce((s, r) => s + Number(r.total_vendas), 0),
+      itens: data.filter((r) => Number(r.total_vendas) > 0).length,
+      semCusto: data.reduce((s, r) => s + Number(r.vendas_sem_custo || 0), 0),
+    };
+  }, [data]);
 
   const top5 = useMemo(
     () => data.filter((r) => Number(r.receita_total) > 0).slice(0, 5),
@@ -116,6 +124,37 @@ export default function ProfitabilityReport() {
       renderCell: (p) => Number(p.row.total_vendas) > 0 ? formatCurrency(p.value) : "—",
     },
     {
+      field: "custo_total",
+      headerName: "Custo",
+      width: 120,
+      align: "right",
+      headerAlign: "right",
+      renderCell: (p) => (Number(p.row.total_vendas) > 0 ? formatCurrency(p.value) : "—"),
+    },
+    {
+      field: "lucro",
+      headerName: "Lucro",
+      width: 130,
+      align: "right",
+      headerAlign: "right",
+      valueGetter: (_v, row) => Number(row.receita_total) - Number(row.custo_total),
+      renderCell: (p) =>
+        Number(p.row.total_vendas) > 0 ? (
+          <Typography variant="body2" fontWeight={700} color={p.value < 0 ? "error.main" : "text.primary"}>
+            {formatCurrency(p.value)}
+          </Typography>
+        ) : "—",
+    },
+    {
+      field: "margem",
+      headerName: "Margem",
+      width: 90,
+      align: "right",
+      headerAlign: "right",
+      valueGetter: (_v, row) => (Number(row.receita_total) > 0 ? ((Number(row.receita_total) - Number(row.custo_total)) / Number(row.receita_total)) * 100 : null),
+      renderCell: (p) => (p.value === null ? "—" : `${p.value.toFixed(0)}%`),
+    },
+    {
       field: "receita_total",
       headerName: "Receita Total",
       width: 140,
@@ -146,22 +185,30 @@ export default function ProfitabilityReport() {
       <Box sx={{ mb: 3 }}>
         <Typography variant="h4" fontWeight={700} gutterBottom>Lucratividade por Serviço</Typography>
         <Typography variant="body2" color="text.secondary">
-          Receita gerada por cada produto ou serviço em OS finalizadas e entregues.
+          Receita, custo e margem de cada produto ou serviço em OS finalizadas e entregues.
         </Typography>
       </Box>
 
       {/* Stats */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard icon={TrendingUpIcon} label="Receita total gerada" value={formatCurrency(totals.receita)} color="success" />
         </Grid>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard icon={SavingsIcon} label={`Lucro bruto${totals.receita ? ` (${((totals.lucro / totals.receita) * 100).toFixed(0)}%)` : ""}`} value={formatCurrency(totals.lucro)} color="info" />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard icon={ReceiptLongIcon} label="Vendas realizadas" value={totals.vendas} color="primary" />
         </Grid>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <StatCard icon={ShoppingCartIcon} label="Itens com vendas" value={`${totals.itens} / ${data.length}`} color="secondary" />
         </Grid>
       </Grid>
+      {totals.semCusto > 0 && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {totals.semCusto} venda(s) de itens sem custo cadastrado — o lucro considera custo zero para eles. Informe o custo em Produtos/Serviços.
+        </Alert>
+      )}
 
       {/* Gráfico Top 5 */}
       {top5.length > 0 && (

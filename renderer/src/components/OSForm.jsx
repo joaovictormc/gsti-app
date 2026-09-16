@@ -148,6 +148,8 @@ function OSForm({ initialData, onSave, onClose }) {
         ...selectedProduct,
         temp_id: Date.now(),
         quantidade: 1,
+        observacao: "",
+        custo_unitario: selectedProduct.custo ?? null,
       };
       setSelectedItems([...selectedItems, newItem]);
     }
@@ -165,6 +167,12 @@ function OSForm({ initialData, onSave, onClose }) {
             }
           : item
       )
+    );
+  };
+
+  const handleItemNoteChange = (temp_id, observacao) => {
+    setSelectedItems((items) =>
+      items.map((item) => (item.temp_id === temp_id ? { ...item, observacao } : item))
     );
   };
 
@@ -423,7 +431,19 @@ function OSForm({ initialData, onSave, onClose }) {
           <TableBody>
             {selectedItems.map((item) => (
               <TableRow key={item.temp_id}>
-                <TableCell>{item.descricao}</TableCell>
+                <TableCell>
+                  {item.descricao}
+                  <TextField
+                    variant="standard"
+                    size="small"
+                    fullWidth
+                    placeholder="Observação do item (opcional)"
+                    value={item.observacao || ""}
+                    onChange={(e) => handleItemNoteChange(item.temp_id, e.target.value)}
+                    inputProps={{ maxLength: 500, style: { fontSize: 13 } }}
+                    sx={{ mt: 0.5 }}
+                  />
+                </TableCell>
                 <TableCell align="right">
                   <TextField
                     type="number"
