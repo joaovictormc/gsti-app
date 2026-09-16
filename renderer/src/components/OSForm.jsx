@@ -19,6 +19,10 @@ import {
   TableRow,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { tiposCom, descreverEquipamento } from "../constants/equipamentos";
+
+// Opção especial do seletor de equipamentos
+const NOVO_EQUIPAMENTO = { id: "novo", novo: true };
 
 const toLocalISOString = (date) => {
   if (!date) return "";
@@ -33,6 +37,7 @@ const toLocalISOString = (date) => {
 const BLANK_OS = {
   id_cliente: null,
   id_atendente: null,
+  id_equipamento: null,
   tipo_equipamento: "Notebook",
   marca: "",
   modelo: "",
@@ -57,6 +62,7 @@ function OSForm({ initialData, onSave, onClose }) {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedCustomerValue, setSelectedCustomerValue] = useState(null);
   const [selectedAtendente, setSelectedAtendente] = useState(null);
+  const [equipamentosCliente, setEquipamentosCliente] = useState([]);
   const [validationError, setValidationError] = useState(null);
 
   const isEditing = initialData && initialData.os && initialData.os.id;
@@ -82,6 +88,7 @@ function OSForm({ initialData, onSave, onClose }) {
               acc[key] = toLocalISOString(osFromDb[key]);
             else if (key === "data_prevista") acc[key] = osFromDb[key] ? toLocalISOString(osFromDb[key]) : "";
             else if (key === "garantia_dias") acc[key] = osFromDb[key] || 90;
+            else if (key === "id_equipamento") acc[key] = osFromDb[key] || null;
             else if (key === "tipo_equipamento")
               acc[key] = nullToString(osFromDb[key]) || "Notebook";
             else if (key === "status")
@@ -138,9 +145,43 @@ function OSForm({ initialData, onSave, onClose }) {
 
   const handleCustomerChange = useCallback((event, newValue) => {
     setSelectedCustomerValue(newValue);
-    setOsData((prev) => ({ ...prev, id_cliente: newValue ? newValue.id : null }));
+    // Outro cliente: desfaz o vínculo com o equipamento anterior
+    setOsData((prev) => ({ ...prev, id_cliente: newValue ? newValue.id : null, id_equipamento: null }));
     setValidationError(null);
   }, []);
+
+  // Equipamentos já cadastrados do cliente selecionado
+  useEffect(() => {
+    if (!osData.id_cliente) {
+      setEquipamentosCliente([]);
+      return;
+    }
+    let ativo = true;
+    window.api.getEquipments({ clienteId: osData.id_cliente }).then((r) => {
+      if (ativo && r.success) setEquipamentosCliente(r.data);
+    });
+    return () => { ativo = false; };
+  }, [osData.id_cliente]);
+
+  const equipamentoSelecionado = osData.id_equipamento
+    ? equipamentosCliente.find((e) => e.id === osData.id_equipamento) || null
+    : NOVO_EQUIPAMENTO;
+
+  const handleEquipmentChange = (_e, valor) => {
+    if (!valor || valor.novo) {
+      setOsData((prev) => ({ ...prev, id_equipamento: null, marca: "", modelo: "", numero_serie: "" }));
+      return;
+    }
+    setOsData((prev) => ({
+      ...prev,
+      id_equipamento: valor.id,
+      tipo_equipamento: valor.tipo || prev.tipo_equipamento,
+      marca: valor.marca || "",
+      modelo: valor.modelo || "",
+      numero_serie: valor.numero_serie || "",
+    }));
+    setValidationError(null);
+  };
 
   const handleAddItem = () => {
     if (selectedProduct) {
@@ -243,6 +284,45 @@ function OSForm({ initialData, onSave, onClose }) {
       />
 
       {/* Campos de Equipamento */}
+      <Autocomplete
+        value={equipamentoSelecionado}
+        options={[NOVO_EQUIPAMENTO, ...equipamentosCliente]}
+        disabled={!osData.id_cliente}
+        getOptionLabel={(o) =>
+          !o ? "" : o.novo ? "Novo equipamento (preencha abaixo)" : `${descreverEquipamento(o)}${o.numero_serie ? ` · Série ${o.numero_serie}` : ""}`
+        }
+        isOptionEqualToValue={(o, v) => o.id === v.id}
+        onChange={handleEquipmentChange}
+        disableClearable
+        renderOption={(props, o) => (
+          <li {...props} key={o.id}>
+            {o.novo ? (
+              <em>Novo equipamento (preencha abaixo)</em>
+            ) : (
+              <Box>
+                <Typography variant="body2">{descreverEquipamento(o)}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {o.numero_serie ? `Série ${o.numero_serie} · ` : ""}{o.total_os} OS no histórico
+                </Typography>
+              </Box>
+            )}
+          </li>
+        )}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Equipamento do cliente"
+            margin="normal"
+            helperText={
+              !osData.id_cliente
+                ? "Selecione o cliente para ver os equipamentos dele."
+                : equipamentosCliente.length
+                  ? "Escolha um aparelho já cadastrado ou cadastre um novo preenchendo os campos."
+                  : "Nenhum aparelho cadastrado para este cliente — será cadastrado ao salvar a OS."
+            }
+          />
+        )}
+      />
       <Box sx={{ display: "flex", gap: 2, mt: 1, flexWrap: 'wrap' }}>
         <FormControl fullWidth margin="normal">
           <InputLabel>Tipo de Equipamento</InputLabel>
@@ -252,10 +332,9 @@ function OSForm({ initialData, onSave, onClose }) {
             label="Tipo de Equipamento"
             onChange={handleInputChange}
           >
-            <MenuItem value="Notebook">Notebook</MenuItem>
-            <MenuItem value="Desktop">Desktop</MenuItem>
-            <MenuItem value="Impressora">Impressora</MenuItem>
-            <MenuItem value="Outro">Outro</MenuItem>
+            {tiposCom(osData.tipo_equipamento).map((t) => (
+              <MenuItem key={t} value={t}>{t}</MenuItem>
+            ))}
           </Select>
         </FormControl>
         <TextField

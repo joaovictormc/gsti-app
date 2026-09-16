@@ -181,6 +181,16 @@ function initializeDbPool() {
         // Histórico de mudanças de status da OS
         "CREATE TABLE IF NOT EXISTS os_status_historico (id SERIAL PRIMARY KEY, id_os INT NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE, status_anterior VARCHAR(50), status_novo VARCHAR(50) NOT NULL, id_usuario INT NULL REFERENCES usuarios(id) ON DELETE SET NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW())",
         "CREATE INDEX IF NOT EXISTS ix_os_status_historico_os ON os_status_historico(id_os, criado_em)",
+        // Módulo de Equipamentos: série única POR CLIENTE (antes era única no banco inteiro)
+        "ALTER TABLE equipamentos DROP CONSTRAINT IF EXISTS equipamentos_numero_serie_key",
+        "ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS observacoes TEXT NULL",
+        "ALTER TABLE equipamentos ADD COLUMN IF NOT EXISTS criado_em TIMESTAMP NOT NULL DEFAULT NOW()",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_equipamentos_cliente_serie ON equipamentos(cliente_id, lower(numero_serie)) WHERE numero_serie IS NOT NULL AND numero_serie <> ''",
+        "ALTER TABLE ordens_servico ADD COLUMN IF NOT EXISTS id_equipamento INT NULL REFERENCES equipamentos(id) ON DELETE SET NULL",
+        "CREATE INDEX IF NOT EXISTS ix_ordens_servico_equipamento ON ordens_servico(id_equipamento)",
+        // Migra os equipamentos das OS antigas (idempotente: só OS ainda sem vínculo)
+        "INSERT INTO equipamentos (cliente_id, tipo, marca, modelo, numero_serie) SELECT DISTINCT ON (os.id_cliente, lower(COALESCE(NULLIF(TRIM(os.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(os.tipo_equipamento, '')) || '|' || TRIM(COALESCE(os.marca, '')) || '|' || TRIM(COALESCE(os.modelo, ''))))) os.id_cliente, COALESCE(NULLIF(TRIM(os.tipo_equipamento), ''), 'Outro'), NULLIF(TRIM(os.marca), ''), NULLIF(TRIM(os.modelo), ''), NULLIF(TRIM(os.numero_serie), '') FROM ordens_servico os WHERE os.id_equipamento IS NULL AND NOT EXISTS (SELECT 1 FROM equipamentos e WHERE e.cliente_id = os.id_cliente AND lower(COALESCE(NULLIF(TRIM(e.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(e.tipo, '')) || '|' || TRIM(COALESCE(e.marca, '')) || '|' || TRIM(COALESCE(e.modelo, '')))) = lower(COALESCE(NULLIF(TRIM(os.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(os.tipo_equipamento, '')) || '|' || TRIM(COALESCE(os.marca, '')) || '|' || TRIM(COALESCE(os.modelo, ''))))) ORDER BY os.id_cliente, lower(COALESCE(NULLIF(TRIM(os.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(os.tipo_equipamento, '')) || '|' || TRIM(COALESCE(os.marca, '')) || '|' || TRIM(COALESCE(os.modelo, '')))), os.data_entrada DESC",
+        "UPDATE ordens_servico os SET id_equipamento = e.id FROM equipamentos e WHERE os.id_equipamento IS NULL AND e.cliente_id = os.id_cliente AND lower(COALESCE(NULLIF(TRIM(e.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(e.tipo, '')) || '|' || TRIM(COALESCE(e.marca, '')) || '|' || TRIM(COALESCE(e.modelo, '')))) = lower(COALESCE(NULLIF(TRIM(os.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(os.tipo_equipamento, '')) || '|' || TRIM(COALESCE(os.marca, '')) || '|' || TRIM(COALESCE(os.modelo, ''))))",
       ].reduce(
         (anterior, sql) =>
           anterior.then(() =>
@@ -1274,6 +1284,104 @@ function parseMoney(v) {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+// --- EQUIPAMENTOS (inventário por cliente) ---
+
+ipcMain.handle("get-equipments", async (event, filtros = {}) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const params = [];
+    let where = "";
+    if (filtros.clienteId) {
+      params.push(filtros.clienteId);
+      where = "WHERE e.cliente_id = $1";
+    }
+    const { rows } = await dbPool.query(
+      `SELECT e.id, e.cliente_id, c.nome AS nome_cliente, e.tipo, e.marca, e.modelo, e.numero_serie,
+              e.observacoes, e.criado_em,
+              COUNT(os.id)::int AS total_os,
+              MAX(os.data_entrada) AS ultima_os_em,
+              (SELECT o2.status FROM ordens_servico o2 WHERE o2.id_equipamento = e.id ORDER BY o2.data_entrada DESC LIMIT 1) AS ultimo_status
+         FROM equipamentos e
+         JOIN clientes c ON c.id = e.cliente_id
+         LEFT JOIN ordens_servico os ON os.id_equipamento = e.id
+         ${where}
+        GROUP BY e.id, c.nome
+        ORDER BY MAX(os.data_entrada) DESC NULLS LAST, e.id DESC`,
+      params
+    );
+    return { success: true, data: rows };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+function dadosEquipamento(d) {
+  const limpa = (v) => {
+    const t = String(v ?? "").trim();
+    return t || null;
+  };
+  return [d.cliente_id, limpa(d.tipo) || "Outro", limpa(d.marca), limpa(d.modelo), limpa(d.numero_serie), limpa(d.observacoes)];
+}
+
+ipcMain.handle("add-equipment", async (event, dados) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  if (!dados?.cliente_id) return { success: false, error: "Selecione o cliente." };
+  try {
+    const { rows } = await dbPool.query(
+      "INSERT INTO equipamentos (cliente_id, tipo, marca, modelo, numero_serie, observacoes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+      dadosEquipamento(dados)
+    );
+    return { success: true, id: rows[0].id };
+  } catch (error) {
+    return { success: false, error: mensagemErroEquipamento(error) };
+  }
+});
+
+ipcMain.handle("update-equipment", async (event, dados) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  if (!dados?.id || !dados?.cliente_id) return { success: false, error: "Dados incompletos." };
+  try {
+    await dbPool.query(
+      "UPDATE equipamentos SET cliente_id = $1, tipo = $2, marca = $3, modelo = $4, numero_serie = $5, observacoes = $6 WHERE id = $7",
+      [...dadosEquipamento(dados), dados.id]
+    );
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: mensagemErroEquipamento(error) };
+  }
+});
+
+ipcMain.handle("delete-equipment", async (event, id) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const { rows } = await dbPool.query("SELECT COUNT(*)::int AS n FROM ordens_servico WHERE id_equipamento = $1", [id]);
+    if (rows[0].n > 0) {
+      return { success: false, error: `Este equipamento tem ${rows[0].n} OS no histórico e não pode ser excluído.` };
+    }
+    await dbPool.query("DELETE FROM equipamentos WHERE id = $1", [id]);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("get-equipment-history", async (event, id) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const { rows } = await dbPool.query(
+      `SELECT os.id, os.status, os.data_entrada, os.data_saida, os.valor_total, os.defeito_relatado,
+              os.solucao_aplicada, os.garantia_dias, u.nome AS nome_atendente
+         FROM ordens_servico os LEFT JOIN usuarios u ON u.id = os.id_atendente
+        WHERE os.id_equipamento = $1
+        ORDER BY os.data_entrada DESC`,
+      [id]
+    );
+    return { success: true, data: rows };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // Listener para buscar todos os produtos e serviços
 ipcMain.handle("get-products", async () => {
   if (!dbPool)
@@ -1422,6 +1530,55 @@ ipcMain.handle("get-os-details", async (event, osId) => {
   }
 });
 
+// Encontra (ou cadastra) o equipamento da OS no inventário do cliente e devolve o id.
+// - Com id_equipamento do mesmo cliente: usa e atualiza os dados do aparelho.
+// - Sem id: procura pelo nº de série (ou tipo+marca+modelo quando não há série); se não achar, cadastra.
+async function vincularEquipamentoOS(osData) {
+  const limpa = (v) => {
+    const t = String(v ?? "").trim();
+    return t || null;
+  };
+  const clienteId = osData.id_cliente;
+  const dados = {
+    tipo: limpa(osData.tipo_equipamento) || "Outro",
+    marca: limpa(osData.marca),
+    modelo: limpa(osData.modelo),
+    serie: limpa(osData.numero_serie),
+  };
+  if (!clienteId) return null;
+
+  if (osData.id_equipamento) {
+    const { rows } = await dbPool.query("SELECT id FROM equipamentos WHERE id = $1 AND cliente_id = $2", [osData.id_equipamento, clienteId]);
+    if (rows.length) {
+      await dbPool.query(
+        "UPDATE equipamentos SET tipo = $1, marca = $2, modelo = $3, numero_serie = $4 WHERE id = $5",
+        [dados.tipo, dados.marca, dados.modelo, dados.serie, rows[0].id]
+      );
+      return rows[0].id;
+    }
+  }
+
+  const chave = dados.serie
+    ? dados.serie.toLowerCase()
+    : `sem-serie|${dados.tipo}|${dados.marca || ""}|${dados.modelo || ""}`.toLowerCase();
+  const { rows: achados } = await dbPool.query(
+    `SELECT e.id FROM equipamentos e WHERE e.cliente_id = $1 AND lower(COALESCE(NULLIF(TRIM(e.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(e.tipo, '')) || '|' || TRIM(COALESCE(e.marca, '')) || '|' || TRIM(COALESCE(e.modelo, '')))) = $2 ORDER BY e.id LIMIT 1`,
+    [clienteId, chave]
+  );
+  if (achados.length) return achados[0].id;
+
+  const { rows: novo } = await dbPool.query(
+    "INSERT INTO equipamentos (cliente_id, tipo, marca, modelo, numero_serie) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    [clienteId, dados.tipo, dados.marca, dados.modelo, dados.serie]
+  );
+  return novo[0].id;
+}
+
+const mensagemErroEquipamento = (error) =>
+  error.code === "23505"
+    ? "Este cliente já tem um equipamento cadastrado com esse número de série."
+    : error.message;
+
 // Registra a mudança de status (best-effort: não impede salvar a OS).
 async function registrarStatusOS(osId, statusAnterior, statusNovo, usuarioId) {
   try {
@@ -1444,13 +1601,19 @@ ipcMain.handle("add-os", async (event, { osData, total, usuarioId }) => {
     garantia_dias, data_prevista, id_atendente,
   } = osData;
   const sql = pgQuery(`INSERT INTO ordens_servico
-    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias, data_prevista, id_atendente)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
+    (id_cliente, tipo_equipamento, marca, modelo, numero_serie, defeito_relatado, observacoes_entrada, status, data_entrada, valor_total, garantia_dias, data_prevista, id_atendente, id_equipamento)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
   try {
+    let idEquipamento = null;
+    try {
+      idEquipamento = await vincularEquipamentoOS(osData);
+    } catch (e) {
+      return { success: false, error: mensagemErroEquipamento(e) };
+    }
     const { rows } = await dbPool.query(sql, [
       id_cliente, tipo_equipamento, marca, modelo, numero_serie,
       defeito_relatado, observacoes_entrada, status, data_entrada,
-      total, garantia_dias, data_prevista || null, id_atendente || null,
+      total, garantia_dias, data_prevista || null, id_atendente || null, idEquipamento,
     ]);
     const osId = rows[0].id;
     await registrarStatusOS(osId, null, status, usuarioId);
@@ -1500,13 +1663,20 @@ ipcMain.handle("update-os", async (event, { osData, total, usuarioId }) => {
 
     const setEstoqueBaixadoSql = baixarEstoque ? ", estoque_baixado = TRUE" : "";
 
+    let idEquipamento = null;
+    try {
+      idEquipamento = await vincularEquipamentoOS(osData);
+    } catch (e) {
+      return { success: false, error: mensagemErroEquipamento(e) };
+    }
+
     const sql = pgQuery(`
       UPDATE ordens_servico SET
       id_cliente = ?, tipo_equipamento = ?, marca = ?, modelo = ?,
       numero_serie = ?, defeito_relatado = ?, observacoes_entrada = ?,
       laudo_tecnico = ?, solucao_aplicada = ?, status = ?,
       data_entrada = ?, valor_total = ?, garantia_dias = ?, data_prevista = ?,
-      id_atendente = ?
+      id_atendente = ?, id_equipamento = ?
       ${setDataSaidaSql}${setEstoqueBaixadoSql}
       WHERE id = ?`);
 
@@ -1514,7 +1684,7 @@ ipcMain.handle("update-os", async (event, { osData, total, usuarioId }) => {
       id_cliente, tipo_equipamento, marca, modelo, numero_serie,
       defeito_relatado, observacoes_entrada, laudo_tecnico, solucao_aplicada,
       status, data_entrada, total, garantia_dias, data_prevista || null,
-      id_atendente || null, id,
+      id_atendente || null, idEquipamento, id,
     ]);
 
     if (baixarEstoque) {
@@ -3494,12 +3664,13 @@ ipcMain.handle("search-os-by-serial", async (event, serialNumber) => {
       c.nome AS nome_cliente
     FROM ordens_servico AS os
     JOIN clientes AS c ON os.id_cliente = c.id
-    WHERE os.numero_serie LIKE ?
+    LEFT JOIN equipamentos AS e ON e.id = os.id_equipamento
+    WHERE os.numero_serie ILIKE ? OR e.numero_serie ILIKE ?
     ORDER BY os.id DESC
   `;
 
   try {
-    const { rows } = await dbPool.query(pgQuery(sql), [searchTerm]);
+    const { rows } = await dbPool.query(pgQuery(sql), [searchTerm, searchTerm]);
     return { success: true, data: rows };
   } catch (error) {
     console.error(`Erro ao buscar OS pelo serial ${serialNumber}:`, error);

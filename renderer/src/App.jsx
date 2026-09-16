@@ -41,6 +41,7 @@ import {
   TrendingUp as TrendingUpIcon,
   Shield as ShieldIcon,
   ManageAccounts as ManageAccountsIcon,
+  DevicesOther as DevicesOtherIcon,
 } from "@mui/icons-material";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -51,6 +52,7 @@ import OSAgenda from "./screens/OSAgenda";
 import StockControl from "./screens/StockControl";
 import ProfitabilityReport from "./screens/ProfitabilityReport";
 import CustomerGrid from "./components/CustomerGrid";
+import EquipmentGrid from "./components/EquipmentGrid";
 import ProductServiceGrid from "./components/ProductServiceGrid";
 import OSGrid from "./components/OSGrid";
 import ExpensesGrid from "./components/ExpensesGrid";
@@ -73,6 +75,7 @@ const drawerWidth = 240; // Largura da Sidebar
 // Mapeia nomes de componentes
 const componentMap = {
   CustomerGrid,
+  EquipmentGrid,
   ProductServiceGrid,
   OSGrid,
   ExpensesGrid,
@@ -143,6 +146,7 @@ function AppSidebar({
   const menuItems = [
     { label: "Início", component: "HomeScreen", icon: <HomeIcon /> },
     { label: "Clientes", component: "CustomerGrid", icon: <PeopleIcon /> },
+    { label: "Equipamentos", component: "EquipmentGrid", icon: <DevicesOtherIcon /> },
     { label: "Produtos/Serviços", component: "ProductServiceGrid", icon: <InventoryIcon /> },
     { label: "Ordens de Serviço", component: "OSGrid", icon: <AssignmentIcon /> },
     ...(canSeeFinancial ? [

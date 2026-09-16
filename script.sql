@@ -32,16 +32,22 @@ CREATE TABLE IF NOT EXISTS clientes (
     endereco   TEXT
 );
 
--- Tabela de Equipamentos (reservada para uso futuro)
+-- Tabela de Equipamentos (inventário de aparelhos por cliente)
 CREATE TABLE IF NOT EXISTS equipamentos (
     id           SERIAL PRIMARY KEY,
     cliente_id   INT NOT NULL,
     tipo         VARCHAR(100) NOT NULL,
     marca        VARCHAR(100),
     modelo       VARCHAR(255),
-    numero_serie VARCHAR(255) UNIQUE,
+    numero_serie VARCHAR(255),
+    observacoes  TEXT,
+    criado_em    TIMESTAMP NOT NULL DEFAULT NOW(),
     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
 );
+-- Nº de série único por cliente (vazio/nulo permitido)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_equipamentos_cliente_serie
+    ON equipamentos(cliente_id, lower(numero_serie))
+    WHERE numero_serie IS NOT NULL AND numero_serie <> '';
 
 -- Tabela de Produtos e Serviços
 CREATE TABLE IF NOT EXISTS produtos_servicos (
@@ -72,6 +78,7 @@ CREATE TABLE IF NOT EXISTS ordens_servico (
     data_prevista       TIMESTAMP,
     valor_total         DECIMAL(10, 2) DEFAULT 0.00,
     garantia_dias       INT DEFAULT 90,
+    id_equipamento      INT NULL REFERENCES equipamentos(id) ON DELETE SET NULL,
     FOREIGN KEY (id_cliente) REFERENCES clientes(id) ON DELETE RESTRICT
 );
 

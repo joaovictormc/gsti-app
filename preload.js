@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld('api', {
   // Ordens de Serviço (Atualizado)
   getOSList: () => ipcRenderer.invoke('get-os-list'),
   getActiveData: () => ipcRenderer.invoke('get-active-data'),
+  getEquipments: (filtros) => ipcRenderer.invoke('get-equipments', filtros || {}),
+  addEquipment: (dados) => ipcRenderer.invoke('add-equipment', dados),
+  updateEquipment: (dados) => ipcRenderer.invoke('update-equipment', dados),
+  deleteEquipment: (id) => ipcRenderer.invoke('delete-equipment', id),
+  getEquipmentHistory: (id) => ipcRenderer.invoke('get-equipment-history', id),
   getOSDetails: (osId) => ipcRenderer.invoke('get-os-details', osId),
   deleteOS: (osId) => ipcRenderer.invoke('delete-os', osId),
 
