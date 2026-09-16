@@ -97,12 +97,33 @@ function Estrutura() {
           <Typography variant="caption" sx={{ color: "#9fb0c9" }}>Painel</Typography>
         </Box>
       </Toolbar>
-      <Box sx={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", pb: 2 }}>
+      <Box
+        sx={{
+          flex: "1 1 auto", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", pb: 2,
+          // Barra de rolagem no tom do menu
+          scrollbarWidth: "thin",
+          scrollbarColor: "#2b4468 #10213a",
+          "&::-webkit-scrollbar": { width: 8 },
+          "&::-webkit-scrollbar-track": { background: "#10213a" },
+          "&::-webkit-scrollbar-thumb": { background: "#2b4468", borderRadius: 4 },
+          "&::-webkit-scrollbar-thumb:hover": { background: "#3a5277" },
+        }}
+      >
         {MENU.map(({ grupo, itens }) => {
           const visiveis = itens.filter((i) => permitido(i.perm));
           if (!visiveis.length) return null;
           return (
-            <List key={grupo || "raiz"} dense subheader={grupo && <ListSubheader sx={{ bgcolor: "transparent", color: "#7f93b3", fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", lineHeight: "32px" }}>{grupo}</ListSubheader>}>
+            <List
+              key={grupo || "raiz"}
+              dense
+              subheader={
+                grupo && (
+                  <ListSubheader disableSticky sx={{ bgcolor: "#10213a", color: "#7f93b3", fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase", lineHeight: "32px" }}>
+                    {grupo}
+                  </ListSubheader>
+                )
+              }
+            >
               {visiveis.map((i) => (
                 <ListItemButton
                   key={i.to}
