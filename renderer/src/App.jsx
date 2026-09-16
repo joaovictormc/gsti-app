@@ -500,6 +500,7 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem("themeMode", themeMode);
+    window.dispatchEvent(new CustomEvent("gsti:tema", { detail: themeMode })); // barra de título
   }, [themeMode]);
 
   const toggleThemeMode = () => {
@@ -528,6 +529,10 @@ function App() {
           MuiButton: { styleOverrides: { root: { textTransform: 'none', borderRadius: 8 } } },
           MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
           MuiDataGrid: { styleOverrides: { root: { borderRadius: 12, border: 'none' } } },
+          // O menu lateral é fixo: começa abaixo da barra de título
+          MuiDrawer: { styleOverrides: { paper: { top: 'var(--gsti-barra)', height: 'var(--gsti-vh)' } } },
+          // Diálogos centralizados na área abaixo da barra de título
+          MuiDialog: { styleOverrides: { root: { top: 'var(--gsti-barra)' } } },
         },
       }),
     [themeMode]
@@ -568,7 +573,7 @@ function App() {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            height: "100vh",
+            height: "var(--gsti-vh)",
           }}
         >
           <CircularProgress />
@@ -609,7 +614,7 @@ function App() {
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            height: "100vh",
+            height: "var(--gsti-vh)",
           }}
         >
           <CircularProgress />
@@ -731,7 +736,7 @@ function App() {
               flexGrow: 1,
               bgcolor: "background.default",
               p: 3,
-              height: "100vh",
+              height: "var(--gsti-vh)",
               overflowY: "auto",
             }}
           >

@@ -9,9 +9,9 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ConfirmDialog from "./ConfirmDialog";
 
 const modalStyle = {
-  position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+  position: "absolute", top: "calc(50% + var(--gsti-barra) / 2)", left: "50%", transform: "translate(-50%, -50%)",
   width: { xs: '95vw', sm: 480 }, bgcolor: "background.paper",
-  boxShadow: 24, p: 4, maxHeight: "90vh", overflowY: "auto",
+  boxShadow: 24, p: 4, maxHeight: "calc(var(--gsti-vh) - 48px)", overflowY: "auto",
 };
 
 const toInputDateString = (date) => {
@@ -134,7 +134,7 @@ function MiscRevenueGrid() {
         </Typography>
         <Button variant="contained" onClick={handleOpenAddModal}>Adicionar Nova Receita</Button>
       </Box>
-      <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={revenues} columns={columns} getRowId={(row) => row.id}
           loading={isLoading}

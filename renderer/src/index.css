@@ -1,0 +1,10 @@
+/* Barra de título própria: --gsti-barra é definida por BarraTitulo.jsx (0px fora do Electron).
+   --gsti-vh é a altura útil abaixo da barra; use no lugar de 100vh. */
+:root {
+  --gsti-barra: 0px;
+  --gsti-vh: calc(100vh - var(--gsti-barra));
+}
+
+body {
+  padding-top: var(--gsti-barra);
+}

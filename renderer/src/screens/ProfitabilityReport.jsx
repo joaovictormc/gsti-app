@@ -221,7 +221,7 @@ export default function ProfitabilityReport() {
       )}
 
       {/* Tabela completa */}
-      <Box sx={{ height: "calc(100vh - 520px)", minHeight: 280, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 520px)", minHeight: 280, width: "100%" }}>
         <DataGrid
           rows={data} columns={columns} getRowId={(r) => r.id}
           initialState={{ pagination: { paginationModel: { pageSize: 25 } } }}

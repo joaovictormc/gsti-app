@@ -262,7 +262,7 @@ export default function WarrantyPanel() {
       </Paper>
 
       {/* Grid */}
-      <Box sx={{ height: "calc(100vh - 380px)", minHeight: 320, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 380px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={filtered}
           columns={columns}

@@ -144,7 +144,7 @@ function OSReportAttendant() {
             </Grid>
           </Grid>
 
-          <Box sx={{ height: "calc(100vh - 480px)", minHeight: 320 }}>
+          <Box sx={{ height: "calc(var(--gsti-vh) - 480px)", minHeight: 320 }}>
             <DataGrid
               rows={osData}
               columns={columns}

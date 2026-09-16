@@ -23,14 +23,14 @@ import DeleteIcon from "@mui/icons-material/Delete";
 // Estilo do Modal (pode ser o mesmo dos outros)
 const modalStyle = {
   position: "absolute",
-  top: "50%",
+  top: "calc(50% + var(--gsti-barra) / 2)",
   left: "50%",
   transform: "translate(-50%, -50%)",
   width: { xs: '95vw', sm: 560 },
   bgcolor: "background.paper",
   boxShadow: 24,
   p: 4,
-  maxHeight: "90vh",
+  maxHeight: "calc(var(--gsti-vh) - 48px)",
   overflowY: "auto",
 };
 
@@ -250,7 +250,7 @@ function ExpensesGrid() {
           Adicionar Nova Despesa
         </Button>
       </Box>
-      <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={expenses}
           columns={columns}

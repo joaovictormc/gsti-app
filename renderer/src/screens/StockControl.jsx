@@ -212,7 +212,7 @@ export default function StockControl() {
       </Paper>
 
       {/* Grid */}
-      <Box sx={{ height: "calc(100vh - 420px)", minHeight: 300, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 420px)", minHeight: 300, width: "100%" }}>
         <DataGrid
           rows={filtered} columns={columns} getRowId={(r) => r.id}
           loading={loading}

@@ -66,7 +66,7 @@ function ForgotPasswordScreen({ onBackToLogin, onSuccessGoToReset }) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        height: "100vh",
+        height: "var(--gsti-vh)",
         backgroundColor: "#f5f5f5",
       }}
     >

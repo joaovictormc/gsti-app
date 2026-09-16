@@ -24,7 +24,7 @@ function ReactivationScreen({ motivo, codigo, onReactivated }) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        minHeight: "100vh",
+        minHeight: "var(--gsti-vh)",
         background: "linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%)",
         p: 2,
       }}

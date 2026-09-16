@@ -216,7 +216,7 @@ function OSReportOpenAging() {
       </Paper>
 
       {/* Tabela */}
-      <Box sx={{ height: "calc(100vh - 380px)", minHeight: 320, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 380px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={rows}
           columns={columns}

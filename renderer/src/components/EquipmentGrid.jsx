@@ -194,7 +194,7 @@ function EquipmentGrid() {
         </Typography>
       </Paper>
 
-      <Box sx={{ height: "calc(100vh - 290px)", minHeight: 320, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 290px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={filtrados}
           columns={colunas}

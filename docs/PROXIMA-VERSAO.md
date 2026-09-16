@@ -47,6 +47,10 @@ Atualizado em 2026-09-16.
 - [x] **Logo e nome da empresa na tela de login** e no título da janela.
 - [x] **"Desenvolvido por"** no rodapé do login, com a versão do app; nome editável e
       pode ser ocultado (padrão: desenvolvedor original).
+- [x] **Barra de título própria**: logo e nome da empresa, arrastável, sem o menu padrão
+      do Electron; minimizar/maximizar/fechar nativos (Snap Layouts no Windows 11) nas
+      cores do tema claro/escuro. Atalhos mantidos: Ctrl +/−/0 (zoom) e, em
+      desenvolvimento, F12 e Ctrl+R. Telas usam `var(--gsti-vh)` no lugar de `100vh`.
 - [x] Licenciamento v2 com chave de licença, trial, transferência de computador.
 - [x] Plataforma de vendas (site, Mercado Pago, área do cliente, painel da equipe) —
       ver [PLANO-LICENCIAMENTO-E-VENDAS.md](./PLANO-LICENCIAMENTO-E-VENDAS.md).
@@ -78,10 +82,6 @@ Atualizado em 2026-09-16.
 
 - **Emissão de NFS-e / NF-e após finalizar a OS** — botão nas OS finalizadas;
   avaliar APIs de prefeitura/SEFAZ ou emissores de terceiros.
-- **Barra de título personalizada (frameless window)** — barra em React com ícone e
-  nome configuráveis, botões de janela no tema do sistema e sem os menus padrão do
-  Electron. Requer `frame: false`/`titleBarStyle: 'hidden'`, drag region e controles
-  via IPC.
 - **Aviso automático também pelo WhatsApp** — hoje o botão abre a conversa com a
   mensagem pronta. Envio automático exige API paga (WhatsApp Business Cloud API,
   Z-API, Twilio); reavaliar se houver demanda.

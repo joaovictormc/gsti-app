@@ -63,6 +63,7 @@ const POLITICAS_IPC = {
   "select-background-file": "admin",
   "load-logo-image": "publico", // sem Admin, só a logo salva (verificado no handler)
   "load-background-image": "publico", // sem Admin, só o fundo salvo (verificado no handler)
+  "set-title-bar-theme": "publico",
   "backup-database": "admin",
   "restore-database": "admin",
   "select-backup-folder": "admin",

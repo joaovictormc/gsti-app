@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, nativeImage } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, nativeImage, Menu } = require("electron");
 const path = require("path");
 const os = require("os");
 const { Pool } = require("pg");
@@ -4242,6 +4242,58 @@ function aplicarIconeJanela() {
   for (const janela of BrowserWindow.getAllWindows()) janela.setIcon(icone);
 }
 
+// Barra de título: a interface desenha nome e logo (BarraTitulo.jsx) e os botões
+// minimizar/maximizar/fechar são os nativos do sistema, nas cores do tema.
+const ALTURA_BARRA_TITULO = 36;
+const CORES_BARRA_TITULO = {
+  light: { color: "#ffffff", symbolColor: "#1e293b" },
+  dark: { color: "#0c1424", symbolColor: "#e2e8f0" },
+};
+
+function opcoesBarraTitulo() {
+  if (process.platform === "darwin") {
+    return { titleBarStyle: "hidden", trafficLightPosition: { x: 12, y: 11 } };
+  }
+  return {
+    titleBarStyle: "hidden",
+    titleBarOverlay: { ...CORES_BARRA_TITULO.light, height: ALTURA_BARRA_TITULO },
+  };
+}
+
+ipcMain.handle("set-title-bar-theme", async (event, modo) => {
+  const cores = CORES_BARRA_TITULO[modo];
+  const janela = BrowserWindow.fromWebContents(event.sender);
+  if (!cores || !janela || typeof janela.setTitleBarOverlay !== "function" || process.platform === "darwin") {
+    return { success: false };
+  }
+  janela.setTitleBarOverlay({ ...cores, height: ALTURA_BARRA_TITULO });
+  return { success: true };
+});
+
+// Sem o menu padrão do Electron, os atalhos úteis são tratados aqui.
+function atalhosDeTeclado(janela) {
+  janela.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown") return;
+    const ctrl = input.control || input.meta;
+    const tecla = input.key.toLowerCase();
+    const wc = janela.webContents;
+    if (ctrl && (tecla === "=" || tecla === "+")) {
+      wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 3));
+    } else if (ctrl && tecla === "-") {
+      wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -3));
+    } else if (ctrl && tecla === "0") {
+      wc.setZoomLevel(0);
+    } else if (!app.isPackaged && (input.key === "F12" || (ctrl && input.shift && tecla === "i"))) {
+      wc.toggleDevTools();
+    } else if (!app.isPackaged && (input.key === "F5" || (ctrl && tecla === "r"))) {
+      wc.reload();
+    } else {
+      return;
+    }
+    event.preventDefault();
+  });
+}
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1280,
@@ -4249,6 +4301,8 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 680,
     title: "GSTI App - Gestão de Serviços de TI",
+    backgroundColor: CORES_BARRA_TITULO.light.color,
+    ...opcoesBarraTitulo(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       devTools: !app.isPackaged,
@@ -4258,6 +4312,7 @@ function createWindow() {
     nodeIntegration: false
   });
   aplicarIconeJanela();
+  atalhosDeTeclado(mainWindow);
 
   // --- MOVER openDevTools PARA CIMA e USAR app.isPackaged ---
   // Força a abertura ANTES de tentar carregar qualquer conteúdo
@@ -4284,6 +4339,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null); // barra de título própria, sem Arquivo/Editar/Exibir
   iniciarConfiguracao();
   createWindow();
   // Revalida a licença periodicamente enquanto o app fica aberto.

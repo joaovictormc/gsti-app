@@ -146,7 +146,7 @@ function LoginScreen({ onLoginSuccess }) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        height: "100vh",
+        height: "var(--gsti-vh)",
         position: "relative",
         ...(backgroundImage
           ? {

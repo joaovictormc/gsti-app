@@ -21,6 +21,10 @@ contextBridge.exposeInMainWorld('api', {
   selectBackgroundFile: () => ipcRenderer.invoke('select-background-file'),
   loadBackgroundImage: (bgPath) => ipcRenderer.invoke('load-background-image', bgPath),
 
+  // Barra de título própria
+  plataforma: process.platform,
+  definirTemaBarraTitulo: (modo) => ipcRenderer.invoke('set-title-bar-theme', modo),
+
 // Autenticação e Usuários
   login: (credentials) => ipcRenderer.invoke('handle-login', credentials),
   getCurrentSession: () => ipcRenderer.invoke('get-current-session'),

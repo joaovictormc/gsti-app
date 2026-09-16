@@ -158,7 +158,7 @@ const InitialSetupScreen = ({ onSetupComplete }) => {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        minHeight: "100vh",
+        minHeight: "var(--gsti-vh)",
         p: 2,
         bgcolor: "background.default",
       }}

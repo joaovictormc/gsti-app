@@ -51,14 +51,14 @@ const STATUS_COLORS = {
 
 const modalStyle = {
   position: "absolute",
-  top: "50%",
+  top: "calc(50% + var(--gsti-barra) / 2)",
   left: "50%",
   transform: "translate(-50%, -50%)",
   width: { xs: "95vw", sm: "90vw", md: 640 },
   bgcolor: "background.paper",
   boxShadow: 24,
   p: 4,
-  maxHeight: "90vh",
+  maxHeight: "calc(var(--gsti-vh) - 48px)",
   overflowY: "auto",
 };
 
@@ -310,7 +310,7 @@ function OSGrid() {
       </Paper>
 
       {/* Grid */}
-      <Box sx={{ height: "calc(100vh - 290px)", minHeight: 320, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 290px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={filteredOSList}
           columns={columns}

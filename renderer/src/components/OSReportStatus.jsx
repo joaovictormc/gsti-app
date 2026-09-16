@@ -102,7 +102,7 @@ function OSReportStatus() {
       </Paper>
 
       {/* Tabela de Resultados */}
-      <Box sx={{ height: "calc(100vh - 240px)", minHeight: 320, width: "100%" }}>
+      <Box sx={{ height: "calc(var(--gsti-vh) - 240px)", minHeight: 320, width: "100%" }}>
         <DataGrid
           rows={osData}
           columns={columns}
