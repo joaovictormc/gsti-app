@@ -116,7 +116,7 @@ Com o sistema vendido por instância (cada cliente é dono do próprio app + ban
   (há `TODO` no `main.js`); o renderer também informa o usuário que alterou a OS.
 - **Criação automática do schema** no setup → rodar o `script.sql` pelo próprio app
   no primeiro acesso.
-- **`main.js` monolítico** (~3.900 linhas) → continuar extraindo módulos por domínio
+- **`main.js` monolítico** (~4.000 linhas) → continuar extraindo módulos por domínio
   (já extraídos: `license-manager.js`, `os-comunicacao.js`).
 - **`asar: false`** no build → código legível na instalação; avaliar `asar` com
   `asarUnpack` para o `pdf-worker.js`.
