@@ -744,8 +744,8 @@ ipcMain.handle(
     try {
       tempPool = new Pool({ ...database, max: 1, connectionTimeoutMillis: 10000 });
       const { rows } = await tempPool.query(
-        pgQuery("SELECT id, nome, senha, role FROM usuarios WHERE login = ?"),
-        [login]
+        SQL_BUSCA_USUARIO_LOGIN,
+        [String(login ?? "").trim()]
       );
       await tempPool.end();
       tempPool = null;
@@ -893,11 +893,11 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
     return { success: false, error: "Login e senha são obrigatórios." };
   }
   try {
-    const sql = pgQuery("SELECT id, nome, senha, role FROM usuarios WHERE login = ?");
-    const { rows } = await dbPool.query(sql, [login]);
+    const sql = SQL_BUSCA_USUARIO_LOGIN;
+    const { rows } = await dbPool.query(sql, [String(login ?? "").trim()]);
 
     if (rows.length === 0) {
-      return { success: false, error: "Usuário não encontrado." };
+      return { success: false, error: "Usuário não encontrado. Confira o login (ou use o e-mail cadastrado)." };
     }
 
     const user = rows[0];
@@ -1274,6 +1274,13 @@ ipcMain.handle("delete-customer", async (event, customerId) => {
     return { success: false, error: error.message };
   }
 });
+
+// Busca o usuário pelo login ou e-mail, sem diferenciar maiúsculas e ignorando espaços nas pontas.
+// A correspondência exata do login tem prioridade.
+const SQL_BUSCA_USUARIO_LOGIN = `SELECT id, nome, senha, role FROM usuarios
+  WHERE lower(trim(login)) = lower(trim($1)) OR lower(trim(email)) = lower(trim($1))
+  ORDER BY (login = trim($1)) DESC, (lower(trim(login)) = lower(trim($1))) DESC, id
+  LIMIT 1`;
 
 // Converte valor monetário vindo da tela ("1.234,56", "12.5", "") em número ou null.
 function parseMoney(v) {
