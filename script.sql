@@ -3,11 +3,12 @@
 -- Script de Criação do Schema v1.2 — PostgreSQL
 -- =================================================================
 
--- Tipos ENUM (devem ser criados antes das tabelas que os referenciam)
-CREATE TYPE tipo_pessoa_enum   AS ENUM ('Física', 'Jurídica');
-CREATE TYPE os_status_enum     AS ENUM ('Orçamento', 'Aguardando Autorização', 'Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado');
-CREATE TYPE tipo_despesa_enum  AS ENUM ('Fixa', 'Variável');
-CREATE TYPE user_role_enum     AS ENUM ('Admin', 'Funcionario');
+-- Tipos ENUM (devem ser criados antes das tabelas que os referenciam).
+-- Blocos DO tornam o script seguro para rodar de novo (o app o executa na primeira instalação).
+DO $$ BEGIN CREATE TYPE tipo_pessoa_enum AS ENUM ('Física', 'Jurídica'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE os_status_enum AS ENUM ('Orçamento', 'Aguardando Autorização', 'Em Aberto', 'Aguardando Peça', 'Em Andamento', 'Finalizado', 'Entregue', 'Cancelado'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE tipo_despesa_enum AS ENUM ('Fixa', 'Variável'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE user_role_enum AS ENUM ('Admin', 'Funcionario'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Tabela de Usuários
 CREATE TABLE IF NOT EXISTS usuarios (

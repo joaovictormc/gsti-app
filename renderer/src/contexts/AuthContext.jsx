@@ -4,43 +4,38 @@ import React, { createContext, useState, useContext, useEffect } from "react";
 const AuthContext = createContext(null);
 
 // 2. Cria o Provedor (Componente que vai envolver a aplicação)
+// A sessão fica no processo principal (controle-acesso.js); aqui só espelhamos o
+// usuário logado para a interface. Recarregar a janela mantém a sessão.
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true); // Para checar se já tentou carregar do storage
+  const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Tenta carregar o usuário do sessionStorage ao iniciar (opcional, para persistência simples)
   useEffect(() => {
-    try {
-      const storedUser = sessionStorage.getItem("gstiUser");
-      if (storedUser) {
-        setCurrentUser(JSON.parse(storedUser));
+    (async () => {
+      try {
+        const result = await window.api.getCurrentSession();
+        setCurrentUser(result?.user || null);
+      } catch (e) {
+        console.error("Erro ao consultar a sessão:", e);
+        setCurrentUser(null);
+      } finally {
+        setLoadingAuth(false); // Marca que a verificação inicial terminou
       }
-    } catch (e) {
-      console.error("Erro ao carregar usuário do sessionStorage:", e);
-      sessionStorage.removeItem("gstiUser"); // Limpa se estiver corrompido
-    } finally {
-      setLoadingAuth(false); // Marca que a verificação inicial terminou
-    }
+    })();
   }, []);
 
-  // Função chamada pelo LoginScreen em caso de sucesso
+  // Chamada após login bem-sucedido (o processo principal já registrou a sessão)
   const login = (userData) => {
-    console.log("AuthProvider: Login successful, setting user:", userData);
     setCurrentUser(userData);
-    try {
-      // Salva no sessionStorage para persistir se fechar/reabrir (opcional)
-      sessionStorage.setItem("gstiUser", JSON.stringify(userData));
-    } catch (e) {
-      console.error("Erro ao salvar usuário no sessionStorage:", e);
-    }
   };
 
-  // Função para fazer logout
-  const logout = () => {
-    console.log("AuthProvider: Logging out user");
+  const logout = async () => {
+    try {
+      await window.api.logout();
+    } catch (e) {
+      console.error("Erro ao encerrar a sessão:", e);
+    }
     setCurrentUser(null);
-    sessionStorage.removeItem("gstiUser"); // Remove do storage
-    // Aqui você poderia redirecionar para a tela de login se usar roteamento
   };
 
   // O valor que será compartilhado com os componentes filhos
@@ -51,8 +46,7 @@ export function AuthProvider({ children }) {
     loadingAuth, // Exporta o estado de loading inicial
   };
 
-  // Renderiza os componentes filhos envolvidos pelo Provider
-  // Só renderiza o conteúdo principal depois de verificar o storage
+  // Só renderiza o conteúdo principal depois de consultar a sessão
   return (
     <AuthContext.Provider value={value}>
       {!loadingAuth && children}

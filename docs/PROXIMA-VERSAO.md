@@ -45,6 +45,17 @@ Atualizado em 2026-09-16.
 - [x] Plataforma de vendas (site, Mercado Pago, área do cliente, painel da equipe) —
       ver [PLANO-LICENCIAMENTO-E-VENDAS.md](./PLANO-LICENCIAMENTO-E-VENDAS.md).
 
+### Segurança
+- [x] **Permissões checadas no processo principal** (`controle-acesso.js`): cada canal IPC
+      declara quem pode chamá-lo (Admin, Financeiro, Relatórios, usuário logado, público);
+      a sessão fica no processo principal e o histórico da OS usa o usuário da sessão.
+- [x] Tela inicial sem receita/despesas/lucro para quem não tem acesso ao Financeiro.
+- [x] Não é possível excluir/rebaixar o próprio usuário nem ficar sem nenhum Admin.
+- [x] **Senhas do banco e do e-mail cifradas no `config.json`** (cofre do Windows via
+      `safeStorage`; configurações antigas são migradas ao abrir o app).
+- [x] **Tabelas criadas automaticamente** na primeira instalação em banco vazio.
+- [x] Código de redefinição de senha: validade corrigida (10 min) e bloqueio após 5 erros.
+
 ---
 
 ## 2. Fila — próximas funcionalidades
@@ -108,16 +119,11 @@ Com o sistema vendido por instância (cada cliente é dono do próprio app + ban
 
 ## 5. Dívida técnica e segurança
 
-- **Credenciais do banco em texto puro** no `config.json` → criptografar ou usar o
-  cofre de credenciais do sistema operacional.
 - **DevTools/console em produção** → `window.api` acessível pelo console; manter
   DevTools desligado no build (hoje: `devTools: !app.isPackaged`).
-- **Validação de papel no backend** → handlers administrativos só checam no frontend
-  (há `TODO` no `main.js`); o renderer também informa o usuário que alterou a OS.
-- **Criação automática do schema** no setup → rodar o `script.sql` pelo próprio app
-  no primeiro acesso.
 - **`main.js` monolítico** (~4.000 linhas) → continuar extraindo módulos por domínio
-  (já extraídos: `license-manager.js`, `os-comunicacao.js`).
+  (já extraídos: `license-manager.js`, `os-comunicacao.js`, `controle-acesso.js`,
+  `config-segredos.js`).
 - **`asar: false`** no build → código legível na instalação; avaliar `asar` com
   `asarUnpack` para o `pdf-worker.js`.
 - **Backup com banco em servidor remoto** → `pg_dump` agendado no servidor,

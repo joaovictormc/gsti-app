@@ -25,7 +25,6 @@ import PrintIcon from "@mui/icons-material/Print";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import ConfirmDialog from "./ConfirmDialog";
-import { useAuth } from "../contexts/AuthContext";
 
 const STATUS_LIST = [
   "Orçamento",
@@ -63,7 +62,6 @@ const modalStyle = {
 };
 
 function OSGrid() {
-  const { currentUser } = useAuth();
   const [osList, setOSList] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOS, setEditingOS] = useState(null);
@@ -156,12 +154,12 @@ function OSGrid() {
     const isEditing = !!osData.id;
     if (isEditing) {
       const [osResult] = await Promise.all([
-        window.api.updateOS({ osData, total, usuarioId: currentUser?.id }),
+        window.api.updateOS({ osData, total }),
         window.api.updateOSItems({ osId: osData.id, items }),
       ]);
       if (!osResult.success) showSnackbar(`Erro ao salvar OS: ${osResult.error}`);
     } else {
-      const osResult = await window.api.addOS({ osData, total, usuarioId: currentUser?.id });
+      const osResult = await window.api.addOS({ osData, total });
       if (osResult.success) {
         await window.api.addOSItems({ osId: osResult.osId, items });
       } else {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require("electron");
 const path = require("path");
 const os = require("os");
 const { Pool } = require("pg");
@@ -11,6 +11,8 @@ const crypto = require("crypto");
 const { execFile, execSync } = require("child_process");
 const { Worker } = require("worker_threads");
 const comunicacao = require("./os-comunicacao");
+const { criarControleAcesso } = require("./controle-acesso");
+const { protegerSegredos, abrirSegredos } = require("./config-segredos");
 const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 const archiver = require("archiver");
@@ -47,7 +49,7 @@ function pgQuery(sql) {
 const { createLicenseManager } = require("./license-manager");
 const licenseManager = createLicenseManager({
   getConfig: () => appConfig,
-  saveConfig: () => fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2)),
+  saveConfig: () => salvarConfig(),
   appVersion: app.getVersion(),
 });
 
@@ -58,6 +60,22 @@ const configPath = path.join(userDataPath, "config.json"); // Caminho completo d
 let appConfig = null; // Variável global para guardar a configuração carregada
 let dbPool = null; // Pool do DB será inicializado depois de carregar config
 let mailTransporter = null; // Transporter do email será inicializado depois
+
+// Senhas do banco e do e-mail ficam cifradas no config.json (cofre do Windows).
+const cofreSegredos = {
+  disponivel: () => safeStorage.isEncryptionAvailable(),
+  cifrar: (texto) => safeStorage.encryptString(texto).toString("base64"),
+  decifrar: (base64) => safeStorage.decryptString(Buffer.from(base64, "base64")),
+};
+
+function salvarConfig() {
+  fs.writeFileSync(configPath, JSON.stringify(protegerSegredos(appConfig, cofreSegredos), null, 2));
+}
+
+// Toda chamada IPC passa pela política de acesso (ver controle-acesso.js).
+// Precisa vir antes do primeiro ipcMain.handle.
+const acesso = criarControleAcesso({ obterConfig: () => appConfig });
+acesso.protegerIpc(ipcMain);
 
 // Estrutura padrão da configuração
 const defaultConfig = {
@@ -121,14 +139,30 @@ function loadConfig() {
       appConfig = JSON.parse(rawData);
       // Mescla com o padrão para garantir que todos os campos existam
       appConfig = { ...defaultConfig, ...appConfig };
-      console.log("[Config] Configuração carregada:", appConfig);
+      const { falhas, precisaRegravar } = abrirSegredos(appConfig, cofreSegredos);
+      if (falhas.includes("database") && appConfig.setupComplete) {
+        // Senha gravada por outro usuário do Windows/computador: pede a conexão de novo.
+        appConfig.setupComplete = false;
+        dialog.showErrorBox(
+          "Informe novamente a conexão com o banco",
+          "Não foi possível ler a senha do banco salva neste computador (a configuração pode ter sido copiada de outra máquina ou de outro usuário do Windows).\n\nNa próxima tela, informe os dados do banco e entre com seu usuário em \"Já tenho cadastro\"."
+        );
+      }
+      if (falhas.includes("email")) {
+        console.warn("[Config] Senha do e-mail não pôde ser lida; informe-a novamente em Configurações.");
+      }
+      if (precisaRegravar) {
+        salvarConfig();
+        console.log("[Config] Senhas migradas para o formato cifrado.");
+      }
+      console.log("[Config] Configuração carregada (setupComplete=%s).", appConfig.setupComplete);
     } else {
       console.log(
         "[Config] Arquivo de configuração não encontrado. Usando padrão e marcando setup como incompleto."
       );
       appConfig = { ...defaultConfig, setupComplete: false };
       // Salva o arquivo padrão na primeira vez
-      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+      salvarConfig();
       console.log(`[Config] Arquivo padrão salvo em: ${configPath}`);
     }
   } catch (error) {
@@ -504,13 +538,15 @@ function scheduleAutoBackup() {
   console.log(`[AutoBackup] Scheduler ativo — ${(config.scheduledDays ?? []).join(",")} dias, hora ${config.scheduledHour ?? 2}:00 → ${config.destinationPath}`);
 }
 
-// --- CARREGA A CONFIGURAÇÃO AO INICIAR ---
-loadConfig();
-// --- INICIALIZA OS SERVIÇOS QUE DEPENDEM DA CONFIG ---
-// O dbPool e mailTransporter só serão realmente criados se setupComplete for true
-initializeDbPool();
-initializeMailTransporter();
-scheduleAutoBackup();
+// A configuração é carregada em app.whenReady (fim do arquivo): o cofre de senhas
+// (safeStorage) só funciona depois que o Electron fica pronto.
+function iniciarConfiguracao() {
+  loadConfig();
+  // O dbPool e mailTransporter só serão realmente criados se setupComplete for true
+  initializeDbPool();
+  initializeMailTransporter();
+  scheduleAutoBackup();
+}
 // --- FIM GERENCIAMENTO DE CONFIGURAÇÃO ---
 
 // --- FUNÇÕES DE FORMATAÇÃO (Definidas globalmente no módulo) ---
@@ -634,7 +670,7 @@ ipcMain.handle(
       // A licença já foi ativada e persistida em appConfig.license antes deste passo.
       appConfig.setupComplete = true; // Marca setup como completo
       // Mantém as outras configs (email, branding) com os defaults
-      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+      salvarConfig();
       console.log("[Setup] config.json salvo com setupComplete=true.");
 
       // 2. Tenta conectar ao banco recém-configurado para criar o admin
@@ -642,6 +678,18 @@ ipcMain.handle(
       tempPool = new Pool({ ...appConfig.database, max: 1, connectionTimeoutMillis: 10000 });
       await tempPool.query("SELECT 1"); // Testa conexão
       console.log("[Setup] Conectado ao banco para criar admin.");
+
+      // Banco vazio: cria as tabelas pelo script.sql (as migrações completam o restante
+      // quando o pool principal é inicializado logo abaixo).
+      const { rows: schema } = await tempPool.query(
+        "SELECT to_regclass('public.usuarios') IS NOT NULL AS existe"
+      );
+      if (!schema[0].existe) {
+        console.log("[Setup] Banco sem tabelas do GSTI App. Criando schema...");
+        const scriptSql = fs.readFileSync(path.join(__dirname, "script.sql"), "utf8");
+        await tempPool.query(scriptSql);
+        console.log("[Setup] Schema criado.");
+      }
 
       // 3. Hashea a senha do admin
       const hashedPassword = await bcrypt.hash(adminUser.password, saltRounds);
@@ -677,7 +725,7 @@ ipcMain.handle(
       // Se falhou, reverte setupComplete para false no arquivo
       try {
         appConfig.setupComplete = false;
-        fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+        salvarConfig();
         console.log(
           "[Setup] Revertido setupComplete para false devido a erro."
         );
@@ -757,13 +805,14 @@ ipcMain.handle(
 
       appConfig.database = database;
       appConfig.setupComplete = true;
-      fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+      salvarConfig();
       console.log(`[Setup] Instalação vinculada ao banco existente (usuário ${user.nome}).`);
 
       initializeDbPool();
       initializeMailTransporter();
       scheduleAutoBackup();
 
+      acesso.iniciarSessao(event, user);
       return { success: true, user: { id: user.id, nome: user.nome, role: user.role } };
     } catch (error) {
       if (tempPool) await tempPool.end().catch(() => {});
@@ -814,7 +863,17 @@ ipcMain.handle("deactivate-license", async () => {
 });
 
 // Handler para buscar as configurações atuais (para a tela de Settings)
-ipcMain.handle("get-app-settings", async () => {
+ipcMain.handle("get-app-settings", async (event) => {
+  // Sem Admin (tela de login, Funcionário): só o necessário para marca e menu.
+  if (!acesso.pode(acesso.usuarioDe(event), "admin")) {
+    return {
+      success: true,
+      settings: {
+        branding: { ...appConfig.branding },
+        permissions: { funcionario: { ...appConfig.permissions?.funcionario } },
+      },
+    };
+  }
   // Retorna uma cópia, excluindo senhas por segurança se necessário
   const settingsToSend = JSON.parse(JSON.stringify(appConfig));
   if (settingsToSend.database) delete settingsToSend.database.password; // Não envia senha do DB
@@ -867,7 +926,7 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
     };
 
     // Salva no arquivo
-    fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+    salvarConfig();
     console.log("[Config] Configurações salvas com sucesso.");
 
     initializeMailTransporter();
@@ -909,6 +968,7 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
       console.log(
         `[Login] Usuário ${user.nome} (${user.role}) logado com sucesso.`
       );
+      acesso.iniciarSessao(event, user);
       return {
         success: true,
         user: {
@@ -927,19 +987,26 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
   }
 });
 
-// Listener para buscar todos os usuários (Admin Only)
-ipcMain.handle("get-users", async (event /*, adminUserId */) => {
+// Sessão atual guardada no processo principal (a interface consulta ao abrir/recarregar).
+ipcMain.handle("get-current-session", async (event) => {
+  return { success: true, user: acesso.usuarioDe(event) };
+});
+
+ipcMain.handle("logout", async (event) => {
+  acesso.encerrarSessao(event);
+  return { success: true };
+});
+
+// Listener para buscar os usuários (Admin; relatórios recebem só id e nome)
+ipcMain.handle("get-users", async (event) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  // TODO: Adicionar verificação de Admin
-  // --- CORREÇÃO: Adicionado 'email' ao SELECT ---
-  const sql =
-    "SELECT id, nome, email, login, role FROM usuarios ORDER BY nome ASC";
-  // --- FIM CORREÇÃO ---
+  const completo = acesso.pode(acesso.usuarioDe(event), "admin");
+  const sql = completo
+    ? "SELECT id, nome, email, login, role FROM usuarios ORDER BY nome ASC"
+    : "SELECT id, nome FROM usuarios ORDER BY nome ASC";
   try {
     const { rows } = await dbPool.query(sql);
-    // Filtra o próprio admin logado para segurança (se currentUser for passado no futuro)
-    // const filteredRows = adminUserId ? rows.filter(user => user.id !== adminUserId) : rows;
     return { success: true, data: rows };
   } catch (error) {
     console.error("Erro ao buscar usuários:", error);
@@ -948,10 +1015,9 @@ ipcMain.handle("get-users", async (event /*, adminUserId */) => {
 });
 
 // Adicionar usuário (ATUALIZADO com email)
-ipcMain.handle("add-user", async (event, userData /*, adminUserId */) => {
+ipcMain.handle("add-user", async (event, userData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  // TODO: Adicionar verificação de Admin
   const { nome, email, login, password, role } = userData; // Adicionado email
   if (!nome || !email || !login || !password || !role) {
     // Adicionado email na validação
@@ -992,10 +1058,18 @@ ipcMain.handle("add-user", async (event, userData /*, adminUserId */) => {
 });
 
 // Atualizar usuário (ATUALIZADO com email, sem alterar senha aqui)
-ipcMain.handle("update-user", async (event, userData /*, adminUserId */) => {
+// Quantos Admins restariam se o usuário `id` deixasse de ser Admin.
+async function adminsRestantesSem(id) {
+  const { rows } = await dbPool.query(
+    "SELECT COUNT(*)::int AS total FROM usuarios WHERE role = 'Admin' AND id <> $1",
+    [id]
+  );
+  return rows[0].total;
+}
+
+ipcMain.handle("update-user", async (event, userData) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  // TODO: Adicionar verificação de Admin
   const { id, nome, email, login, role } = userData; // Adicionado email
   if (!id || !nome || !email || !login || !role) {
     // Adicionado email na validação
@@ -1009,6 +1083,14 @@ ipcMain.handle("update-user", async (event, userData /*, adminUserId */) => {
   }
 
   try {
+    if (role !== "Admin") {
+      if (Number(id) === acesso.usuarioDe(event)?.id) {
+        return { success: false, error: "Você não pode remover o seu próprio perfil de Admin." };
+      }
+      if ((await adminsRestantesSem(id)) === 0) {
+        return { success: false, error: "O sistema precisa de pelo menos um Admin." };
+      }
+    }
     // Adicionado email ao SQL
     const sql = pgQuery(
       "UPDATE usuarios SET nome = ?, email = ?, login = ?, role = ? WHERE id = ?"
@@ -1037,17 +1119,21 @@ ipcMain.handle("update-user", async (event, userData /*, adminUserId */) => {
 });
 
 // Listener para deletar usuário (Admin Only)
-ipcMain.handle("delete-user", async (event, userId /*, adminUserId */) => {
+ipcMain.handle("delete-user", async (event, userId) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
-  // TODO: Adicionar verificação para garantir que apenas 'Admin' possa chamar esta função
-  // TODO: Adicionar verificação para impedir que o Admin se auto-delete ou delete o último Admin
   const id = parseInt(userId, 10);
   if (isNaN(id) || id <= 0) {
     return { success: false, error: "ID de usuário inválido." };
   }
+  if (id === acesso.usuarioDe(event)?.id) {
+    return { success: false, error: "Você não pode excluir o próprio usuário." };
+  }
 
   try {
+    if ((await adminsRestantesSem(id)) === 0) {
+      return { success: false, error: "O sistema precisa de pelo menos um Admin." };
+    }
     const sql = pgQuery("DELETE FROM usuarios WHERE id = ?");
     await dbPool.query(sql, [id]);
     return { success: true };
@@ -1058,6 +1144,11 @@ ipcMain.handle("delete-user", async (event, userId /*, adminUserId */) => {
 });
 
 // --- RECUPERAÇÃO DE SENHA ---
+
+// O código tem 6 dígitos: após algumas tentativas erradas todos os códigos pendentes
+// são invalidados, para que não seja possível testar códigos até acertar.
+const MAX_TENTATIVAS_CODIGO_SENHA = 5;
+let tentativasCodigoSenha = 0;
 
 // Passo 1: Solicitar redefinição
 ipcMain.handle("handle-forgot-password", async (event, { email }) => {
@@ -1085,7 +1176,7 @@ ipcMain.handle("handle-forgot-password", async (event, { email }) => {
     // const token = crypto.randomBytes(32).toString("hex");
     const code = crypto.randomInt(100000, 999999).toString();
     const expiry = new Date();
-    expiry.setHours(expiry.getMinutes() + 6); // Token válido por 10 minutos
+    expiry.setMinutes(expiry.getMinutes() + 10); // Código válido por 10 minutos
 
     // 3. Hashea o token antes de salvar no banco
     const hashedToken = await bcrypt.hash(code, saltRounds);
@@ -1095,6 +1186,7 @@ ipcMain.handle("handle-forgot-password", async (event, { email }) => {
       pgQuery("UPDATE usuarios SET reset_token = ?, reset_token_expiry = ? WHERE id = ?"),
       [hashedToken, expiry, user.id]
     );
+    tentativasCodigoSenha = 0;
 
     // 5. Envia o email com o token NÃO HASHED (ou link)
     const mailOptions = {
@@ -1155,8 +1247,20 @@ ipcMain.handle(
       }
 
       if (!foundUser) {
+        tentativasCodigoSenha += 1;
+        if (tentativasCodigoSenha >= MAX_TENTATIVAS_CODIGO_SENHA) {
+          tentativasCodigoSenha = 0;
+          await dbPool.query(
+            "UPDATE usuarios SET reset_token = NULL, reset_token_expiry = NULL WHERE reset_token IS NOT NULL"
+          );
+          return {
+            success: false,
+            error: "Muitas tentativas com código inválido. Solicite um novo código.",
+          };
+        }
         return { success: false, error: "Token inválido ou expirado." };
       }
+      tentativasCodigoSenha = 0;
 
       // 2. Hashea a nova senha
       const hashedPassword = await bcrypt.hash(password, saltRounds);
@@ -1598,7 +1702,7 @@ async function registrarStatusOS(osId, statusAnterior, statusNovo, usuarioId) {
   }
 }
 
-ipcMain.handle("add-os", async (event, { osData, total, usuarioId }) => {
+ipcMain.handle("add-os", async (event, { osData, total }) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   // Atualizado para os novos campos
@@ -1623,7 +1727,7 @@ ipcMain.handle("add-os", async (event, { osData, total, usuarioId }) => {
       total, garantia_dias, data_prevista || null, id_atendente || null, idEquipamento,
     ]);
     const osId = rows[0].id;
-    await registrarStatusOS(osId, null, status, usuarioId);
+    await registrarStatusOS(osId, null, status, acesso.usuarioDe(event)?.id);
     notifyOSCreated(osId, osData).catch((e) => console.error("[Email] notifyOSCreated:", e));
     notifyClientStatusChange(osId).catch((e) => console.error("[Email] aviso de status:", e));
     return { success: true, osId };
@@ -1632,7 +1736,7 @@ ipcMain.handle("add-os", async (event, { osData, total, usuarioId }) => {
   }
 });
 
-ipcMain.handle("update-os", async (event, { osData, total, usuarioId }) => {
+ipcMain.handle("update-os", async (event, { osData, total }) => {
   if (!dbPool)
     return { success: false, error: "Banco de dados não configurado." };
   const {
@@ -1718,7 +1822,7 @@ ipcMain.handle("update-os", async (event, { osData, total, usuarioId }) => {
     }
 
     if (status !== osAtual.status) {
-      await registrarStatusOS(id, osAtual.status, status, usuarioId);
+      await registrarStatusOS(id, osAtual.status, status, acesso.usuarioDe(event)?.id);
       notifyClientStatusChange(id).catch((e) => console.error("[Email] aviso de status:", e));
     }
 
@@ -2059,7 +2163,7 @@ ipcMain.handle("delete-expense", async (event, expenseId) => {
   }
 });
 
-ipcMain.handle('get-dashboard-stats', async () => {
+ipcMain.handle('get-dashboard-stats', async (event) => {
   if (!dbPool) return { success: false, error: 'Banco de dados não configurado.' };
   try {
     const now = new Date();
@@ -2125,7 +2229,8 @@ ipcMain.handle('get-dashboard-stats', async () => {
         em_andamento: countRows[0].em_andamento,
         finalizadas_mes: countRows[0].finalizadas_mes,
       },
-      financeiro: {
+      // Receita, despesas e lucro só para quem tem acesso ao Financeiro.
+      financeiro: !acesso.pode(acesso.usuarioDe(event), "financeiro") ? null : {
         receita_os,
         receita_avulsa,
         receita_mes: receita,
@@ -3049,7 +3154,7 @@ ipcMain.handle("save-financial-config", async (event, { despesaFixaEstimada }) =
       return { success: false, error: "Valor de despesa fixa estimada inválido." };
     }
     appConfig.financeiro = { ...appConfig.financeiro, despesaFixaEstimada: value };
-    fs.writeFileSync(configPath, JSON.stringify(appConfig, null, 2));
+    salvarConfig();
     return { success: true, financeiro: appConfig.financeiro };
   } catch (error) {
     console.error("[save-financial-config] Erro:", error);
@@ -4047,6 +4152,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  iniciarConfiguracao();
   createWindow();
   // Revalida a licença periodicamente enquanto o app fica aberto.
   setInterval(() => {

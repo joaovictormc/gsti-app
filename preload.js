@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('api', {
 
 // Autenticação e Usuários
   login: (credentials) => ipcRenderer.invoke('handle-login', credentials),
+  getCurrentSession: () => ipcRenderer.invoke('get-current-session'),
+  logout: () => ipcRenderer.invoke('logout'),
   forgotPassword: (data) => ipcRenderer.invoke('handle-forgot-password', data),
   resetPassword: (data) => ipcRenderer.invoke('handle-reset-password', data),  
   getUsers: () => ipcRenderer.invoke('get-users'),

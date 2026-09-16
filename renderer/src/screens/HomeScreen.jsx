@@ -343,6 +343,8 @@ export default function HomeScreen() {
   });
 
   const lucro = data?.financeiro?.lucro_mes ?? 0;
+  // O servidor só envia os valores financeiros para quem tem acesso ao Financeiro.
+  const temFinanceiro = !!data?.financeiro;
 
   const kpiCards = [
     { key: "cardAbertas", gradient: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)", icon: AssignmentIcon, label: "OS Abertas", value: data?.counts.abertas ?? 0 },
@@ -351,9 +353,9 @@ export default function HomeScreen() {
     { key: "cardLucro", gradient: lucro >= 0 ? "linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)" : "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)", icon: AccountBalanceWalletIcon, label: "Lucro do Mês", value: lucro, isCurrency: true },
   ];
 
-  const visibleCards = kpiCards.filter((c) => widgets[c.key]);
+  const visibleCards = kpiCards.filter((c) => widgets[c.key] && (c.key !== "cardLucro" || temFinanceiro));
 
-  const WIDGET_LABELS = [
+  const WIDGET_LABELS_TODOS = [
     { key: "cardAbertas", label: "Card: OS Abertas" },
     { key: "cardAndamento", label: "Card: Em Andamento" },
     { key: "cardFinalizadas", label: "Card: Finalizadas este Mês" },
@@ -365,6 +367,10 @@ export default function HomeScreen() {
     { key: "secaoAgenda", label: "OS Agendadas este Mês" },
     { key: "secaoFinanceiro", label: "Resumo Financeiro" },
   ];
+  const WIDGET_LABELS = WIDGET_LABELS_TODOS.filter(
+    (w) => temFinanceiro || (w.key !== "cardLucro" && w.key !== "secaoFinanceiro")
+  );
+  const totalCardsKpi = WIDGET_LABELS.filter((w) => w.key.startsWith("card")).length;
 
   return (
     <Box>
@@ -397,7 +403,7 @@ export default function HomeScreen() {
           <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>Exibir no dashboard</Typography>
           <Divider sx={{ mb: 1 }} />
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 600 }}>Cards de KPI</Typography>
-          {WIDGET_LABELS.slice(0, 4).map((w) => (
+          {WIDGET_LABELS.slice(0, totalCardsKpi).map((w) => (
             <FormControlLabel key={w.key} sx={{ display: "block" }}
               control={<Switch size="small" checked={widgets[w.key]} onChange={() => toggleWidget(w.key)} />}
               label={<Typography variant="body2">{w.label}</Typography>}
@@ -405,7 +411,7 @@ export default function HomeScreen() {
           ))}
           <Divider sx={{ my: 1 }} />
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 600 }}>Seções</Typography>
-          {WIDGET_LABELS.slice(4).map((w) => (
+          {WIDGET_LABELS.slice(totalCardsKpi).map((w) => (
             <FormControlLabel key={w.key} sx={{ display: "block" }}
               control={<Switch size="small" checked={widgets[w.key]} onChange={() => toggleWidget(w.key)} />}
               label={<Typography variant="body2">{w.label}</Typography>}
@@ -527,7 +533,7 @@ export default function HomeScreen() {
         )}
 
         {/* Resumo Financeiro */}
-        {widgets.secaoFinanceiro && (
+        {widgets.secaoFinanceiro && temFinanceiro && (
           <Grid item xs={12} md={6}>
             <SecaoFinanceiro financeiro={data?.financeiro} loading={loading} />
           </Grid>
