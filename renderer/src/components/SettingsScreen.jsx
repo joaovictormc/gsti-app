@@ -39,11 +39,48 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import Switch from "@mui/material/Switch";
 import { useAuth } from "../contexts/AuthContext"; // Para verificar se é admin
 
+// Pré-visualização de uma imagem escolhida em Configurações (logo ou fundo do login)
+function MiniaturaImagem({ caminho, tipo, largura, altura, vazio }) {
+  const [dados, setDados] = useState(null);
+  useEffect(() => {
+    let ativo = true;
+    setDados(null);
+    if (caminho) {
+      const carregar = tipo === "logo" ? window.api.loadLogoImage : window.api.loadBackgroundImage;
+      carregar(caminho)
+        .then((r) => { if (ativo && r?.success) setDados(r.imageData); })
+        .catch(() => {});
+    }
+    return () => { ativo = false; };
+  }, [caminho, tipo]);
+  return (
+    <Box
+      sx={{
+        width: largura, height: altura, borderRadius: 1.5, flexShrink: 0,
+        border: 1, borderColor: "divider", bgcolor: "action.hover", overflow: "hidden",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      {dados ? (
+        <img
+          src={dados}
+          alt=""
+          style={{ width: "100%", height: "100%", objectFit: tipo === "logo" ? "contain" : "cover" }}
+        />
+      ) : (
+        <Typography variant="caption" color="textSecondary" align="center" sx={{ px: 1 }}>
+          {caminho ? "Carregando…" : vazio}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
 function SettingsScreen() {
   const { currentUser } = useAuth();
   const [settings, setSettings] = useState({
     email: { host: "", port: 587, secure: false, user: "", pass: "", from: "" },
-    branding: { companyName: "", logoPath: null, backgroundPath: null },
+    branding: { companyName: "", logoPath: null, backgroundPath: null, logoComoIcone: false, loginSubtitulo: "", creditoExibir: true, creditoNome: "" },
     emailNotifications: { notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "", notifyClientStatus: false, clientStatuses: [] },
     permissions: { funcionario: { canSeeFinancial: false, canSeeReports: false } },
     autoBackup: { enabled: false, scheduledDays: [1,2,3,4,5], scheduledHour: 2, destinationPath: "", retentionDays: 30 },
@@ -81,7 +118,7 @@ function SettingsScreen() {
         if (result.success && result.settings) {
           // Mescla com um objeto padrão para garantir que todos os campos existam
           const defaultEmail = { host: "", port: 587, secure: false, user: "", pass: "", from: "" };
-          const defaultBranding = { companyName: "GSTI App", logoPath: null, backgroundPath: null };
+          const defaultBranding = { companyName: "GSTI App", logoPath: null, backgroundPath: null, logoComoIcone: false, loginSubtitulo: "", creditoExibir: true, creditoNome: "" };
           const defaultNotifications = {
             notifyOnFinalize: false, notifyOnCreate: false, technicianEmail: "",
             notifyClientStatus: false, clientStatuses: result.padroes?.statusAviso || [],
@@ -263,6 +300,8 @@ function SettingsScreen() {
           type: "success",
           text: "Configurações salvas com sucesso!",
         });
+        // Menu lateral e título da janela recarregam a marca
+        window.dispatchEvent(new Event("gsti:marca-atualizada"));
       } else {
         setSaveStatus({
           type: "error",
@@ -363,6 +402,16 @@ function SettingsScreen() {
       });
     }
   };
+
+  const handleRemoveLogo = () => {
+    setSettings((prev) => ({
+      ...prev,
+      branding: { ...prev.branding, logoPath: null, logoComoIcone: false },
+    }));
+    setSaveStatus({ type: "info", text: "Logo removida. Clique em Salvar para aplicar." });
+  };
+
+  const logoAceitaComoIcone = /\.(png|jpe?g)$/i.test(settings.branding.logoPath || "");
 
   const handleRemoveBackground = () => {
     handleInputChange("branding", "backgroundPath", null);
@@ -522,109 +571,123 @@ function SettingsScreen() {
         </Box>
       </Paper>
 
-      {/* --- NOVA SEÇÃO: Whitelabeling --- */}
+      {/* --- Personalização da marca --- */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
-          Personalização (Whitelabel)
+          Personalização da marca
         </Typography>
-        <TextField
-          label="Nome da Empresa"
-          name="companyName"
-          value={settings.branding.companyName}
-          onChange={(e) =>
-            handleInputChange("branding", "companyName", e.target.value)
-          }
-          fullWidth
-          margin="normal"
-          size="small" // Ajustado margin/size
-          disabled={saving || testingEmail}
-        />
-        <Box sx={{ mt: 2, display: "flex", alignItems: "center", gap: 2 }}>
-          <Button
-            variant="outlined"
-            onClick={handleSelectLogo}
-            disabled={saving || testingEmail}
-          >
-            Selecionar Logo da Empresa
-          </Button>
-          {/* Mostra o caminho da logo selecionada (ou a salva) */}
-          {settings.branding.logoPath && (
-            <Typography
-              variant="caption"
-              sx={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Logo atual: {settings.branding.logoPath}
-            </Typography>
-          )}
-          {!settings.branding.logoPath && (
-            <Typography variant="caption" color="textSecondary">
-              Nenhuma logo definida.
-            </Typography>
-          )}
-        </Box>
-        <Typography
-          variant="caption"
-          sx={{ display: "block", mt: 1 }}
-          color="textSecondary"
-        >
-          * A logo será exibida na Sidebar e futuramente nos PDFs. Use um
-          formato comum (PNG, JPG).
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+          Defina como o nome e a imagem da sua empresa aparecem no sistema.
         </Typography>
 
-        {/* --- Imagem de fundo da tela de login --- */}
-        <Box sx={{ mt: 3, display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-          <Button
-            variant="outlined"
-            onClick={handleSelectBackground}
-            disabled={saving || testingEmail}
-          >
-            Selecionar Imagem de Fundo (Login)
-          </Button>
-          {settings.branding.backgroundPath && (
-            <>
-              <Typography
-                variant="caption"
-                sx={{
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  maxWidth: 300,
-                }}
-              >
-                Fundo atual: {settings.branding.backgroundPath}
-              </Typography>
-              <Button
-                variant="text"
-                color="error"
-                size="small"
-                onClick={handleRemoveBackground}
-                disabled={saving || testingEmail}
-              >
+        <TextField
+          label="Nome da empresa"
+          name="companyName"
+          value={settings.branding.companyName}
+          onChange={(e) => handleInputChange("branding", "companyName", e.target.value)}
+          fullWidth
+          size="small"
+          disabled={saving || testingEmail}
+          helperText="Aparece no menu lateral, na tela de login e no título da janela."
+        />
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Logo */}
+        <Typography variant="subtitle1" fontWeight={600}>Logo da empresa</Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 1.5 }}>
+          Aparece no topo do menu lateral e na tela de login. PNG ou JPG, até 2 MB.
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+          <MiniaturaImagem caminho={settings.branding.logoPath} tipo="logo" largura={96} altura={64} vazio="Sem logo" />
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" onClick={handleSelectLogo} disabled={saving || testingEmail}>
+              {settings.branding.logoPath ? "Trocar logo" : "Selecionar logo"}
+            </Button>
+            {settings.branding.logoPath && (
+              <Button variant="text" color="error" onClick={handleRemoveLogo} disabled={saving || testingEmail}>
                 Remover
               </Button>
-            </>
-          )}
-          {!settings.branding.backgroundPath && (
-            <Typography variant="caption" color="textSecondary">
-              Nenhuma imagem de fundo definida.
-            </Typography>
-          )}
+            )}
+          </Stack>
         </Box>
-        <Typography
-          variant="caption"
-          sx={{ display: "block", mt: 1 }}
-          color="textSecondary"
-        >
-          * A imagem de fundo aparece atrás do formulário de login. Prefira uma
-          imagem em boa resolução (máximo 5 MB). Sem imagem, é usado o fundo
-          padrão.
+        <FormControlLabel
+          sx={{ mt: 1.5, display: "flex" }}
+          control={
+            <Checkbox
+              checked={!!settings.branding.logoComoIcone && logoAceitaComoIcone}
+              onChange={(e) => handleInputChange("branding", "logoComoIcone", e.target.checked)}
+              disabled={!logoAceitaComoIcone || saving || testingEmail}
+            />
+          }
+          label="Usar a logo também como ícone da janela e da barra de tarefas"
+        />
+        <Typography variant="caption" color="textSecondary" sx={{ display: "block", ml: 4 }}>
+          {settings.branding.logoPath && !logoAceitaComoIcone
+            ? "Disponível apenas para logo em PNG ou JPG."
+            : "O atalho da Área de Trabalho e o instalador continuam com o ícone do GSTI App. Prefira uma imagem quadrada."}
         </Typography>
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Tela de login */}
+        <Typography variant="subtitle1" fontWeight={600}>Tela de login</Typography>
+        <Typography variant="body2" color="textSecondary" sx={{ mb: 1.5 }}>
+          A tela de login mostra a logo, o nome da empresa e a mensagem abaixo.
+        </Typography>
+        <TextField
+          label="Mensagem abaixo do nome"
+          value={settings.branding.loginSubtitulo}
+          onChange={(e) => handleInputChange("branding", "loginSubtitulo", e.target.value)}
+          fullWidth
+          size="small"
+          placeholder="Faça login para continuar"
+          disabled={saving || testingEmail}
+          inputProps={{ maxLength: 80 }}
+        />
+        <Typography variant="body2" sx={{ mt: 2.5, mb: 1 }}>
+          Imagem de fundo da tela de login
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+          <MiniaturaImagem caminho={settings.branding.backgroundPath} tipo="fundo" largura={160} altura={90} vazio="Fundo padrão" />
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" onClick={handleSelectBackground} disabled={saving || testingEmail}>
+              {settings.branding.backgroundPath ? "Trocar imagem de fundo" : "Selecionar imagem de fundo"}
+            </Button>
+            {settings.branding.backgroundPath && (
+              <Button variant="text" color="error" onClick={handleRemoveBackground} disabled={saving || testingEmail}>
+                Remover
+              </Button>
+            )}
+          </Stack>
+        </Box>
+        <Typography variant="caption" sx={{ display: "block", mt: 1 }} color="textSecondary">
+          Fica atrás do formulário de login (não é o ícone do app). Prefira uma imagem em boa
+          resolução, até 5 MB. Sem imagem, é usado o fundo padrão.
+        </Typography>
+        <FormControlLabel
+          sx={{ mt: 2, display: "flex" }}
+          control={
+            <Switch
+              checked={!!settings.branding.creditoExibir}
+              onChange={(e) => handleInputChange("branding", "creditoExibir", e.target.checked)}
+              disabled={saving || testingEmail}
+            />
+          }
+          label={'Exibir "Desenvolvido por" no rodapé da tela de login'}
+        />
+        {settings.branding.creditoExibir && (
+          <TextField
+            label="Desenvolvido por"
+            value={settings.branding.creditoNome}
+            onChange={(e) => handleInputChange("branding", "creditoNome", e.target.value)}
+            size="small"
+            sx={{ mt: 1, width: { xs: "100%", sm: 360 } }}
+            disabled={saving || testingEmail}
+            inputProps={{ maxLength: 80 }}
+          />
+        )}
       </Paper>
-      {/* --- FIM NOVA SEÇÃO --- */}
 
       {/* --- Dados da empresa e textos dos documentos --- */}
       <Paper sx={{ p: 3, mb: 3 }}>

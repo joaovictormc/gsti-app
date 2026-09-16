@@ -41,6 +41,12 @@ Atualizado em 2026-09-16.
 - [x] Permissões do perfil Funcionário para Financeiro e Relatórios.
 - [x] Notificações por e-mail (nova OS para o técnico, OS finalizada para o cliente).
 - [x] Imagem de fundo e logo na tela de login.
+- [x] **Personalização da marca reorganizada**: nome, logo (com prévia), fundo do login e
+      mensagem do login em blocos com rótulos explícitos; opção separada para usar a logo
+      como ícone da janela/barra de tarefas (o atalho e o instalador mantêm o ícone do app).
+- [x] **Logo e nome da empresa na tela de login** e no título da janela.
+- [x] **"Desenvolvido por"** no rodapé do login, com a versão do app; nome editável e
+      pode ser ocultado (padrão: desenvolvedor original).
 - [x] Licenciamento v2 com chave de licença, trial, transferência de computador.
 - [x] Plataforma de vendas (site, Mercado Pago, área do cliente, painel da equipe) —
       ver [PLANO-LICENCIAMENTO-E-VENDAS.md](./PLANO-LICENCIAMENTO-E-VENDAS.md).
@@ -52,7 +58,11 @@ Atualizado em 2026-09-16.
 - [x] Tela inicial sem receita/despesas/lucro para quem não tem acesso ao Financeiro.
 - [x] Não é possível excluir/rebaixar o próprio usuário nem ficar sem nenhum Admin.
 - [x] **Senhas do banco e do e-mail cifradas no `config.json`** (cofre do Windows via
-      `safeStorage`; configurações antigas são migradas ao abrir o app).
+      `safeStorage`; configurações antigas são migradas ao abrir o app). A chave fica no
+      arquivo `Local State` da pasta de dados do app: se ele se perder, o app pede a
+      conexão de novo ("Já tenho cadastro").
+- [x] Salvar Configurações não apaga mais a senha do SMTP (campo em branco = manter).
+- [x] Conexão ociosa derrubada pelo servidor do banco não abre mais janela de erro.
 - [x] **Tabelas criadas automaticamente** na primeira instalação em banco vazio.
 - [x] Código de redefinição de senha: validade corrigida (10 min) e bloqueio após 5 erros.
 
@@ -60,14 +70,6 @@ Atualizado em 2026-09-16.
 
 ## 2. Fila — próximas funcionalidades
 
-- **Clareza nas configurações de personalização do login** — rótulos que deixem
-  explícito qual campo define a *imagem de fundo da tela de login* e qual define o
-  *ícone do app* (barra de título / taskbar).
-- **Alterar logo e nome na tela de login** — permitir substituir a logo e editar o
-  nome/título do sistema exibidos na tela de login.
-- **Crédito ao desenvolvedor** — "Desenvolvido por [nome/empresa]" no rodapé do login,
-  em uma tela "Sobre" ou nos PDFs; configurável, com padrão apontando para o
-  desenvolvedor original.
 - **Emissão de NFS-e / NF-e após finalizar a OS** — botão nas OS finalizadas;
   avaliar APIs de prefeitura/SEFAZ ou emissores de terceiros.
 - **Barra de título personalizada (frameless window)** — barra em React com ícone e

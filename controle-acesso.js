@@ -30,8 +30,8 @@ const POLITICAS_IPC = {
   "test-email-settings": "admin",
   "select-logo-file": "admin",
   "select-background-file": "admin",
-  "load-logo-image": "sessao",
-  "load-background-image": "publico",
+  "load-logo-image": "publico", // sem Admin, só a logo salva (verificado no handler)
+  "load-background-image": "publico", // sem Admin, só o fundo salvo (verificado no handler)
   "backup-database": "admin",
   "restore-database": "admin",
   "select-backup-folder": "admin",

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, nativeImage } = require("electron");
 const path = require("path");
 const os = require("os");
 const { Pool } = require("pg");
@@ -94,7 +94,15 @@ const defaultConfig = {
     pass: "",
     from: "",
   },
-  branding: { companyName: "GSTI App", logoPath: null, backgroundPath: null },
+  branding: {
+    companyName: "GSTI App",
+    logoPath: null,
+    backgroundPath: null,
+    logoComoIcone: false, // usa a logo como ícone da janela/barra de tarefas
+    loginSubtitulo: "Faça login para continuar",
+    creditoExibir: true, // "Desenvolvido por" no rodapé da tela de login
+    creditoNome: "João Victor Maciel Campos",
+  },
   financeiro: { despesaFixaEstimada: 0 },
   emailNotifications: {
     notifyOnFinalize: false,
@@ -192,6 +200,12 @@ function initializeDbPool() {
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
         options: "-c statement_timeout=30000",
+      });
+      // Conexão ociosa derrubada (servidor reiniciou, rede caiu): sem este listener o
+      // erro vira exceção não tratada e abre a janela de erro do Electron. O pool
+      // descarta a conexão e abre outra na próxima consulta.
+      dbPool.on("error", (error) => {
+        console.warn("[DB] Conexão ociosa encerrada pelo servidor:", error.message);
       });
       console.log("[DB] Pool de conexão inicializado com sucesso.");
       // Migrações automáticas de schema
@@ -865,22 +879,25 @@ ipcMain.handle("deactivate-license", async () => {
 // Handler para buscar as configurações atuais (para a tela de Settings)
 ipcMain.handle("get-app-settings", async (event) => {
   // Sem Admin (tela de login, Funcionário): só o necessário para marca e menu.
+  const branding = { ...defaultConfig.branding, ...appConfig.branding };
   if (!acesso.pode(acesso.usuarioDe(event), "admin")) {
     return {
       success: true,
+      appVersion: app.getVersion(),
       settings: {
-        branding: { ...appConfig.branding },
+        branding,
         permissions: { funcionario: { ...appConfig.permissions?.funcionario } },
       },
     };
   }
   // Retorna uma cópia, excluindo senhas por segurança se necessário
-  const settingsToSend = JSON.parse(JSON.stringify(appConfig));
+  const settingsToSend = JSON.parse(JSON.stringify({ ...appConfig, branding }));
   if (settingsToSend.database) delete settingsToSend.database.password; // Não envia senha do DB
   if (settingsToSend.email) delete settingsToSend.email.pass; // Não envia senha do Email
   if (settingsToSend.license) delete settingsToSend.license.token; // Não expõe o token de licença
   return {
     success: true,
+    appVersion: app.getVersion(),
     settings: settingsToSend,
     padroes: {
       statusOS: comunicacao.STATUS_OS,
@@ -894,19 +911,19 @@ ipcMain.handle("get-app-settings", async (event) => {
 
 // Handler para salvar as configurações (da tela de Settings)
 ipcMain.handle("save-app-settings", async (event, newSettings) => {
-  // TODO: Adicionar verificação de Admin
-  console.log(
-    "[Config] Recebido pedido para salvar configurações:",
-    newSettings
-  );
+  console.log("[Config] Recebido pedido para salvar configurações:", Object.keys(newSettings || {}));
   try {
+    // Senha do SMTP em branco na tela significa "manter a atual"
+    const novoEmail = { ...(newSettings.email || {}) };
+    if (!novoEmail.pass) delete novoEmail.pass;
+
     // Mescla as novas configurações com as existentes (preserva DB config, setupComplete)
     const currentDbConfig = appConfig.database;
     const currentSetupStatus = appConfig.setupComplete;
 
     appConfig = {
       ...appConfig,
-      email: { ...appConfig.email, ...newSettings.email },
+      email: { ...appConfig.email, ...novoEmail },
       branding: { ...appConfig.branding, ...newSettings.branding },
       emailNotifications: { ...appConfig.emailNotifications, ...(newSettings.emailNotifications || {}) },
       permissions: {
@@ -931,6 +948,7 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
 
     initializeMailTransporter();
     scheduleAutoBackup();
+    aplicarIconeJanela();
 
     return { success: true };
   } catch (error) {
@@ -3984,6 +4002,11 @@ ipcMain.handle("load-logo-image", async (event, logoPath) => {
   if (!logoPath || typeof logoPath !== "string") {
     return { success: false, error: "Caminho da logo inválido." };
   }
+  // Sem Admin (inclui a tela de login) só a logo salva nas configurações;
+  // o Admin pode pré-visualizar um arquivo recém-selecionado.
+  if (!acesso.pode(acesso.usuarioDe(event), "admin") && logoPath !== appConfig.branding?.logoPath) {
+    return { success: false, error: "Imagem não disponível." };
+  }
 
   try {
     // Verifica se o arquivo existe
@@ -4073,6 +4096,9 @@ ipcMain.handle("load-background-image", async (event, bgPath) => {
   if (!bgPath || typeof bgPath !== "string") {
     return { success: false, error: "Caminho da imagem inválido." };
   }
+  if (!acesso.pode(acesso.usuarioDe(event), "admin") && bgPath !== appConfig.branding?.backgroundPath) {
+    return { success: false, error: "Imagem não disponível." };
+  }
 
   try {
     if (!fs.existsSync(bgPath)) {
@@ -4111,6 +4137,24 @@ ipcMain.handle("load-background-image", async (event, bgPath) => {
 });
 
 // --- FUNÇÕES DA JANELA ---
+
+// Ícone da janela e da barra de tarefas: a logo da empresa (se marcado em
+// Configurações e for PNG/JPG) ou o ícone padrão do GSTI App. O atalho e o
+// instalador sempre usam o ícone embutido no executável.
+function aplicarIconeJanela() {
+  const branding = appConfig?.branding || {};
+  let icone = null;
+  if (branding.logoComoIcone && branding.logoPath && /.(png|jpe?g)$/i.test(branding.logoPath) && fs.existsSync(branding.logoPath)) {
+    icone = nativeImage.createFromPath(branding.logoPath);
+  }
+  if (!icone || icone.isEmpty()) {
+    const padrao = path.join(__dirname, "build_resources", "icon.ico");
+    if (!fs.existsSync(padrao)) return;
+    icone = nativeImage.createFromPath(padrao);
+  }
+  for (const janela of BrowserWindow.getAllWindows()) janela.setIcon(icone);
+}
+
 function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1280,
@@ -4126,6 +4170,7 @@ function createWindow() {
     contextIsolation: true,
     nodeIntegration: false
   });
+  aplicarIconeJanela();
 
   // --- MOVER openDevTools PARA CIMA e USAR app.isPackaged ---
   // Força a abertura ANTES de tentar carregar qualquer conteúdo

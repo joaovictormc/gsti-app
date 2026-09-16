@@ -26,29 +26,43 @@ function LoginScreen({ onLoginSuccess }) {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   // --- FIM NOVO ESTADO ---
 
-  // --- Imagem de fundo configurável (whitelabel) ---
+  // --- Marca configurável em Configurações > Personalização da marca ---
   const [backgroundImage, setBackgroundImage] = useState(null);
+  const [logoImage, setLogoImage] = useState(null);
+  const [marca, setMarca] = useState(null); // null enquanto carrega
+  const [versao, setVersao] = useState("");
 
   useEffect(() => {
     let mounted = true;
-    const loadBackground = async () => {
+    const loadBranding = async () => {
       try {
         const result = await window.api.getAppSettings();
-        const bgPath = result?.settings?.branding?.backgroundPath;
-        if (!bgPath) return;
-        const img = await window.api.loadBackgroundImage(bgPath);
-        if (mounted && img?.success && img.imageData) {
-          setBackgroundImage(img.imageData);
-        }
+        const branding = result?.settings?.branding || {};
+        if (!mounted) return;
+        setMarca(branding);
+        setVersao(result?.appVersion || "");
+        if (branding.companyName) document.title = branding.companyName;
+        const [bg, logo] = await Promise.all([
+          branding.backgroundPath ? window.api.loadBackgroundImage(branding.backgroundPath) : null,
+          branding.logoPath ? window.api.loadLogoImage(branding.logoPath) : null,
+        ]);
+        if (!mounted) return;
+        if (bg?.success && bg.imageData) setBackgroundImage(bg.imageData);
+        if (logo?.success && logo.imageData) setLogoImage(logo.imageData);
       } catch (err) {
-        console.error("Erro ao carregar imagem de fundo do login:", err);
+        console.error("Erro ao carregar a marca da tela de login:", err);
+        if (mounted) setMarca({});
       }
     };
-    loadBackground();
+    loadBranding();
     return () => {
       mounted = false;
     };
   }, []);
+
+  const nomeEmpresa = marca?.companyName?.trim() || "GSTI App";
+  const subtitulo = marca?.loginSubtitulo?.trim() || "Faça login para continuar";
+  const credito = marca?.creditoExibir && marca?.creditoNome?.trim();
 
   const handleLogin = async () => {
     setError(""); // Limpa erros antigos
@@ -133,6 +147,7 @@ function LoginScreen({ onLoginSuccess }) {
         alignItems: "center",
         justifyContent: "center",
         height: "100vh",
+        position: "relative",
         ...(backgroundImage
           ? {
               backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.55), rgba(15, 23, 42, 0.55)), url(${backgroundImage})`,
@@ -158,27 +173,37 @@ function LoginScreen({ onLoginSuccess }) {
           bgcolor: "background.paper",
         }}
       >
-        <Box
-          sx={{
-            width: 56,
-            height: 56,
-            borderRadius: 2,
-            bgcolor: "primary.main",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            mb: 2,
-          }}
-        >
-          <Typography variant="h5" sx={{ color: "white", fontWeight: 700 }}>
-            G
-          </Typography>
-        </Box>
-        <Typography component="h1" variant="h5" sx={{ mb: 0.5, fontWeight: 700 }}>
-          GSTI App
+        {logoImage ? (
+          <Box
+            component="img"
+            src={logoImage}
+            alt=""
+            sx={{ maxWidth: "70%", maxHeight: 72, objectFit: "contain", mb: 2 }}
+          />
+        ) : (
+          <Box
+            sx={{
+              width: 56,
+              height: 56,
+              borderRadius: 2,
+              bgcolor: "primary.main",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              mb: 2,
+              visibility: marca ? "visible" : "hidden",
+            }}
+          >
+            <Typography variant="h5" sx={{ color: "white", fontWeight: 700 }}>
+              {nomeEmpresa[0].toUpperCase()}
+            </Typography>
+          </Box>
+        )}
+        <Typography component="h1" variant="h5" align="center" sx={{ mb: 0.5, fontWeight: 700 }}>
+          {marca ? nomeEmpresa : "\u00a0"}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Faça login para continuar
+        <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
+          {subtitulo}
         </Typography>
 
         {error && (
@@ -251,6 +276,23 @@ function LoginScreen({ onLoginSuccess }) {
         </MuiLink>
         {/* --- FIM DO LINK --- */}
       </Paper>
+
+      {(credito || versao) && (
+        <Typography
+          variant="caption"
+          sx={{
+            position: "absolute",
+            bottom: 16,
+            left: 16,
+            right: 16,
+            textAlign: "center",
+            color: "rgba(255, 255, 255, 0.75)",
+            textShadow: "0 1px 2px rgba(0, 0, 0, 0.4)",
+          }}
+        >
+          {[credito && `Desenvolvido por ${credito}`, versao && `versão ${versao}`].filter(Boolean).join(" · ")}
+        </Typography>
+      )}
     </Box>
   );
 }

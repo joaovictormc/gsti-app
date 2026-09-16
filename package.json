@@ -53,6 +53,7 @@
       "script.sql",
       "config-segredos.js",
       "controle-acesso.js",
+      "build_resources/icon.ico",
       "package.json",
       "!node_modules/@types/",
       "!node_modules/.bin/",

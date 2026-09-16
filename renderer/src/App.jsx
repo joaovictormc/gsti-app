@@ -236,11 +236,15 @@ function AppSidebar({
               </Typography>
             </>
           ) : (
-            <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Typography sx={{ color: 'white', fontWeight: 700, fontSize: '1rem' }}>
-                {(companyName || 'G')[0].toUpperCase()}
-              </Typography>
-            </Box>
+            logoData ? (
+              <img src={logoData} alt="" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+            ) : (
+              <Box sx={{ width: 36, height: 36, borderRadius: 2, bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography sx={{ color: 'white', fontWeight: 700, fontSize: '1rem' }}>
+                  {(companyName || 'G')[0].toUpperCase()}
+                </Typography>
+              </Box>
+            )
           )}
           <Tooltip title={isOpen ? 'Recolher menu' : 'Expandir menu'} placement="right">
             <IconButton onClick={onToggle} size="small" sx={{ color: st.subtext, mt: 1, '&:hover': { bgcolor: st.hover } }}>
@@ -379,6 +383,12 @@ function App() {
     canSeeReports: false,
   });
   const [loadingBranding, setLoadingBranding] = useState(false);
+  const [marcaRevisao, setMarcaRevisao] = useState(0);
+  useEffect(() => {
+    const recarregar = () => setMarcaRevisao((n) => n + 1);
+    window.addEventListener("gsti:marca-atualizada", recarregar);
+    return () => window.removeEventListener("gsti:marca-atualizada", recarregar);
+  }, []);
   // --- EFEITO PARA VERIFICAR SETUP INICIAL (Roda 1x) ---
   useEffect(() => {
     const checkSetup = async () => {
@@ -438,7 +448,7 @@ function App() {
       // Só executa se o setup estiver completo E houver um usuário logado
       if (needsSetup === false && currentUser) {
         console.log("[App] Carregando configurações de branding...");
-        setLoadingBranding(true);
+        if (marcaRevisao === 0) setLoadingBranding(true);
         let currentCompanyName = "GSTI App"; // Padrão
         let currentLogoData = null;
 
@@ -483,6 +493,7 @@ function App() {
             companyName: currentCompanyName,
             logoData: currentLogoData,
           });
+          document.title = currentCompanyName;
           setLoadingBranding(false);
           console.log("[App] Configuração de branding definida:", {
             companyName: currentCompanyName,
@@ -494,7 +505,7 @@ function App() {
 
     loadBranding();
     // Depende de needsSetup e currentUser para rodar QUANDO o login acontece
-  }, [needsSetup, currentUser]);
+  }, [needsSetup, currentUser, marcaRevisao]);
   // --- FIM NOVO EFEITO ---
 
   useEffect(() => {
