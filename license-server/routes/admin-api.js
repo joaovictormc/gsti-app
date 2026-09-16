@@ -18,6 +18,8 @@ const { abrir } = require("../lib/db");
 const { LicencaErro } = require("../lib/erros");
 const { limitar, rota } = require("../lib/http");
 const { version } = require("../package.json");
+const views = require("../views/paginas");
+const { renderLanding } = require("../views/landing");
 
 const r = express.Router();
 const eq = auth.exigirEquipe;
@@ -360,12 +362,40 @@ r.post("/conteudo/:chave/restaurar", eq(), exigirConteudo, rota((req) => ({
 r.post("/conteudo/:chave/email-teste", eq(), exigirConteudo, limitar(10, 10), rota(async (req) => {
   const chave = req.params.chave;
   if (!chave.startsWith("email.")) throw new LicencaErro("NAO_EMAIL", "Esta seção não é um e-mail.");
-  const exemplo = {
-    nome: req.equipe.nome, chave: "GSTI-TEST-E000-0000-0000", plano: "Anual", validade: vendas.dataBR(new Date(Date.now() + 365 * 86400000).toISOString()),
-    dias: 7, download: conteudo.obter("site.geral").linkDownload || cfg.PUBLIC_URL, link: `${cfg.PUBLIC_URL}/cliente`,
-    link_renovacao: `${cfg.PUBLIC_URL}/`, minutos: cfg.LINK_MAGICO_MINUTOS,
-  };
+  const exemplo = { ...email.VARS_EXEMPLO, nome: req.equipe.nome, download: conteudo.obter("site.geral").linkDownload || cfg.PUBLIC_URL };
   return await email.enviar(chave.slice(6), req.equipe.email, exemplo);
+}));
+
+// Pré-visualização do site com alterações ainda NÃO salvas.
+const PAGINAS_PREVIA = {
+  inicio: () => renderLanding({ ofertas: vendas.listarOfertas({ apenasAtivas: true }), pagamentosAtivos: mp.configurado() }),
+  "teste-gratis": () => views.testeGratis(),
+  termos: () => views.legal(conteudo.obter("pagina.termos")),
+  privacidade: () => views.legal(conteudo.obter("pagina.privacidade")),
+  cliente: () => views.portal({ logado: false }),
+  checkout: () =>
+    views.retornoCheckout({
+      pedido: { id: "00000000-0000-0000-0000-000000000000", status: "pendente", modalidade: "avulso" },
+      falha: false,
+    }),
+};
+
+r.post("/site/previa", eq(), exigirQualquer("conteudo.editar", "emails.editar"), rota((req, res) => {
+const pedida = String(req.body?.pagina || "inicio");
+  const chaveEmail = String(req.body?.chave || "");
+  const gerar = pedida === "email" && chaveEmail.startsWith("email.")
+    ? () => {
+        const m = email.previa(chaveEmail.slice(6));
+        return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>body{margin:0;background:#eef1f5}.assunto{font:600 14px/1.4 system-ui;padding:12px 16px;background:#fff;border-bottom:1px solid #e5e7eb;color:#1f2937}.assunto span{color:#6b7280;font-weight:400}</style></head><body><p class="assunto"><span>Assunto:</span> ${m.assunto.replace(/[<>&]/g, "")}</p>${m.html}</body></html>`;
+      }
+    : PAGINAS_PREVIA[pedida];
+  if (!gerar) throw new LicencaErro("PAGINA", "Página desconhecida.", 404);
+  const alteracoes = {};
+  for (const [chave, valor] of Object.entries(req.body?.alteracoes || {})) {
+    if (/^(site|pagina|email)\./.test(chave)) alteracoes[chave] = valor;
+  }
+  const html = conteudo.comSobreposicao(alteracoes, gerar);
+  res.type("html").set("Cache-Control", "no-store").send(html);
 }));
 
 r.post(

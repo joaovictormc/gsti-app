@@ -29,7 +29,6 @@ import PedidoDetalhe from "./pages/PedidoDetalhe";
 import Assinaturas from "./pages/Assinaturas";
 import Ofertas from "./pages/Ofertas";
 import Conteudo from "./pages/Conteudo";
-import ConteudoEditor from "./pages/ConteudoEditor";
 import Equipe from "./pages/Equipe";
 import Sistema from "./pages/Sistema";
 import Auditoria from "./pages/Auditoria";
@@ -194,7 +193,7 @@ function Estrutura() {
           <Route path="/assinaturas" element={<Rota perm="pedidos.ver"><Assinaturas /></Rota>} />
           <Route path="/planos" element={<Rota perm={["ofertas.editar", "pedidos.ver"]}><Ofertas /></Rota>} />
           <Route path="/conteudo" element={<Rota perm={["conteudo.editar", "emails.editar"]}><Conteudo /></Rota>} />
-          <Route path="/conteudo/:chave" element={<Rota perm={["conteudo.editar", "emails.editar"]}><ConteudoEditor /></Rota>} />
+          <Route path="/conteudo/:chave" element={<Rota perm={["conteudo.editar", "emails.editar"]}><Conteudo /></Rota>} />
           <Route path="/equipe" element={<Rota perm="usuarios.gerenciar"><Equipe /></Rota>} />
           <Route path="/sistema" element={<Rota perm="sistema.ver"><Sistema /></Rota>} />
           <Route path="/auditoria" element={<Rota perm="auditoria.ver"><Auditoria /></Rota>} />

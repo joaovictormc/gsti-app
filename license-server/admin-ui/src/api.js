@@ -13,7 +13,7 @@ export class ErroApi extends Error {
   }
 }
 
-export async function api(metodo, rota, corpo, { bruto = false, headers = {} } = {}) {
+export async function api(metodo, rota, corpo, { bruto = false, texto = false, headers = {} } = {}) {
   const opcoes = { method: metodo, credentials: "same-origin", headers: { ...headers } };
   if (csrf) opcoes.headers["X-CSRF-Token"] = csrf;
   if (corpo !== undefined) {
@@ -30,6 +30,11 @@ export async function api(metodo, rota, corpo, { bruto = false, headers = {} } =
     resp = await fetch(`/admin/api${rota}`, opcoes);
   } catch {
     throw new ErroApi("Sem conexão com o servidor.", 0);
+  }
+  if (texto) {
+    const corpoTexto = await resp.text();
+    if (!resp.ok) throw new ErroApi("Não foi possível gerar a prévia.", resp.status);
+    return corpoTexto;
   }
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok || json.success === false) {

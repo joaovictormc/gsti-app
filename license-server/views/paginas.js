@@ -3,7 +3,6 @@ const { escapeHtml: e } = require("../lib/http");
 const { markdown } = require("../lib/markdown");
 const vendas = require("../lib/vendas");
 const conteudo = require("../lib/conteudo");
-const cfg = require("../lib/config");
 const { layout } = require("./layout");
 const { cartaoPlano, dialogoCheckout } = require("./componentes");
 
@@ -20,6 +19,9 @@ function legal(c) {
 function retornoCheckout({ pedido, falha }) {
   if (!pedido) return naoEncontrada();
   const assinatura = pedido.modalidade === "assinatura";
+  const c = conteudo.obter("pagina.checkout");
+  // {{email}} vira o e-mail mascarado preenchido pelo JavaScript da página.
+  const comEmail = (txt) => e(txt).replace("{{email}}", '<strong data-email></strong>');
   return layout({
     titulo: "Pagamento",
     pagina: "retorno",
@@ -28,20 +30,20 @@ function retornoCheckout({ pedido, falha }) {
       `<div id="retorno" data-pedido="${e(pedido.id)}" data-status="${e(pedido.status)}" data-falha="${falha ? 1 : 0}" data-assinatura="${assinatura ? 1 : 0}">
         <div class="estado estado--pendente">
           <span class="estado__icone girando" aria-hidden="true"></span>
-          <h1>Confirmando seu pagamento…</h1>
-          <p>Pix costuma confirmar em segundos. Boleto pode levar até 3 dias úteis — você recebe a chave por e-mail assim que for compensado.</p>
+          <h1>${e(c.aguardandoTitulo)}</h1>
+          <p>${e(c.aguardandoTexto)}</p>
           <p class="rotulo-mono">Pedido ${e(pedido.id.slice(0, 8))}</p>
         </div>
         <div class="estado estado--pago" hidden>
           <span class="estado__icone ok" aria-hidden="true"></span>
-          <h1>Pagamento confirmado!</h1>
-          <p>Enviamos a chave de licença para <strong data-email></strong>. Verifique também a caixa de spam.</p>
+          <h1>${e(c.pagoTitulo)}</h1>
+          <p>${comEmail(c.pagoTexto)}</p>
           <div class="estado__acoes"><a class="btn" href="/#duvidas">Como ativar</a><a class="btn btn--contorno" href="/cliente">Área do cliente</a></div>
         </div>
         <div class="estado estado--falha" hidden>
           <span class="estado__icone erro" aria-hidden="true"></span>
-          <h1>O pagamento não foi concluído</h1>
-          <p>Nenhuma cobrança foi feita. Você pode tentar novamente com outra forma de pagamento.</p>
+          <h1>${e(c.falhaTitulo)}</h1>
+          <p>${e(c.falhaTexto)}</p>
           <div class="estado__acoes"><a class="btn" href="/#planos">Voltar aos planos</a></div>
         </div>
       </div>`
@@ -57,7 +59,7 @@ function renovar({ licenca, ofertas, renovacaoAutomatica, pagamentosAtivos }) {
       <header class="secao__cabeca secao__cabeca--esquerda">
         <p class="rotulo-mono">Renovação de licença · ${e(licenca.emailMascarado)}</p>
         <h1>${expirada ? `Sua licença venceu em ${e(validade)}` : `Sua licença vale até ${e(validade)}`}</h1>
-        <p>A renovação soma 12 meses à validade atual — você não perde nenhum dia.</p>
+        <p>${e(conteudo.obter("pagina.cliente").renovarTexto)}</p>
       </header>
       ${renovacaoAutomatica
         ? `<p class="aviso-claro">Esta licença já tem renovação automática ativa. Nada a fazer por aqui.</p>`
@@ -75,18 +77,19 @@ function renovar({ licenca, ofertas, renovacaoAutomatica, pagamentosAtivos }) {
 }
 
 function portal({ logado }) {
+  const c = conteudo.obter("pagina.cliente");
   const entrar = `<div class="cartao cartao--estreito" id="portal-login">
     <p class="rotulo-mono">Área do cliente</p>
-    <h1>Acesse suas licenças</h1>
-    <p>Informe o e-mail usado na compra. Enviaremos um link de acesso — sem senha.</p>
+    <h1>${e(c.titulo)}</h1>
+    <p>${e(c.texto)}</p>
     <form class="form" id="portal-form" novalidate>
       <label class="campo"><span>E-mail</span><input name="email" type="email" autocomplete="email" required></label>
       <p class="form__erro" role="alert" hidden></p>
-      <button class="btn btn--bloco" type="submit"><span data-texto>Enviar link de acesso</span></button>
+      <button class="btn btn--bloco" type="submit"><span data-texto>${e(c.botao)}</span></button>
     </form>
     <div class="form__ok" hidden>
-      <h2>Confira seu e-mail</h2>
-      <p>Se houver compras com esse endereço, o link chega em instantes. Ele vale por 30 minutos.</p>
+      <h2>${e(c.enviadoTitulo)}</h2>
+      <p>${e(c.enviadoTexto)}</p>
     </div>
   </div>`;
   const painel = `<div class="portal" id="portal-painel" data-carregar="1">
@@ -103,29 +106,25 @@ function portal({ logado }) {
 
 function testeGratis() {
   const g = conteudo.obter("site.geral");
+  const p = conteudo.obter("pagina.teste_gratis");
   const baixar = g.linkDownload
-    ? `<a class="btn btn--grande" href="${e(g.linkDownload)}" download>Baixar o instalador</a>
-       <p class="rotulo-mono" style="margin-top:1rem">${e(g.requisitos)}${g.versaoApp ? ` · versão ${e(g.versaoApp)}` : ""}</p>`
-    : `<p class="aviso-claro">O instalador estará disponível para download em breve.${g.emailContato ? ` Enquanto isso, fale com a gente: <a href="mailto:${e(g.emailContato)}">${e(g.emailContato)}</a>` : ""}</p>`;
-  const passos = [
-    ["Baixe e instale", "Execute o instalador no computador da assistência. É necessário ter o PostgreSQL instalado (o guia de instalação explica em poucos passos)."],
-    ["Escolha “Testar grátis”", `Na primeira abertura, na tela de ativação, selecione “Testar ${cfg.TRIAL_DIAS} dias grátis” e informe seu e-mail. Não pedimos cartão.`],
-    ["Use à vontade", `Durante ${cfg.TRIAL_DIAS} dias todos os recursos ficam liberados. Gostou? Compre um plano e ative com a chave recebida por e-mail — seus dados continuam no banco.`],
-  ];
+    ? `<a class="btn btn--grande" href="${e(g.linkDownload)}" download>${e(p.botao)}</a>
+       ${g.requisitos || g.versaoApp ? `<p class="rotulo-mono" style="margin-top:1rem">${e(g.requisitos)}${g.versaoApp ? ` · versão ${e(g.versaoApp)}` : ""}</p>` : ""}`
+    : `<p class="aviso-claro">${e(p.semDownload)}${g.emailContato ? ` <a href="mailto:${e(g.emailContato)}">${e(g.emailContato)}</a>` : ""}</p>`;
   return layout({
     titulo: "Teste grátis",
     pagina: "teste",
     corpo: `<section class="pagina">
       <div class="secao__in">
         <header class="secao__cabeca">
-          <p class="rotulo-mono">${cfg.TRIAL_DIAS} dias grátis · sem cartão</p>
-          <h1>Teste o ${e(g.nomeProduto)} na sua bancada</h1>
-          <p>O teste é feito no próprio sistema, no seu computador, com os seus dados.</p>
+          ${p.selo ? `<p class="rotulo-mono">${e(p.selo)}</p>` : ""}
+          <h1>${e(p.titulo)}</h1>
+          ${p.subtitulo ? `<p>${e(p.subtitulo)}</p>` : ""}
         </header>
         <ol class="passos passos--teste">
-          ${passos.map(([t, d], i) => `<li class="passo"><span class="passo__num">${i + 1}</span><h3>${e(t)}</h3><p>${e(d)}</p></li>`).join("")}
+          ${p.passos.map((item, i) => `<li class="passo"><span class="passo__num">${i + 1}</span><h3>${e(item.titulo)}</h3><p>${e(item.texto)}</p></li>`).join("")}
         </ol>
-        <div class="teste__acoes">${baixar}<p><a href="/#planos">Prefiro ver os planos</a></p></div>
+        <div class="teste__acoes">${baixar}${p.linkPlanos ? `<p><a href="/#planos">${e(p.linkPlanos)}</a></p>` : ""}</div>
       </div>
     </section>`,
   });

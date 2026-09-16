@@ -48,6 +48,36 @@ function layoutHtml(corpoHtml, produto) {
 </table></td></tr></table></body></html>`;
 }
 
+// Monta assunto e HTML de um modelo (usado no envio e na pré-visualização).
+function montar(modelo, vars = {}) {
+  const { nomeProduto } = conteudo.obter("site.geral");
+  const m = conteudo.obter(`email.${modelo}`);
+  const LINKS = ["portal", "download", "link", "link_renovacao"];
+  const seguros = Object.fromEntries(
+    Object.entries(vars).map(([k, v]) => [k, LINKS.includes(k) ? String(v ?? "") : String(v ?? "").replace(/[[\]()*#_`<>]/g, "")])
+  );
+  const todas = { produto: nomeProduto, suporte: suporte(), portal: `${cfg.PUBLIC_URL}/cliente`, ...seguros };
+  const assunto = preencher(m.assunto, todas, false).slice(0, 200);
+  const fonte = preencher(m.texto, todas, false);
+  return { assunto, html: layoutHtml(markdown(fonte), nomeProduto), texto: textoPuro(fonte) };
+}
+
+// Exemplo usado na pré-visualização e no envio de teste.
+const VARS_EXEMPLO = {
+  nome: "Maria Souza",
+  email: "cliente@exemplo.com",
+  chave: "GSTI-EXEM-PLO0-0000-0000",
+  plano: "Anual",
+  validade: "31/12/2027",
+  dias: 7,
+  minutos: 30,
+  download: "#",
+  link: "#",
+  link_renovacao: "#",
+};
+
+const previa = (modelo) => montar(modelo, VARS_EXEMPLO);
+
 /**
  * Envia um e-mail a partir de um modelo.
  * @param {string} modelo  ex.: "licenca_emitida"
@@ -55,25 +85,7 @@ function layoutHtml(corpoHtml, produto) {
  * @param {object} vars    variáveis do modelo (nome, chave, validade...)
  */
 async function enviar(modelo, para, vars = {}) {
-  const { nomeProduto } = conteudo.obter("site.geral");
-  const m = conteudo.obter(`email.${modelo}`);
-  // Valores vindos de clientes (nome etc.) não podem injetar links/formatação no markdown.
-  const LINKS = ["portal", "download", "link", "link_renovacao"];
-  const seguros = Object.fromEntries(
-    Object.entries(vars).map(([k, v]) => [k, LINKS.includes(k) ? String(v ?? "") : String(v ?? "").replace(/[[\]()*#_`<>]/g, "")])
-  );
-  const todas = {
-    produto: nomeProduto,
-    suporte: suporte(),
-    portal: `${cfg.PUBLIC_URL}/cliente`,
-    email: para,
-    ...seguros,
-  };
-  const assunto = preencher(m.assunto, todas, false).slice(0, 200);
-  const fonte = preencher(m.texto, todas, false);
-  // Markdown escapa o texto; variáveis entram como texto (links são validados pelo parser).
-  const html = layoutHtml(markdown(fonte), nomeProduto);
-  const texto = textoPuro(fonte);
+  const { assunto, html, texto } = montar(modelo, { email: para, ...vars });
 
   const log = (status, erro = null) =>
     abrir()
@@ -115,4 +127,4 @@ async function enviarTeste(para) {
   }
 }
 
-module.exports = { enviar, enviarTeste, smtpConfigurado, reiniciarTransporte, remetente };
+module.exports = { enviar, enviarTeste, previa, montar, VARS_EXEMPLO, smtpConfigurado, reiniciarTransporte, remetente };

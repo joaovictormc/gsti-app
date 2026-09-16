@@ -22,15 +22,13 @@ const whatsappUrl = (numero) => {
 
 function layout({ titulo, descricao, corpo, pagina = "", semNav = false }) {
   const g = conteudo.obter("site.geral");
+  const n = conteudo.obter("site.navegacao");
   const tituloFinal = titulo ? `${titulo} · ${g.nomeProduto}` : g.seoTitulo;
   const whats = whatsappUrl(g.whatsapp);
-  const nav = semNav
+  const itensMenu = n.itens.filter((i) => i.rotulo && i.destino);
+  const nav = semNav || !itensMenu.length
     ? ""
-    : `<nav class="nav" aria-label="Principal">
-        <a href="/#recursos">Recursos</a>
-        <a href="/#planos">Planos</a>
-        <a href="/#duvidas">Dúvidas</a>
-      </nav>`;
+    : `<nav class="nav" aria-label="Principal">${itensMenu.map((i) => `<a href="${e(i.destino)}">${e(i.rotulo)}</a>`).join("")}</nav>`;
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -61,8 +59,8 @@ ${cfg.MP_API_BASE !== cfg.MP_API_OFICIAL ? `<p class="faixa-homologacao">Ambient
     </a>
     ${nav}
     <div class="topo__acoes">
-      <a class="link-discreto" href="/cliente">Área do cliente</a>
-      ${semNav ? "" : `<a class="btn btn--pequeno" href="/#planos">Ver planos</a>`}
+      <a class="link-discreto" href="/cliente">${e(n.linkCliente)}</a>
+      ${semNav || !n.botaoTopo ? "" : `<a class="btn btn--pequeno" href="/#planos">${e(n.botaoTopo)}</a>`}
     </div>
   </div>
 </header>
@@ -76,10 +74,10 @@ ${corpo}
       <p>${e(g.rodape)}</p>
     </div>
     <ul class="rodape__links">
-      <li><a href="/cliente">Área do cliente</a></li>
-      <li><a href="/termos">Termos de uso</a></li>
-      <li><a href="/privacidade">Privacidade</a></li>
-      <li><a href="/admin" rel="nofollow">Acesso da equipe</a></li>
+      <li><a href="/cliente">${e(n.linkCliente)}</a></li>
+      <li><a href="/termos">${e(n.linkTermos)}</a></li>
+      <li><a href="/privacidade">${e(n.linkPrivacidade)}</a></li>
+      ${n.linkEquipe ? `<li><a href="/admin" rel="nofollow">${e(n.linkEquipe)}</a></li>` : ""}
     </ul>
     <ul class="rodape__links">
       ${g.emailContato ? `<li><a href="mailto:${e(g.emailContato)}">${e(g.emailContato)}</a></li>` : ""}

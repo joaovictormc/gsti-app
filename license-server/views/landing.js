@@ -1,6 +1,5 @@
 /** Landing page de vendas — todo o texto vem do conteúdo editável (lib/conteudo.js). */
 const conteudo = require("../lib/conteudo");
-const cfg = require("../lib/config");
 const { escapeHtml: e } = require("../lib/http");
 const { layout } = require("./layout");
 const { cartaoPlano, dialogoCheckout, inclusos } = require("./componentes");
@@ -9,35 +8,29 @@ const pad = (n) => String(n + 1).padStart(2, "0");
 
 // Ordem de serviço ilustrativa (substituída pela imagem de destaque, se houver).
 function ticketOs() {
-  const etapas = [
-    ["Entrada", "09:12", "feito"],
-    ["Diagnóstico", "10:40", "feito"],
-    ["Aguardando peça", "ontem", "feito"],
-    ["Pronto para retirada", "agora", "atual"],
-    ["Entregue", "", ""],
-  ];
+  const t = conteudo.obter("site.ticket");
   return `<figure class="ticket" aria-label="Exemplo de ordem de serviço no sistema">
     <div class="ticket__cabeca">
       <span class="rotulo-mono">Ordem de serviço</span>
-      <span class="ticket__numero">Nº 0427</span>
+      <span class="ticket__numero">Nº ${e(t.numero)}</span>
     </div>
     <dl class="ticket__dados">
-      <div><dt>Cliente</dt><dd>Carla Menezes</dd></div>
-      <div><dt>Equipamento</dt><dd>Notebook Dell Inspiron 15</dd></div>
-      <div><dt>Defeito relatado</dt><dd>Não liga após queda de energia</dd></div>
-      <div class="ticket__linha"><div><dt>Garantia</dt><dd>90 dias</dd></div><div><dt>Total</dt><dd class="ticket__total">R$ 380,00</dd></div></div>
+      <div><dt>Cliente</dt><dd>${e(t.cliente)}</dd></div>
+      <div><dt>Equipamento</dt><dd>${e(t.equipamento)}</dd></div>
+      <div><dt>Defeito relatado</dt><dd>${e(t.defeito)}</dd></div>
+      <div class="ticket__linha"><div><dt>Garantia</dt><dd>${e(t.garantia)}</dd></div><div><dt>Total</dt><dd class="ticket__total">${e(t.total)}</dd></div></div>
     </dl>
     <ol class="ticket__etapas">
-      ${etapas.map(([n, h, s]) => `<li class="${s}"><span>${n}</span><time>${h}</time></li>`).join("")}
+      ${t.etapas.map((p) => `<li class="${e(p.estado)}"><span>${e(p.titulo)}</span><time>${e(p.quando)}</time></li>`).join("")}
     </ol>
-    <figcaption class="ticket__rodape">Cliente avisado por e-mail · PDF de entrada emitido</figcaption>
+    ${t.rodape ? `<figcaption class="ticket__rodape">${e(t.rodape)}</figcaption>` : ""}
   </figure>`;
 }
 
 function renderLanding({ ofertas, pagamentosAtivos }) {
   const c = conteudo.obterVarios([
     "site.geral", "site.hero", "site.recursos", "site.como_funciona", "site.telas",
-    "site.planos", "site.depoimentos", "site.faq", "site.cta_final",
+    "site.planos", "site.depoimentos", "site.faq", "site.cta_final", "site.secoes",
   ]);
   const g = c["site.geral"], h = c["site.hero"];
 
@@ -48,15 +41,10 @@ function renderLanding({ ofertas, pagamentosAtivos }) {
         <h1>${e(h.titulo)}</h1>
         <p class="hero__sub">${e(h.subtitulo)}</p>
         <div class="hero__acoes">
-          <a class="btn" href="#planos">${e(h.ctaPrimario)}</a>
-          <a class="btn btn--contorno" href="/teste-gratis">${e(h.ctaSecundario)}</a>
+          ${h.ctaPrimario ? `<a class="btn" href="#planos">${e(h.ctaPrimario)}</a>` : ""}
+          ${h.ctaSecundario ? `<a class="btn btn--contorno" href="/teste-gratis">${e(h.ctaSecundario)}</a>` : ""}
         </div>
-        <ul class="fatos">
-          <li>Funciona sem internet no dia a dia</li>
-          <li>Dados no seu próprio banco</li>
-          <li>Pix, boleto ou cartão</li>
-          <li>${cfg.TRIAL_DIAS} dias grátis, sem cartão</li>
-        </ul>
+        ${h.fatos.length ? `<ul class="fatos">${h.fatos.filter((f) => f.texto).map((f) => `<li>${e(f.texto)}</li>`).join("")}</ul>` : ""}
       </div>
       <div class="hero__visual">
         ${h.imagem ? `<img class="hero__imagem" src="${e(h.imagem)}" alt="Tela do ${e(g.nomeProduto)}" width="1200" height="760">` : ticketOs()}
@@ -65,41 +53,35 @@ function renderLanding({ ofertas, pagamentosAtivos }) {
   </section>`;
 
   const rec = c["site.recursos"];
-  const recursos = rec.itens.length
-    ? `<section class="secao" id="recursos">
+  const recursos = !rec.itens.length ? "" : `<section class="secao" id="recursos">
     <div class="secao__in">
       <header class="secao__cabeca"><h2>${e(rec.titulo)}</h2>${rec.subtitulo ? `<p>${e(rec.subtitulo)}</p>` : ""}</header>
       <ul class="recursos">
         ${rec.itens.map((it, i) => `<li class="recurso"><span class="etiqueta">${pad(i)}</span><h3>${e(it.titulo)}</h3><p>${e(it.texto)}</p></li>`).join("")}
       </ul>
     </div>
-  </section>`
-    : "";
+  </section>`;
 
   const cf = c["site.como_funciona"];
-  const como = cf.passos.length
-    ? `<section class="secao secao--papel">
+  const como = !cf.passos.length ? "" : `<section class="secao secao--papel">
     <div class="secao__in">
       <header class="secao__cabeca"><h2>${e(cf.titulo)}</h2></header>
       <ol class="passos">
         ${cf.passos.map((p, i) => `<li class="passo"><span class="passo__num">${i + 1}</span><h3>${e(p.titulo)}</h3><p>${e(p.texto)}</p></li>`).join("")}
       </ol>
     </div>
-  </section>`
-    : "";
+  </section>`;
 
   const tl = c["site.telas"];
   const imagensTelas = tl.imagens.filter((i) => i.imagem);
-  const telas = tl.ativo && imagensTelas.length
-    ? `<section class="secao">
+  const telas = !imagensTelas.length ? "" : `<section class="secao">
     <div class="secao__in">
       <header class="secao__cabeca"><h2>${e(tl.titulo)}</h2></header>
       <div class="telas">
         ${imagensTelas.map((i) => `<figure class="tela"><img src="${e(i.imagem)}" alt="${e(i.legenda || "Tela do sistema")}" loading="lazy"><figcaption>${e(i.legenda)}</figcaption></figure>`).join("")}
       </div>
     </div>
-  </section>`
-    : "";
+  </section>`;
 
   const pl = c["site.planos"];
   const lista = inclusos();
@@ -115,28 +97,24 @@ function renderLanding({ ofertas, pagamentosAtivos }) {
   </section>`;
 
   const dp = c["site.depoimentos"];
-  const depoimentos = dp.ativo && dp.itens.length
-    ? `<section class="secao">
+  const depoimentos = !dp.itens.length ? "" : `<section class="secao">
     <div class="secao__in">
       <header class="secao__cabeca"><h2>${e(dp.titulo)}</h2></header>
       <div class="depoimentos">
         ${dp.itens.map((d) => `<figure class="depoimento"><blockquote>${e(d.texto)}</blockquote><figcaption><strong>${e(d.nome)}</strong>${d.empresa ? `<span>${e(d.empresa)}</span>` : ""}</figcaption></figure>`).join("")}
       </div>
     </div>
-  </section>`
-    : "";
+  </section>`;
 
   const fq = c["site.faq"];
-  const faq = fq.itens.length
-    ? `<section class="secao secao--papel" id="duvidas">
+  const faq = !fq.itens.length ? "" : `<section class="secao secao--papel" id="duvidas">
     <div class="secao__in secao__in--estreito">
       <header class="secao__cabeca"><h2>${e(fq.titulo)}</h2></header>
       <div class="faq">
         ${fq.itens.map((q) => `<details class="faq__item"><summary>${e(q.pergunta)}</summary><p>${e(q.resposta)}</p></details>`).join("")}
       </div>
     </div>
-  </section>`
-    : "";
+  </section>`;
 
   const ct = c["site.cta_final"];
   const cta = `<section class="cta">
@@ -144,13 +122,20 @@ function renderLanding({ ofertas, pagamentosAtivos }) {
       <h2>${e(ct.titulo)}</h2>
       <p>${e(ct.texto)}</p>
       <a class="btn btn--grande" href="/teste-gratis">${e(ct.botao)}</a>
-      <p class="cta__req">${e(g.requisitos)}${g.versaoApp ? ` · versão ${e(g.versaoApp)}` : ""}</p>
+      ${g.requisitos || g.versaoApp ? `<p class="cta__req">${e(g.requisitos)}${g.versaoApp ? ` · versão ${e(g.versaoApp)}` : ""}</p>` : ""}
     </div>
   </section>`;
 
+  // Ordem e visibilidade vêm de "Ordem e visibilidade das seções".
+  const blocos = { recursos, como_funciona: como, telas, planos, depoimentos, faq, cta_final: cta };
+  const corpoSecoes = c["site.secoes"].itens
+    .filter((i) => i.visivel)
+    .map((i) => blocos[i.id] || "")
+    .join("");
+
   return layout({
     pagina: "inicio",
-    corpo: hero + recursos + como + telas + planos + depoimentos + faq + cta + (pagamentosAtivos ? dialogoCheckout() : ""),
+    corpo: hero + corpoSecoes + (pagamentosAtivos ? dialogoCheckout() : ""),
   });
 }
 

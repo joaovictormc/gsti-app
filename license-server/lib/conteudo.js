@@ -14,7 +14,51 @@ const area = (nome, rotulo, extra = {}) => ({ nome, rotulo, tipo: "textarea", ma
 
 const PLACEHOLDERS_EMAIL = "Variáveis: {{nome}}, {{email}}, {{produto}}, {{suporte}}, {{portal}}";
 
+// Seções da página inicial que podem ser reordenadas/ocultadas.
+const BLOCOS_HOME = [
+  ["recursos", "Recursos"],
+  ["como_funciona", "Como funciona"],
+  ["telas", "Telas do sistema"],
+  ["planos", "Planos"],
+  ["depoimentos", "Depoimentos"],
+  ["faq", "Perguntas frequentes"],
+  ["cta_final", "Chamada final"],
+];
+
 const SECOES = [
+  {
+    chave: "site.secoes",
+    grupo: "site",
+    titulo: "Ordem e visibilidade das seções",
+    ajuda: "Defina a ordem da página inicial e oculte o que não quiser exibir.",
+    campos: [{ nome: "itens", rotulo: "Seções da página inicial", tipo: "ordem", opcoes: BLOCOS_HOME.map(([id, rotulo]) => ({ id, rotulo })) }],
+    padrao: { itens: BLOCOS_HOME.map(([id]) => ({ id, visivel: true })) },
+  },
+  {
+    chave: "site.navegacao",
+    grupo: "site",
+    titulo: "Menu e rodapé",
+    campos: [
+      { nome: "itens", rotulo: "Itens do menu", tipo: "lista", max: 6, campos: [t("rotulo", "Texto", { max: 40 }), t("destino", "Destino (ex.: /#planos, /teste-gratis)", { max: 80 })] },
+      t("botaoTopo", "Botão do topo", { max: 30 }),
+      t("linkCliente", "Link da área do cliente", { max: 30 }),
+      t("linkEquipe", "Link do acesso da equipe (rodapé)", { max: 30 }),
+      t("linkTermos", "Link dos termos (rodapé)", { max: 40 }),
+      t("linkPrivacidade", "Link da privacidade (rodapé)", { max: 40 }),
+    ],
+    padrao: {
+      itens: [
+        { rotulo: "Recursos", destino: "/#recursos" },
+        { rotulo: "Planos", destino: "/#planos" },
+        { rotulo: "Dúvidas", destino: "/#duvidas" },
+      ],
+      botaoTopo: "Ver planos",
+      linkCliente: "Área do cliente",
+      linkEquipe: "Acesso da equipe",
+      linkTermos: "Termos de uso",
+      linkPrivacidade: "Privacidade",
+    },
+  },
   {
     chave: "site.geral",
     grupo: "site",
@@ -53,6 +97,7 @@ const SECOES = [
       t("ctaPrimario", "Botão principal", { max: 40 }),
       t("ctaSecundario", "Botão secundário", { max: 40 }),
       { nome: "imagem", rotulo: "Imagem de destaque (captura de tela)", tipo: "imagem" },
+      { nome: "fatos", rotulo: "Destaques rápidos (abaixo dos botões)", tipo: "lista", max: 6, campos: [t("texto", "Texto", { max: 60 })] },
     ],
     padrao: {
       selo: "Para assistências técnicas e prestadores de TI",
@@ -61,6 +106,51 @@ const SECOES = [
       ctaPrimario: "Ver planos",
       ctaSecundario: "Testar 7 dias grátis",
       imagem: "",
+      fatos: [
+        { texto: "Funciona sem internet no dia a dia" },
+        { texto: "Dados no seu próprio banco" },
+        { texto: "Pix, boleto ou cartão" },
+        { texto: "7 dias grátis, sem cartão" },
+      ],
+    },
+  },
+  {
+    chave: "site.ticket",
+    grupo: "site",
+    titulo: "Ilustração do topo (ordem de serviço)",
+    ajuda: "Exemplo de OS desenhado ao lado do título. Aparece quando não há imagem de destaque.",
+    campos: [
+      t("numero", "Número da OS", { max: 12 }),
+      t("cliente", "Cliente", { max: 40 }),
+      t("equipamento", "Equipamento", { max: 60 }),
+      t("defeito", "Defeito relatado", { max: 80 }),
+      t("garantia", "Garantia", { max: 20 }),
+      t("total", "Total", { max: 20 }),
+      {
+        nome: "etapas", rotulo: "Etapas", tipo: "lista", max: 6,
+        campos: [
+          t("titulo", "Etapa", { max: 30 }),
+          t("quando", "Quando", { max: 20 }),
+          { nome: "estado", rotulo: "Situação", tipo: "escolha", opcoes: [{ id: "feito", rotulo: "Concluída" }, { id: "atual", rotulo: "Atual" }, { id: "", rotulo: "Pendente" }] },
+        ],
+      },
+      t("rodape", "Rodapé da ilustração", { max: 80 }),
+    ],
+    padrao: {
+      numero: "0427",
+      cliente: "Carla Menezes",
+      equipamento: "Notebook Dell Inspiron 15",
+      defeito: "Não liga após queda de energia",
+      garantia: "90 dias",
+      total: "R$ 380,00",
+      etapas: [
+        { titulo: "Entrada", quando: "09:12", estado: "feito" },
+        { titulo: "Diagnóstico", quando: "10:40", estado: "feito" },
+        { titulo: "Aguardando peça", quando: "ontem", estado: "feito" },
+        { titulo: "Pronto para retirada", quando: "agora", estado: "atual" },
+        { titulo: "Entregue", quando: "", estado: "" },
+      ],
+      rodape: "Cliente avisado por e-mail · PDF de entrada emitido",
     },
   },
   {
@@ -107,11 +197,10 @@ const SECOES = [
     grupo: "site",
     titulo: "Telas do sistema",
     campos: [
-      { nome: "ativo", rotulo: "Exibir seção", tipo: "booleano" },
       t("titulo", "Título da seção"),
       { nome: "imagens", rotulo: "Imagens", tipo: "lista", max: 8, campos: [{ nome: "imagem", rotulo: "Imagem", tipo: "imagem" }, t("legenda", "Legenda", { max: 120 })] },
     ],
-    padrao: { ativo: false, titulo: "Conheça o sistema por dentro", imagens: [] },
+    padrao: { titulo: "Conheça o sistema por dentro", imagens: [] },
   },
   {
     chave: "site.planos",
@@ -135,11 +224,10 @@ const SECOES = [
     grupo: "site",
     titulo: "Depoimentos",
     campos: [
-      { nome: "ativo", rotulo: "Exibir seção", tipo: "booleano" },
       t("titulo", "Título da seção"),
       { nome: "itens", rotulo: "Depoimentos", tipo: "lista", max: 9, campos: [t("nome", "Nome", { max: 80 }), t("empresa", "Empresa / cidade", { max: 80 }), area("texto", "Depoimento", { max: 500 })] },
     ],
-    padrao: { ativo: false, titulo: "Quem usa, recomenda", itens: [] },
+    padrao: { titulo: "Quem usa, recomenda", itens: [] },
   },
   {
     chave: "site.faq",
@@ -169,6 +257,76 @@ const SECOES = [
       titulo: "Pronto para organizar sua assistência?",
       texto: "Teste grátis por 7 dias. Se gostar, escolha o plano que faz sentido para você.",
       botao: "Baixar e testar grátis",
+    },
+  },
+  {
+    chave: "pagina.teste_gratis",
+    grupo: "paginas",
+    titulo: "Página de teste grátis",
+    campos: [
+      t("selo", "Selo acima do título", { max: 60 }),
+      t("titulo", "Título", { max: 120 }),
+      area("subtitulo", "Subtítulo", { max: 300 }),
+      { nome: "passos", rotulo: "Passos", tipo: "lista", max: 5, campos: [t("titulo", "Título", { max: 60 }), area("texto", "Texto", { max: 300 })] },
+      t("botao", "Botão de download", { max: 40 }),
+      area("semDownload", "Aviso quando não há link de instalador", { max: 300 }),
+      t("linkPlanos", "Link para os planos", { max: 60 }),
+    ],
+    padrao: {
+      selo: "7 dias grátis · sem cartão",
+      titulo: "Teste o GSTI App na sua bancada",
+      subtitulo: "O teste é feito no próprio sistema, no seu computador, com os seus dados.",
+      passos: [
+        { titulo: "Baixe e instale", texto: "Execute o instalador no computador da assistência. É necessário ter o PostgreSQL instalado (o guia de instalação explica em poucos passos)." },
+        { titulo: "Escolha o teste grátis", texto: "Na primeira abertura, na tela de ativação, selecione Testar 7 dias grátis e informe seu e-mail. Não pedimos cartão." },
+        { titulo: "Use à vontade", texto: "Durante 7 dias todos os recursos ficam liberados. Gostou? Compre um plano e ative com a chave recebida por e-mail — seus dados continuam no banco." },
+      ],
+      botao: "Baixar o instalador",
+      semDownload: "O instalador estará disponível para download em breve.",
+      linkPlanos: "Prefiro ver os planos",
+    },
+  },
+  {
+    chave: "pagina.checkout",
+    grupo: "paginas",
+    titulo: "Retorno do pagamento",
+    ajuda: "Página exibida quando o cliente volta do Mercado Pago.",
+    campos: [
+      t("aguardandoTitulo", "Aguardando · título", { max: 80 }),
+      area("aguardandoTexto", "Aguardando · texto", { max: 400 }),
+      t("pagoTitulo", "Confirmado · título", { max: 80 }),
+      area("pagoTexto", "Confirmado · texto (use {{email}} para o e-mail do cliente)", { max: 400 }),
+      t("falhaTitulo", "Não concluído · título", { max: 80 }),
+      area("falhaTexto", "Não concluído · texto", { max: 400 }),
+    ],
+    padrao: {
+      aguardandoTitulo: "Confirmando seu pagamento…",
+      aguardandoTexto: "Pix costuma confirmar em segundos. Boleto pode levar até 3 dias úteis — você recebe a chave por e-mail assim que for compensado.",
+      pagoTitulo: "Pagamento confirmado!",
+      pagoTexto: "Enviamos a chave de licença para {{email}}. Verifique também a caixa de spam.",
+      falhaTitulo: "O pagamento não foi concluído",
+      falhaTexto: "Nenhuma cobrança foi feita. Você pode tentar novamente com outra forma de pagamento.",
+    },
+  },
+  {
+    chave: "pagina.cliente",
+    grupo: "paginas",
+    titulo: "Área do cliente",
+    campos: [
+      t("titulo", "Título da tela de acesso", { max: 80 }),
+      area("texto", "Instruções", { max: 400 }),
+      t("botao", "Botão", { max: 40 }),
+      t("enviadoTitulo", "Confirmação · título", { max: 80 }),
+      area("enviadoTexto", "Confirmação · texto", { max: 400 }),
+      area("renovarTexto", "Texto da página de renovação", { max: 300 }),
+    ],
+    padrao: {
+      titulo: "Acesse suas licenças",
+      texto: "Informe o e-mail usado na compra. Enviaremos um link de acesso — sem senha.",
+      botao: "Enviar link de acesso",
+      enviadoTitulo: "Confira seu e-mail",
+      enviadoTexto: "Se houver compras com esse endereço, o link chega em instantes. Ele vale por 30 minutos.",
+      renovarTexto: "A renovação soma 12 meses à validade atual — você não perde nenhum dia.",
     },
   },
   {
@@ -234,6 +392,25 @@ function limparValor(campo, v) {
   switch (campo.tipo) {
     case "booleano":
       return !!v;
+    case "escolha": {
+      const ids = campo.opcoes.map((o) => o.id);
+      return ids.includes(v) ? v : ids[ids.length - 1];
+    }
+    case "ordem": {
+      // Mantém apenas ids conhecidos, sem repetir, e acrescenta os que faltarem.
+      const conhecidos = campo.opcoes.map((o) => o.id);
+      const enviados = Array.isArray(v) ? v : [];
+      const vistos = new Set();
+      const out = [];
+      for (const item of enviados) {
+        const id = item && item.id;
+        if (!conhecidos.includes(id) || vistos.has(id)) continue;
+        vistos.add(id);
+        out.push({ id, visivel: item.visivel !== false });
+      }
+      for (const id of conhecidos) if (!vistos.has(id)) out.push({ id, visivel: true });
+      return out;
+    }
     case "lista": {
       const arr = Array.isArray(v) ? v.slice(0, campo.max || 50) : [];
       return arr.map((item) => limparObjeto(campo.campos, item || {}));
@@ -263,11 +440,25 @@ function secao(chave) {
   return s;
 }
 
+let sobreposicao = null;
+
+/** Renderiza algo com valores ainda não salvos (pré-visualização do painel). */
+function comSobreposicao(mapa, fn) {
+  sobreposicao = mapa || null;
+  try {
+    return fn();
+  } finally {
+    sobreposicao = null;
+  }
+}
+
 function obter(chave) {
   const s = secao(chave);
   const row = abrir().prepare("SELECT valor FROM conteudo WHERE chave = ?").get(chave);
   const salvo = row ? JSON.parse(row.valor) : {};
-  return { ...s.padrao, ...salvo };
+  const base = { ...s.padrao, ...salvo };
+  if (sobreposicao && sobreposicao[chave]) return limparObjeto(s.campos, { ...base, ...sobreposicao[chave] });
+  return base;
 }
 
 function obterVarios(chaves) {
@@ -321,4 +512,4 @@ function restaurar(chave, historicoId, autor) {
   return salvar(chave, JSON.parse(h.valor), autor);
 }
 
-module.exports = { SECOES, obter, obterVarios, salvar, listarSecoes, detalheSecao, historico, restaurar };
+module.exports = { SECOES, BLOCOS_HOME, obter, obterVarios, salvar, listarSecoes, detalheSecao, historico, restaurar, comSobreposicao };
