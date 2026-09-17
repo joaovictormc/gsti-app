@@ -9,10 +9,10 @@
     "dev:main": "electron .",
     "build": "npm run build --prefix renderer",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win --x64",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux --docker",
+    "dist": "node scripts/notas-da-versao.js && npm run build && electron-builder",
+    "dist:win": "node scripts/notas-da-versao.js && npm run build && electron-builder --win --x64",
+    "dist:mac": "node scripts/notas-da-versao.js && npm run build && electron-builder --mac",
+    "dist:linux": "node scripts/notas-da-versao.js && npm run build && electron-builder --linux --docker",
     "test": "node --test \"tests/unit/*.test.js\"",
     "test:e2e": "npm run build && node tests/e2e/rodar.js"
   },
@@ -30,6 +30,7 @@
     "axios": "^1.13.0",
     "bcryptjs": "^3.0.3",
     "chart.js": "^4.5.1",
+    "electron-updater": "^6.8.9",
     "exceljs": "^3.4.0",
     "node-forge": "^1.4.0",
     "nodemailer": "^8.0.10",
@@ -57,6 +58,7 @@
       "config-segredos.js",
       "controle-acesso.js",
       "modulos.js",
+      "atualizacoes.js",
       "fiscal-emissores.js",
       "fiscal-certificado.js",
       "fiscal-notaas.js",
@@ -86,7 +88,17 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "license": "build_resources/LICENSE.txt"
+      "license": "build_resources/LICENSE.txt",
+      "artifactName": "GSTI-App-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "http://localhost:3030/atualizacoes/win"
+      }
+    ],
+    "releaseInfo": {
+      "releaseNotesFile": "build_resources/notas-da-versao.md"
     }
   }
 }

@@ -38,6 +38,10 @@ Equipe (área admin)
   redefinir-senha --email E        Gera nova senha temporária (desbloqueia o login)
   resetar-2fa --email E            Remove a verificação em duas etapas
 
+Atualizações do app
+  publicar-atualizacao <pasta>     Publica a versão gerada por "npm run dist:win" (pasta dist_electron)
+  atualizacao                      Mostra a versão publicada
+
 Outros
   importar-clientes <clientes.json>  Emite licenças para os clientes ativos do formato v1
   auditoria [--limite N]
@@ -69,7 +73,7 @@ function mostrarLicenca(l) {
   console.log(`  chave:     GSTI-…-${l.chave_final}   validade: ${data(l.valida_ate)}   máquinas: ${l.max_maquinas}`);
 }
 
-function executar() {
+async function executar() {
   const [cmd, ...resto] = process.argv.slice(2);
   const { pos, op } = parse(resto);
 
@@ -180,6 +184,20 @@ Usuário criado: ${r.usuario.email} (${r.usuario.papeis.join(", ")})`);
       else { auth.resetar2fa(u.id, "cli"); console.log("Verificação em duas etapas removida."); }
       break;
     }
+    case "publicar-atualizacao": {
+      if (!pos[0]) throw new Error("Informe a pasta com o latest.yml e o instalador (dist_electron).");
+      const info = await require("./lib/atualizacoes").publicar(pos[0]);
+      console.log(`\nVersão ${info.versao} publicada (${info.arquivo}, ${(info.tamanho / 1048576).toFixed(1)} MB).`);
+      console.log("Os apps com licença válida recebem a atualização na próxima verificação (ao abrir e a cada 6 h).\n");
+      break;
+    }
+    case "atualizacao": {
+      const info = require("./lib/atualizacoes").publicada();
+      if (!info) return console.log("Nenhuma atualização publicada.");
+      console.log(`Versão ${info.versao} · ${info.arquivo} · publicada em ${new Date(info.dataPublicacao).toLocaleString("pt-BR")}`);
+      console.log(`Instalador: ${info.instaladorPresente ? "ok" : "AUSENTE"} · blockmap: ${info.blockmapPresente ? "ok" : "ausente"}`);
+      break;
+    }
     case "auditoria":
       console.table(L.listarAuditoria(op.limite || 50).map((a) => ({
         quando: new Date(a.criado_em).toLocaleString("pt-BR"), ator: a.ator, acao: a.acao, alvo: a.alvo, dados: a.dados,
@@ -190,9 +208,7 @@ Usuário criado: ${r.usuario.email} (${r.usuario.papeis.join(", ")})`);
   }
 }
 
-try {
-  executar();
-} catch (e) {
+executar().catch((e) => {
   console.error(`Erro: ${e.message}`);
   process.exit(1);
-}
+});

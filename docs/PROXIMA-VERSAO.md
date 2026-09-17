@@ -111,9 +111,11 @@ os avançados depois, sem gerar uma build diferente para cada plano.
    [CHANGELOG](../CHANGELOG.md)): módulos por oferta, por licença e do teste no painel;
    app esconde/bloqueia o que não foi contratado (processo principal e interface); área do
    cliente mostra os módulos. Detalhes em [license-server/README.md](../license-server/README.md#venda-por-módulos).
-2. **Atualização automática do app** — receber versões e módulos novos sem reinstalar
-   (electron-updater publicando no servidor/VPS ou no GitHub Releases), com aviso "nova
-   versão disponível" e notas da versão.
+2. ~~**Atualização automática do app**~~ — **entregue**: electron-updater servido pelo
+   próprio servidor de licenças (`/atualizacoes/win`, só para licenças válidas), download em
+   segundo plano, aviso com notas da versão (geradas do CHANGELOG) e seção em Configurações.
+   Publicação: `node admin.js publicar-atualizacao dist_electron`. Ver
+   [license-server/README.md](../license-server/README.md#atualizações-do-app).
 3. **Suporte e helpdesk básico** — página de suporte no site (relatos, erros, dúvidas, com
    anexo), tickets no painel admin (atribuição, status, respostas), acompanhamento na área
    do cliente e aviso por e-mail a cada resposta; atalho "Abrir chamado" dentro do app com

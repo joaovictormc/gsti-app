@@ -10,10 +10,19 @@
     o botão "Ver planos". Configurações mostram os módulos do plano.
   - Painel: módulos por oferta, por licença (upgrade) e do teste grátis; área do cliente
     mostra os módulos incluídos.
+- **Atualização automática**: o app procura novas versões ao abrir e a cada 6 horas, baixa
+  em segundo plano e instala ao reiniciar (botão "Reiniciar e atualizar") ou ao fechar.
+  - Aviso "Versão X pronta para instalar" com as novidades; seção **Configurações →
+    Atualizações** com a versão instalada, o andamento e "Verificar atualizações".
+  - Só licenças válidas (ou teste no prazo) recebem; dados e configurações são mantidos.
+  - Servidor: `node admin.js publicar-atualizacao dist_electron`; *Painel → Sistema* mostra a
+    versão publicada.
 
 ### Compatibilidade
 - Licenças já emitidas e tokens antigos continuam com todos os módulos.
 - Ofertas existentes passam a vender só a base até os módulos serem marcados no painel.
+- O instalador passa a se chamar `GSTI-App-Setup-<versão>.exe`. Quem tem a 1.3.0 ou
+  anterior instala a 1.4.0 manualmente uma vez; daí em diante as versões chegam sozinhas.
 
 ## 1.3.0 — 2026-09
 

@@ -100,7 +100,19 @@ Idealmente em uma **máquina limpa** (ou VM):
 
 ---
 
-## 7. Publicação no GitHub Release
+## 7. Publicar a atualização automática
+
+- [ ] Seção `## <versão>` no `CHANGELOG.md` (vira as notas exibidas no app).
+- [ ] Conferir em `dist_electron/latest.yml` a versão, o `path` `GSTI-App-Setup-<versão>.exe`
+  e as `releaseNotes`.
+- [ ] Copiar `latest.yml`, o instalador e o `.blockmap` para o servidor e rodar
+  `node admin.js publicar-atualizacao <pasta>`.
+- [ ] *Painel → Sistema* mostra a versão publicada; um app com a versão anterior recebe o aviso
+  (ou use *Configurações → Atualizações → Verificar atualizações*).
+
+---
+
+## 8. Publicação no GitHub Release
 
 - [ ] Criar **tag** igual à versão do `package.json` (ex.: `v2.0.0`).
 - [ ] Anexar o **instalador** de `dist_electron/`.

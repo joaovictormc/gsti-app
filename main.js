@@ -5030,10 +5030,27 @@ function createWindow() {
   }
 }
 
+// --- ATUALIZAÇÃO AUTOMÁTICA ---
+// Servidor = o mesmo das licenças; só licenças válidas baixam (ver atualizacoes.js).
+const { criarAtualizador } = require("./atualizacoes");
+const atualizador = criarAtualizador({
+  app,
+  obterServidor: () => licenseManager.serverUrl(),
+  obterToken: () => appConfig?.license?.token || "",
+  aoMudar: (estado) => {
+    for (const janela of BrowserWindow.getAllWindows()) janela.webContents.send("atualizacao-status", estado);
+  },
+});
+
+ipcMain.handle("get-update-status", async () => ({ success: true, estado: atualizador.estado() }));
+ipcMain.handle("check-for-updates", async () => ({ success: true, estado: await atualizador.verificar() }));
+ipcMain.handle("install-update", async () => atualizador.instalar());
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null); // barra de título própria, sem Arquivo/Editar/Exibir
   iniciarConfiguracao();
   createWindow();
+  atualizador.iniciar();
   // Revalida a licença periodicamente enquanto o app fica aberto.
   setInterval(() => {
     if (appConfig && appConfig.license && appConfig.license.token) {

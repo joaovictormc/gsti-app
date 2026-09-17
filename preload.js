@@ -39,6 +39,16 @@ contextBridge.exposeInMainWorld('api', {
   emitirNFSeIntegrada: (dados) => ipcRenderer.invoke('emitir-nfse-integrada', dados),
   atualizarNota: (id) => ipcRenderer.invoke('atualizar-nota', id),
 
+  // Atualização automática
+  getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateStatus: (callback) => {
+    const ouvinte = (_evento, estado) => callback(estado);
+    ipcRenderer.on('atualizacao-status', ouvinte);
+    return () => ipcRenderer.removeListener('atualizacao-status', ouvinte);
+  },
+
   // Barra de título própria
   plataforma: process.platform,
   definirTemaBarraTitulo: (modo) => ipcRenderer.invoke('set-title-bar-theme', modo),

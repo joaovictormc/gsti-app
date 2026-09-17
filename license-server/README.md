@@ -283,7 +283,33 @@ node admin.js oferta anual-avulso --preco 497,00 --ativar
 node admin.js suspender <ref> --motivo "Pagamento em atraso"
 node admin.js redefinir-senha --email pessoa@exemplo.com
 node admin.js resetar-2fa --email pessoa@exemplo.com
+node admin.js publicar-atualizacao dist_electron   # nova versão do app
 ```
+
+### Atualizações do app
+
+O servidor distribui as novas versões do app (electron-updater). O app consulta
+`/atualizacoes/win/latest.yml` ao abrir e a cada 6 h enviando o token da licença; só
+**licenças ativas e não vencidas** (ou teste no prazo) baixam — as demais recebem 401/403.
+
+```bash
+# na máquina de build: versão nova no package.json + seção no CHANGELOG.md
+npm run dist:win          # gera dist_electron/latest.yml, o instalador e o .blockmap
+# copie esses três arquivos para o servidor e publique:
+node admin.js publicar-atualizacao /caminho/dist_electron
+node admin.js atualizacao # versão publicada
+```
+
+- Os arquivos ficam em `data/atualizacoes/win` (a versão atual e a anterior). O instalador é
+  conferido pelo sha512 do `latest.yml`, que é trocado por último.
+- As **notas da versão** vêm da seção da versão no `CHANGELOG.md`
+  (`scripts/notas-da-versao.js`, rodado pelo `dist:win`) e aparecem no aviso do app.
+- O app baixa em segundo plano e instala ao reiniciar ou fechar. *Painel → Sistema* mostra a
+  versão publicada.
+- O endereço é o `serverUrl` do app (`license-config.js` ou `config.json`); a URL em
+  `build.publish` no `package.json` é só referência.
+- Enquanto o instalador não tiver assinatura digital, o Windows pode exibir o SmartScreen na
+  instalação manual; a atualização automática não passa por ele.
 
 ## 7. Chaves de assinatura
 
@@ -304,6 +330,7 @@ Copie **`data/`** inteira diariamente para fora da VPS (cifrada). Instale o `sql
 ```bash
 sqlite3 data/licencas.db ".backup /caminho/backup/licencas-$(date +%F).db"
 tar czf /caminho/backup/gsti-data-$(date +%F).tgz -C data keys uploads .env config.key
+# data/atualizacoes não precisa de backup: basta publicar a versão de novo
 ```
 
 Perder `keys/` invalida as licenças; perder o banco perde clientes e pedidos; perder

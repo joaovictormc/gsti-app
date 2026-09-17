@@ -4,6 +4,7 @@
  *   /              landing page, páginas legais, checkout e portal do cliente
  *   /v2/*          API do aplicativo (ativação, validação, transferência, trial)
  *   /webhooks/*    notificações do Mercado Pago
+ *   /atualizacoes  atualização automática do app (exige licença válida)
  *   /admin         painel da equipe (SPA em public/admin) + /admin/api
  *   /health        verificação de saúde
  *
@@ -48,6 +49,9 @@ app.post(["/ativar", "/trial", "/validar"], (_req, res) => {
 });
 
 app.use("/webhooks", require("./routes/webhooks"));
+
+// Atualização automática do app (arquivos em data/atualizacoes)
+app.use("/atualizacoes", require("./routes/atualizacoes"));
 
 // Área administrativa
 app.use("/admin/api", require("./routes/admin-api"));

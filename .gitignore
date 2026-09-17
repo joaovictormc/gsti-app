@@ -9,3 +9,6 @@ license-server/trials.json
 
 # Capturas dos testes de ponta a ponta
 tests/e2e/saida/
+
+# Gerado no build a partir do CHANGELOG.md
+build_resources/notas-da-versao.md

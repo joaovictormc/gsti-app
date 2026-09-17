@@ -315,6 +315,12 @@ Painel com seletor de período (datas ou atalhos "Este mês", "Mês passado",
 - **Licenciamento e Ativação**: mostra o status da licença (ativa/teste, validade,
   dias restantes), os **módulos incluídos no plano** e o botão **Verificar agora** (aplica na
   hora uma mudança de plano feita pelo suporte).
+- **Atualizações**: o sistema procura novas versões sozinho (ao abrir e a cada 6 horas) e
+  baixa em segundo plano. Quando a versão estiver pronta, aparece o aviso **Versão X pronta
+  para instalar** com as novidades: clique em **Reiniciar e atualizar** ou apenas feche o
+  sistema no fim do expediente — a instalação acontece ao fechar. Os dados e as
+  configurações são mantidos. Aqui também dá para **Verificar atualizações** na hora.
+  É preciso ter licença válida e internet.
 
 🖼️ *Tela de configurações.*
 

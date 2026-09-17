@@ -46,6 +46,7 @@ import { useAuth } from "../contexts/AuthContext"; // Para verificar se é admin
 import { PERFIS_CONFIGURAVEIS, PERMISSOES } from "../constants/perfis";
 import ConfigNotaFiscal from "./ConfigNotaFiscal";
 import { AvisoModulo } from "./ModuloBloqueado";
+import { SecaoAtualizacoes } from "./Atualizacao";
 import { MODULOS } from "../constants/modulos";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
@@ -895,6 +896,9 @@ function SettingsScreen() {
         </DialogActions>
       </Dialog>
       {/* --- FIM Licenciamento --- */}
+
+      {/* --- Atualizações --- */}
+      <SecaoAtualizacoes />
 
       {/* --- Permissões por perfil --- */}
       <Paper sx={{ p: 3, mb: 3 }}>

@@ -45,6 +45,7 @@ import {
   LockOutlined as LockOutlinedIcon,
 } from "@mui/icons-material";
 import { ModuloBloqueado } from "./components/ModuloBloqueado";
+import { AvisoAtualizacao } from "./components/Atualizacao";
 import { MODULO_DA_TELA } from "./constants/modulos";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -762,6 +763,7 @@ function App() {
                 {licenseWarning.text}
               </Alert>
             )}
+            <AvisoAtualizacao />
             <ComponentToRender />
           </Box>
         </Box>

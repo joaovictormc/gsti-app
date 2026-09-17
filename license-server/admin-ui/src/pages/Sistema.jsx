@@ -83,6 +83,15 @@ export default function Sistema() {
           <Item rotulo="Chaves de licença" ok={s.chaves.length > 0} detalhe={<>Assinando com <Box component="span" sx={mono}>{s.chaveAtiva}</Box>{s.chaves.length > 1 && ` · aceitas: ${s.chaves.join(", ")}`}</>} />
         </Grid>
         <Grid size={12}>
+          <Item
+            rotulo="Atualização do app publicada"
+            ok={!!s.atualizacao?.instaladorPresente}
+            detalhe={s.atualizacao
+              ? <>Versão <strong>{s.atualizacao.versao}</strong> · {s.atualizacao.arquivo}{s.atualizacao.tamanho ? ` (${(s.atualizacao.tamanho / 1048576).toFixed(1)} MB)` : ""} · publicada em {dataHora(s.atualizacao.dataPublicacao)}{!s.atualizacao.instaladorPresente && " — instalador ausente na pasta!"}. Apps com licença válida recebem ao abrir e a cada 6 h.</>
+              : <>Nenhuma versão publicada. No servidor: <Box component="span" sx={mono}>node admin.js publicar-atualizacao &lt;pasta dist_electron&gt;</Box></>}
+          />
+        </Grid>
+        <Grid size={12}>
           {!/^https:/.test(s.publicUrl) && <Alert severity="warning">PUBLIC_URL não usa HTTPS: o Mercado Pago não envia notificações para este endereço. A conciliação automática (a cada 30 min) continua funcionando.</Alert>}
         </Grid>
       </Grid>

@@ -460,6 +460,7 @@ r.get("/sistema", eq("sistema.ver"), rota((req) => {
     podeConfigurar: auth.tem(req.equipe, "sistema.configurar"),
     chaves: keys.kids(),
     chaveAtiva: keys.kidAtivo(),
+    atualizacao: require("../lib/atualizacoes").publicada(),
     eventos: db.prepare("SELECT id, tipo, acao, recurso_id, recebido_em, processado_em, tentativas, erro FROM eventos_webhook ORDER BY id DESC LIMIT 50").all(),
     emails: db.prepare("SELECT * FROM emails_log ORDER BY id DESC LIMIT 50").all(),
   };
