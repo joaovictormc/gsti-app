@@ -355,4 +355,17 @@ Painel com seletor de período (datas ou atalhos "Este mês", "Mês passado",
   permissão; o administrador ajusta em Configurações → Permissões por perfil.
 - **Zoom da tela**: `Ctrl +`, `Ctrl -` e `Ctrl 0`.
 
-**Suporte:** pelo e-mail de suporte informado no site do produto.
+### Abrir um chamado de suporte
+
+1. Clique em **Suporte**, na parte de baixo do menu lateral (a tela atual é capturada nesse
+   momento, para você anexar se quiser).
+2. Escolha o **tipo** (erro, dúvida, sugestão, pagamento e licença), escreva o **assunto** e
+   **o que aconteceu**. Confira o **e-mail para resposta**.
+3. Deixe marcado **Incluir dados técnicos** (versão, sistema, licença, tela e erros recentes —
+   use **Ver o que será enviado** para conferir) e **Anexar captura da tela**, se ajudar.
+4. Clique em **Enviar chamado**. Você recebe o número e o link por e-mail; as respostas
+   também chegam por e-mail.
+
+Em **Meus chamados** aparecem os chamados desta licença e a situação de cada um; clique para
+abrir no navegador, responder e enviar mais arquivos. Sem licença ativa (ou sem internet),
+abra o chamado pelo site, na página **Suporte**.

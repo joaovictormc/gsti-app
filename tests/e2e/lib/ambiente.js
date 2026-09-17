@@ -55,7 +55,7 @@ function simularLicenca(licenca) {
           startTrial: async () => ({ success: true }),
           revalidate: async () => ({ status: { ...licenca }, online: false }),
           deactivate: async () => ({ success: true }),
-          serverUrl: () => "",
+          serverUrl: () => licenca.serverUrl || "",
         }),
       };
     }

@@ -24,14 +24,15 @@ const PAPEIS = {
   licencas: "Licenças e clientes",
   financeiro: "Financeiro",
   conteudo: "Conteúdo do site",
+  suporte: "Suporte",
 };
 
 // permissão -> papéis que a possuem (o papel "admin" tem todas)
 const PERMISSOES = {
-  "painel.ver": ["licencas", "financeiro", "conteudo"],
-  "licencas.ver": ["licencas", "financeiro"],
+  "painel.ver": ["licencas", "financeiro", "conteudo", "suporte"],
+  "licencas.ver": ["licencas", "financeiro", "suporte"],
   "licencas.editar": ["licencas"],
-  "clientes.ver": ["licencas", "financeiro"],
+  "clientes.ver": ["licencas", "financeiro", "suporte"],
   "clientes.editar": ["licencas"],
   "pedidos.ver": ["financeiro", "licencas"],
   "pedidos.editar": ["financeiro"],
@@ -39,6 +40,8 @@ const PERMISSOES = {
   "ofertas.editar": ["financeiro"],
   "conteudo.editar": ["conteudo"],
   "emails.editar": ["conteudo"],
+  "suporte.ver": ["suporte", "licencas"],
+  "suporte.responder": ["suporte", "licencas"],
   "usuarios.gerenciar": [],
   "sistema.ver": [],
   "sistema.configurar": [],

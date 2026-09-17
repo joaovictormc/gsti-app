@@ -256,6 +256,53 @@ const MIGRACOES = [
     atualizado_em  TEXT NOT NULL
   );
   `,
+
+  // 5 — suporte (chamados, mensagens e anexos)
+  `
+  CREATE TABLE chamados (
+    id             INTEGER PRIMARY KEY,
+    cliente_id     INTEGER REFERENCES clientes(id),
+    licenca_id     TEXT,
+    email          TEXT NOT NULL,
+    nome           TEXT,
+    categoria      TEXT NOT NULL,
+    assunto        TEXT NOT NULL,
+    status         TEXT NOT NULL CHECK (status IN ('aberto', 'em_andamento', 'aguardando_cliente', 'resolvido', 'fechado')),
+    prioridade     TEXT NOT NULL DEFAULT 'normal' CHECK (prioridade IN ('baixa', 'normal', 'alta', 'urgente')),
+    origem         TEXT NOT NULL,
+    atribuido_a    INTEGER REFERENCES admin_usuarios(id),
+    dados_tecnicos TEXT,
+    criado_em      TEXT NOT NULL,
+    atualizado_em  TEXT NOT NULL,
+    fechado_em     TEXT
+  );
+  CREATE INDEX ix_chamados_status ON chamados(status, atualizado_em);
+  CREATE INDEX ix_chamados_email ON chamados(email);
+  CREATE INDEX ix_chamados_cliente ON chamados(cliente_id);
+
+  CREATE TABLE chamado_mensagens (
+    id          INTEGER PRIMARY KEY,
+    chamado_id  INTEGER NOT NULL REFERENCES chamados(id),
+    autor       TEXT NOT NULL CHECK (autor IN ('cliente', 'equipe', 'sistema')),
+    autor_nome  TEXT,
+    usuario_id  INTEGER,
+    texto       TEXT NOT NULL,
+    interna     INTEGER NOT NULL DEFAULT 0,
+    criado_em   TEXT NOT NULL
+  );
+  CREATE INDEX ix_chamado_mensagens ON chamado_mensagens(chamado_id, id);
+
+  CREATE TABLE chamado_anexos (
+    id            TEXT PRIMARY KEY,
+    chamado_id    INTEGER NOT NULL REFERENCES chamados(id),
+    mensagem_id   INTEGER NOT NULL REFERENCES chamado_mensagens(id),
+    nome_original TEXT NOT NULL,
+    mime          TEXT NOT NULL,
+    tamanho       INTEGER NOT NULL,
+    criado_em     TEXT NOT NULL
+  );
+  CREATE INDEX ix_chamado_anexos ON chamado_anexos(chamado_id);
+  `,
 ];
 
 let db = null;

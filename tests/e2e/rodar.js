@@ -14,6 +14,7 @@ const SUITES = [
   { nome: "fiscal" },
   { nome: "notaas" },
   { nome: "modulos" },
+  { nome: "suporte" },
 ];
 
 const filtro = process.argv.slice(2);

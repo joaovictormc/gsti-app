@@ -46,7 +46,7 @@ export default function Painel() {
   const { dados, erro, carregando, recarregar } = useCarregar(() => get("/painel"), []);
 
   if (carregando) return <Carregando />;
-  const l = dados?.licencas, v = dados?.vendas, s = dados?.sistema;
+  const l = dados?.licencas, v = dados?.vendas, s = dados?.sistema, sp = dados?.suporte;
   const totalAtivas = l ? l.porPlano.reduce((a, p) => a + p.n, 0) : 0;
 
   return (
@@ -64,6 +64,12 @@ export default function Painel() {
       )}
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
+        {sp && (
+          <>
+            <Grid size={{ xs: 12, sm: 6, lg: 3 }}><Numero rotulo="Chamados sem resposta" valor={sp.semResposta} detalhe={`${sp.aberto + sp.em_andamento} em atendimento`} to="/suporte" /></Grid>
+            <Grid size={{ xs: 12, sm: 6, lg: 3 }}><Numero rotulo="Aguardando o cliente" valor={sp.aguardando_cliente} detalhe="Fecham sozinhos após 7 dias sem resposta" to="/suporte?status=aguardando_cliente" /></Grid>
+          </>
+        )}
         {v && (
           <>
             <Grid size={{ xs: 12, sm: 6, lg: 3 }}><Numero rotulo="Vendas no mês" valor={brl(v.mes.total)} detalhe={`${v.mes.n} pedido(s) pago(s)`} to="/pedidos?status=pago" /></Grid>

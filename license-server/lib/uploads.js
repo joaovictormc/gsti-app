@@ -49,4 +49,4 @@ function caminho(id) {
   return fs.existsSync(p) ? { arquivo: p, mime: u.mime } : null;
 }
 
-module.exports = { MAX_BYTES, salvar, listar, caminho };
+module.exports = { MAX_BYTES, detectarTipo, salvar, listar, caminho };

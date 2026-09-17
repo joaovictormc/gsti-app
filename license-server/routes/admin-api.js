@@ -10,6 +10,8 @@ const { MODULOS } = require("../lib/modulos");
 const vendas = require("../lib/vendas");
 const conteudo = require("../lib/conteudo");
 const uploads = require("../lib/uploads");
+const suporte = require("../lib/suporte");
+const { enviarAnexo } = require("./suporte");
 const email = require("../lib/email");
 const mp = require("../lib/mercadopago");
 const keys = require("../lib/keys");
@@ -101,6 +103,10 @@ r.get("/painel", eq("painel.ver"), rota((req) => {
            FROM pedidos p JOIN clientes c ON c.id = p.cliente_id ORDER BY p.criado_em DESC LIMIT 8`
       ).all(),
     };
+  }
+  if (auth.tem(req.equipe, "suporte.ver")) {
+    const { porStatus, semResposta } = suporte.contagens();
+    out.suporte = { ...porStatus, semResposta };
   }
   if (auth.tem(req.equipe, "sistema.ver")) {
     out.sistema = {
@@ -422,6 +428,59 @@ r.post(
 );
 
 r.get("/uploads", eq("conteudo.editar"), rota(() => ({ success: true, itens: uploads.listar() })));
+
+// ============================================================================
+// Suporte
+// ============================================================================
+
+r.get("/suporte/chamados", eq("suporte.ver"), rota((req) => {
+  const { limite, offset, pagina: p } = pagina(req);
+  const { total, itens } = suporte.listar({
+    status: req.query.status, categoria: req.query.categoria, atribuido: req.query.atribuido, busca: req.query.busca,
+    limite, offset, usuarioId: req.equipe.id,
+  });
+  return {
+    success: true, total, itens, pagina: p, porPagina: limite, contagens: suporte.contagens(),
+    categorias: suporte.CATEGORIAS, status: suporte.STATUS, prioridades: suporte.PRIORIDADES, origens: suporte.ORIGENS,
+  };
+}));
+
+r.get("/suporte/chamados/:id", eq("suporte.ver"), rota((req) => {
+  const chamado = suporte.detalhe(req.params.id, { publico: false });
+  const db = abrir();
+  const cliente = chamado.clienteId ? db.prepare("SELECT id, nome, email FROM clientes WHERE id = ?").get(chamado.clienteId) : null;
+  const licencas = cliente
+    ? db.prepare("SELECT id, plano, status, valida_ate, chave_final FROM licencas WHERE cliente_id = ? ORDER BY criado_em DESC").all(cliente.id)
+    : [];
+  const equipe = db.prepare("SELECT id, nome, papeis FROM admin_usuarios WHERE ativo = 1 ORDER BY nome").all()
+    .filter((u) => auth.tem({ papeis: JSON.parse(u.papeis || "[]") }, "suporte.responder"))
+    .map(({ id, nome }) => ({ id, nome }));
+  return {
+    success: true, chamado, cliente, licencas, equipe, link: suporte.linkDoChamado(chamado.id),
+    categorias: suporte.CATEGORIAS, status: suporte.STATUS, prioridades: suporte.PRIORIDADES, origens: suporte.ORIGENS,
+  };
+}));
+
+r.post("/suporte/chamados/:id/mensagens", eq("suporte.responder"), rota((req) =>
+  suporte.responderEquipe(req.params.id, { texto: req.body?.texto, interna: !!req.body?.interna, status: req.body?.status }, req.equipe)
+));
+
+r.put("/suporte/chamados/:id", eq("suporte.responder"), rota((req) =>
+  suporte.atualizarChamado(req.params.id, { status: req.body?.status, prioridade: req.body?.prioridade, atribuidoA: req.body?.atribuidoA }, req.equipe)
+));
+
+r.post(
+  "/suporte/chamados/:id/mensagens/:mensagemId/anexos",
+  eq("suporte.responder"),
+  express.raw({ type: () => true, limit: suporte.MAX_ANEXO + 1024 }),
+  rota((req) => suporte.anexar(req.params.id, req.params.mensagemId, req.body, decodeURIComponent(String(req.headers["x-nome-arquivo"] || "")), { autor: "equipe" }))
+);
+
+r.get("/suporte/chamados/:id/anexos/:anexoId", eq("suporte.ver"), rota((req, res) => {
+  const a = suporte.arquivoDoAnexo(req.params.id, req.params.anexoId, { publico: false });
+  if (!a) throw new LicencaErro("NAO_ENCONTRADO", "Arquivo não encontrado.", 404);
+  enviarAnexo(res, a);
+}));
 
 // ============================================================================
 // Equipe

@@ -37,6 +37,36 @@
     return n;
   }
 
+  const STATUS_CHAMADO = { aberto: "Aberto", em_andamento: "Em andamento", aguardando_cliente: "Aguardando você", resolvido: "Resolvido", fechado: "Fechado" };
+  const MAX_ARQUIVOS = 5;
+  const MAX_BYTES_ARQUIVO = 5 * 1024 * 1024;
+
+  function conferirArquivos(input) {
+    const arquivos = input ? [...input.files] : [];
+    if (arquivos.length > MAX_ARQUIVOS) return { erro: `Envie no máximo ${MAX_ARQUIVOS} arquivos.` };
+    const grande = arquivos.find((a) => a.size > MAX_BYTES_ARQUIVO);
+    if (grande) return { erro: `"${grande.name}" passa de 5 MB.` };
+    return { arquivos };
+  }
+
+  // Envia os arquivos de uma mensagem; devolve a lista dos que falharam
+  async function enviarArquivos(base, mensagemId, arquivos, { token, csrf } = {}) {
+    const falhas = [];
+    for (const arquivo of arquivos) {
+      const headers = { "Content-Type": "application/octet-stream", "X-Nome-Arquivo": encodeURIComponent(arquivo.name) };
+      if (csrf) headers["X-CSRF-Token"] = csrf;
+      const url = `${base}/mensagens/${mensagemId}/anexos${token ? `?t=${encodeURIComponent(token)}` : ""}`;
+      try {
+        const resp = await fetch(url, { method: "POST", headers, body: arquivo, credentials: "same-origin" });
+        const json = await resp.json().catch(() => ({}));
+        if (!resp.ok || json.success === false) throw new Error(json.error || "falha no envio");
+      } catch (e) {
+        falhas.push(`${arquivo.name}: ${e.message}`);
+      }
+    }
+    return falhas;
+  }
+
   function mostrarErro(form, msg) {
     const p = $(".form__erro", form);
     if (!p) return;
@@ -265,10 +295,163 @@
       }
     }
 
+    async function carregarChamados() {
+      const alvo = $("[data-chamados]", painel);
+      try {
+        const r = await api("GET", "/api/cliente/chamados");
+        if (!r.itens.length) return alvo.replaceChildren(el("p", { class: "vazio", text: "Nenhum chamado. Precisa de ajuda? Abra um chamado." }));
+        const corpo = el("tbody", {}, r.itens.map((c) => el("tr", {}, [
+          el("td", { text: `#${c.numero}` }),
+          el("td", {}, el("a", { href: c.url, text: c.assunto })),
+          el("td", {}, el("span", { class: `status status--${c.status}`, text: STATUS_CHAMADO[c.status] || c.status })),
+          el("td", { text: data(c.atualizado_em) }),
+        ])));
+        alvo.replaceChildren(el("div", { class: "tabela-rolagem" }, el("table", { class: "tabela" }, [
+          el("thead", {}, el("tr", {}, ["Nº", "Assunto", "Situação", "Atualizado"].map((t) => el("th", { text: t })))),
+          corpo,
+        ])));
+      } catch (e) {
+        alvo.replaceChildren(el("p", { class: "vazio", text: e.message }));
+      }
+    }
+    carregarChamados();
+
     $("[data-sair]", painel).addEventListener("click", async () => {
       await api("POST", "/api/cliente/sair").catch(() => {});
       window.location.assign("/cliente");
     });
+    carregar();
+  }
+
+  // ---------------- Suporte: abrir chamado ----------------
+  const suporteForm = $("#suporte-form");
+  if (suporteForm) {
+    suporteForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      mostrarErro(suporteForm, "");
+      const f = suporteForm;
+      const campos = { email: f.email.value.trim(), categoria: f.categoria.value, assunto: f.assunto.value.trim(), mensagem: f.mensagem.value.trim() };
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campos.email)) { f.email.focus(); return mostrarErro(f, "Informe um e-mail válido para receber as respostas."); }
+      if (!campos.categoria) { f.categoria.focus(); return mostrarErro(f, "Escolha o tipo do chamado."); }
+      if (campos.assunto.length < 5) { f.assunto.focus(); return mostrarErro(f, "Descreva o assunto em poucas palavras."); }
+      if (campos.mensagem.length < 10) { f.mensagem.focus(); return mostrarErro(f, "Conte com mais detalhes o que aconteceu."); }
+      const { arquivos, erro } = conferirArquivos(f.anexos);
+      if (erro) return mostrarErro(f, erro);
+
+      const botao = $("button[type=submit]", f);
+      ocupado(botao, true, "Enviando…");
+      try {
+        const r = await api("POST", "/api/suporte/chamados", { ...campos, nome: f.nome.value.trim(), site: f.site.value });
+        const ok = $("#suporte-ok");
+        if (r.numero) {
+          if (arquivos.length) ocupado(botao, true, "Enviando arquivos…");
+          const falhas = arquivos.length ? await enviarArquivos(`/api/suporte/chamados/${r.id}`, r.mensagemId, arquivos, { token: r.token }) : [];
+          $("[data-numero]", ok).textContent = `Chamado #${r.numero}`;
+          $("[data-acompanhar]", ok).href = `/suporte/chamado/${r.id}?t=${encodeURIComponent(r.token)}`;
+          if (falhas.length) {
+            const aviso = $("[data-aviso-anexos]", ok);
+            aviso.textContent = `Alguns arquivos não foram enviados (${falhas.join("; ")}). Você pode enviá-los na página do chamado.`;
+            aviso.hidden = false;
+          }
+        } else {
+          $("[data-acompanhar]", ok).hidden = true;
+        }
+        f.hidden = true;
+        ok.hidden = false;
+        ok.scrollIntoView({ block: "center" });
+      } catch (e) {
+        mostrarErro(f, e.message);
+        ocupado(botao, false);
+      }
+    });
+  }
+
+  // ---------------- Suporte: página do chamado ----------------
+  const chamadoEl = $("#chamado");
+  if (chamadoEl) {
+    const id = chamadoEl.dataset.id;
+    const token = new URLSearchParams(window.location.search).get("t") || "";
+    const base = `/api/suporte/chamados/${id}`;
+    const q = token ? `?t=${encodeURIComponent(token)}` : "";
+    const dataHora = (iso) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    let csrf = "";
+
+    // Sem link assinado, usa a sessão da área do cliente (precisa do token CSRF)
+    const prepararSessao = async () => {
+      if (token || csrf) return;
+      try { csrf = (await api("GET", "/api/cliente/me")).csrf; } catch { /* sem sessão */ }
+    };
+
+    function renderMensagem(m) {
+      const item = el("li", { class: `mensagem mensagem--${m.autor}` });
+      if (m.autor !== "sistema") {
+        item.append(el("div", { class: "mensagem__topo" }, [
+          el("strong", { text: m.autor === "cliente" ? `${m.autorNome || "Você"}` : m.autorNome }),
+          el("span", { text: dataHora(m.criadoEm) }),
+        ]));
+      }
+      item.append(el("p", { class: "mensagem__texto", text: m.texto }));
+      if (m.anexos.length) {
+        item.append(el("div", { class: "anexos" }, m.anexos.map((a) => {
+          const url = `${base}/anexos/${encodeURIComponent(a.id)}${q}`;
+          return el("a", { class: "anexo", href: url, target: "_blank", rel: "noopener", title: a.nome }, [
+            a.mime.startsWith("image/") ? el("img", { src: url, alt: "" }) : null,
+            document.createTextNode(a.nome),
+          ]);
+        })));
+      }
+      return item;
+    }
+
+    async function carregar() {
+      try {
+        const { chamado: c } = await api("GET", base + q);
+        $("[data-carregando]", chamadoEl).hidden = true;
+        $("[data-conteudo]", chamadoEl).hidden = false;
+        $("[data-numero]", chamadoEl).textContent = `Chamado #${c.numero}`;
+        $("[data-assunto]", chamadoEl).textContent = c.assunto;
+        document.title = `Chamado #${c.numero} · ${document.title.split(" · ").pop()}`;
+        const st = $("[data-status]", chamadoEl);
+        st.className = `status status--${c.status}`;
+        st.textContent = STATUS_CHAMADO[c.status] || c.status;
+        $("[data-datas]", chamadoEl).textContent = `Aberto em ${dataHora(c.criadoEm)} · atualizado em ${dataHora(c.atualizadoEm)}`;
+        $("[data-mensagens]", chamadoEl).replaceChildren(...c.mensagens.map(renderMensagem));
+        const fechado = c.status === "fechado";
+        $("[data-responder]", chamadoEl).hidden = fechado;
+        $("[data-fechado]", chamadoEl).hidden = !fechado;
+      } catch (e) {
+        $("[data-carregando]", chamadoEl).hidden = true;
+        if (e.status === 404) return ($("[data-erro]", chamadoEl).hidden = false);
+        const p = $("[data-carregando]", chamadoEl);
+        p.textContent = e.message;
+        p.hidden = false;
+      }
+    }
+
+    const form = $("#resposta-form");
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      mostrarErro(form, "");
+      const texto = form.texto.value.trim();
+      if (texto.length < 2) { form.texto.focus(); return mostrarErro(form, "Escreva sua mensagem."); }
+      const { arquivos, erro } = conferirArquivos(form.anexos);
+      if (erro) return mostrarErro(form, erro);
+      const botao = $("button[type=submit]", form);
+      ocupado(botao, true, "Enviando…");
+      try {
+        await prepararSessao();
+        const r = await api("POST", `${base}/mensagens${q}`, { texto }, csrf);
+        const falhas = arquivos.length ? await enviarArquivos(base, r.mensagemId, arquivos, { token, csrf }) : [];
+        form.reset();
+        ocupado(botao, false);
+        await carregar();
+        if (falhas.length) mostrarErro(form, `Mensagem enviada, mas alguns arquivos falharam: ${falhas.join("; ")}`);
+      } catch (e) {
+        mostrarErro(form, e.message);
+        ocupado(botao, false);
+      }
+    });
+
     carregar();
   }
 })();

@@ -100,6 +100,10 @@ function portal({ logado }) {
     <p class="form__erro" role="alert" hidden></p>
     <div data-licencas class="portal__licencas"><p class="carregando">Carregando…</p></div>
     <section class="portal__pedidos"><h2>Pedidos</h2><div data-pedidos></div></section>
+    <section class="portal__pedidos portal__chamados" id="chamados">
+      <div class="portal__secao-topo"><h2>Chamados de suporte</h2><a class="btn btn--pequeno" href="/suporte">Abrir chamado</a></div>
+      <div data-chamados><p class="carregando">Carregando…</p></div>
+    </section>
   </div>`;
   return layout({ titulo: "Área do cliente", pagina: "portal", semNav: true, corpo: `<section class="pagina">${logado ? painel : entrar}</section>` });
 }

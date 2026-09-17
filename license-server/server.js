@@ -1,7 +1,7 @@
 /**
  * Plataforma GSTI App — servidor de licenças, vendas, site e área administrativa.
  *
- *   /              landing page, páginas legais, checkout e portal do cliente
+ *   /              landing page, páginas legais, checkout, portal do cliente e suporte
  *   /v2/*          API do aplicativo (ativação, validação, transferência, trial)
  *   /webhooks/*    notificações do Mercado Pago
  *   /atualizacoes  atualização automática do app (exige licença válida)
@@ -65,7 +65,8 @@ app.get(/^\/admin(\/.*)?$/, csp, (_req, res) => {
   res.set("Cache-Control", "no-store").sendFile(index);
 });
 
-// Site público (landing, checkout, portal do cliente)
+// Site público (landing, checkout, portal do cliente) e suporte
+app.use("/", require("./routes/suporte"));
 app.use("/", require("./routes/site"));
 
 app.use((req, res) => {

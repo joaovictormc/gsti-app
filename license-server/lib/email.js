@@ -52,7 +52,7 @@ function layoutHtml(corpoHtml, produto) {
 function montar(modelo, vars = {}) {
   const { nomeProduto } = conteudo.obter("site.geral");
   const m = conteudo.obter(`email.${modelo}`);
-  const LINKS = ["portal", "download", "link", "link_renovacao"];
+  const LINKS = ["portal", "download", "link", "link_renovacao", "link_painel"];
   const seguros = Object.fromEntries(
     Object.entries(vars).map(([k, v]) => [k, LINKS.includes(k) ? String(v ?? "") : String(v ?? "").replace(/[[\]()*#_`<>]/g, "")])
   );
@@ -74,6 +74,13 @@ const VARS_EXEMPLO = {
   download: "#",
   link: "#",
   link_renovacao: "#",
+  numero: 42,
+  assunto: "Erro ao gerar o PDF da OS",
+  categoria: "Erro ou problema",
+  evento: "Novo chamado",
+  mensagem: "Ao clicar em Imprimir, o sistema mostra uma mensagem de erro.",
+  resposta: "Olá! Atualize para a versão mais recente e tente novamente.",
+  link_painel: "#",
 };
 
 const previa = (modelo) => montar(modelo, VARS_EXEMPLO);
@@ -127,4 +134,4 @@ async function enviarTeste(para) {
   }
 }
 
-module.exports = { enviar, enviarTeste, previa, montar, VARS_EXEMPLO, smtpConfigurado, reiniciarTransporte, remetente };
+module.exports = { enviar, enviarTeste, previa, montar, VARS_EXEMPLO, smtpConfigurado, reiniciarTransporte, remetente, suporte };

@@ -7,6 +7,7 @@ Um único servidor Node que entrega:
 | `/` | Landing page de vendas, termos, privacidade |
 | `/checkout/retorno`, `/renovar/:id` | Retorno do Mercado Pago e página de renovação |
 | `/cliente` | Área do cliente (acesso por link no e-mail) |
+| `/suporte`, `/suporte/chamado/:id` | Abrir chamado e acompanhar (link assinado no e-mail ou sessão da área do cliente) |
 | `/admin` | **Painel da equipe** (licenças, clientes, pedidos, preços, textos, equipe) |
 | `/v2/*` | API do GSTI App (ativação, validação, transferência, trial) |
 | `/webhooks/mercadopago` | Notificações de pagamento |
@@ -78,6 +79,9 @@ em *Painel → Planos e preços*:
 | **Licenças e clientes** | Ver/editar licenças, clientes, computadores e trials; ver pedidos |
 | **Financeiro** | Pedidos, pagamentos, reembolsos, cancelar renovação automática, preços |
 | **Conteúdo do site** | Textos da landing, páginas legais e modelos de e-mail |
+| **Suporte** | Chamados de suporte (responder, notas internas, situação, responsável); ver clientes e licenças sem alterar |
+
+O papel **Licenças e clientes** também atende chamados.
 
 Uma pessoa pode ter vários papéis. Login com senha (mín. 10 caracteres) e
 **verificação em duas etapas** opcional (Minha conta). 5 senhas erradas bloqueiam
@@ -311,6 +315,27 @@ node admin.js atualizacao # versão publicada
 - Enquanto o instalador não tiver assinatura digital, o Windows pode exibir o SmartScreen na
   instalação manual; a atualização automática não passa por ele.
 
+### Suporte
+
+Chamados chegam por três caminhos: página **/suporte** do site (qualquer pessoa), **área do
+cliente** e botão **Suporte** do app (identificado pelo token da licença, com dados técnicos
+e captura da tela opcionais). A equipe atende em *Painel → Suporte*.
+
+- **Situações**: Aberto → Em andamento → Aguardando cliente → Resolvido → Fechado. Resposta
+  da equipe muda para "Aguardando cliente" (ou a situação escolhida); resposta do cliente
+  reabre. Chamados *aguardando cliente* ou *resolvidos* sem novidade por 7 dias fecham
+  sozinhos (tarefa periódica).
+- **Notas internas** e mudanças de situação/prioridade/responsável não aparecem ao cliente.
+- **E-mails** (editáveis em *Textos e e-mails*): *chamado aberto* e *nova resposta* para o
+  cliente; *aviso para a equipe* no endereço **EMAIL_SUPORTE** a cada chamado novo ou
+  mensagem do cliente.
+- **Acesso do cliente**: link com assinatura (HMAC com `data/config.key`) enviado por e-mail,
+  ou sessão da área do cliente com o mesmo e-mail. Sem acesso, a API responde 404.
+- **Anexos**: PNG, JPG, WebP, GIF, PDF e texto (.txt/.log), até 5 por mensagem e 5 MB cada,
+  tipo conferido pelos bytes; ficam em `data/suporte/<nº>` e são servidos com CSP restrita
+  (PDF e texto sempre como download).
+- **Proteções**: limite de chamados por IP e por e-mail, campo invisível contra robôs.
+
 ## 7. Chaves de assinatura
 
 - Homologação e produção usam **chaves diferentes**; a build do app de produção deve
@@ -329,7 +354,7 @@ Copie **`data/`** inteira diariamente para fora da VPS (cifrada). Instale o `sql
 
 ```bash
 sqlite3 data/licencas.db ".backup /caminho/backup/licencas-$(date +%F).db"
-tar czf /caminho/backup/gsti-data-$(date +%F).tgz -C data keys uploads .env config.key
+tar czf /caminho/backup/gsti-data-$(date +%F).tgz -C data keys uploads suporte .env config.key
 # data/atualizacoes não precisa de backup: basta publicar a versão de novo
 ```
 
@@ -351,4 +376,6 @@ cd admin-ui && npm install && npm run dev    # painel com recarga em http://loca
 | POST | `/v2/validar` | `{ token }` | `{ valido, token?, detalhes?, motivo? }` |
 | POST | `/v2/desativar` | `{ token }` | `{ success }` |
 | POST | `/v2/trial` | `{ email, maquinaId }` | `{ success, token }` |
+| POST | `/v2/suporte/chamados` | cabeçalho `x-gsti-licenca`; `{ categoria, assunto, mensagem, email?, nome?, dadosTecnicos? }` | `{ success, numero, mensagemId, token, link }` (anexos: `POST /api/suporte/chamados/:id/mensagens/:mensagemId/anexos?t=token`) |
+| GET | `/v2/suporte/chamados` | cabeçalho `x-gsti-licenca` | `{ success, itens: [{ numero, assunto, status, atualizadoEm, link }] }` |
 | GET | `/health` | — | `{ ok, versao, kids }` |

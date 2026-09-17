@@ -75,6 +75,9 @@ function decifrar(guardado) {
   }
 }
 
+// Assinatura curta e estável (ex.: link de acompanhamento de chamado), com a chave do servidor.
+const assinar = (texto) => crypto.createHmac("sha256", chave()).update(String(texto)).digest("base64url").slice(0, 32);
+
 // --- Leitura ---
 let cache = null;
 const recarregar = () => { cache = null; };
@@ -184,4 +187,4 @@ function salvar(valores, autor) {
   return alterados;
 }
 
-module.exports = { CAMPOS, obter, obterBool, obterNum, origem, estado, salvar, recarregar, mascarar };
+module.exports = { CAMPOS, assinar, obter, obterBool, obterNum, origem, estado, salvar, recarregar, mascarar };

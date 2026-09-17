@@ -16,6 +16,7 @@ import GroupsIcon from "@mui/icons-material/BadgeOutlined";
 import MonitorHeartIcon from "@mui/icons-material/MonitorHeartOutlined";
 import HistoryIcon from "@mui/icons-material/HistoryOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import SupportAgentIcon from "@mui/icons-material/SupportAgentOutlined";
 import { SessaoProvider, useSessao } from "./sessao";
 import { Carregando } from "./components/comum";
 import Login from "./pages/Login";
@@ -33,6 +34,8 @@ import Equipe from "./pages/Equipe";
 import Sistema from "./pages/Sistema";
 import Auditoria from "./pages/Auditoria";
 import MinhaConta from "./pages/MinhaConta";
+import Chamados from "./pages/Chamados";
+import ChamadoDetalhe from "./pages/ChamadoDetalhe";
 
 const LARGURA = 248;
 
@@ -44,6 +47,10 @@ const MENU = [
       { to: "/licencas", rotulo: "Licenças", icone: <KeyIcon />, perm: "licencas.ver" },
       { to: "/clientes", rotulo: "Clientes", icone: <PeopleIcon />, perm: "clientes.ver" },
     ],
+  },
+  {
+    grupo: "Atendimento",
+    itens: [{ to: "/suporte", rotulo: "Suporte", icone: <SupportAgentIcon />, perm: "suporte.ver" }],
   },
   {
     grupo: "Vendas",
@@ -188,6 +195,8 @@ function Estrutura() {
           <Route path="/licencas/:id" element={<Rota perm="licencas.ver"><LicencaDetalhe /></Rota>} />
           <Route path="/clientes" element={<Rota perm="clientes.ver"><Clientes /></Rota>} />
           <Route path="/clientes/:id" element={<Rota perm="clientes.ver"><ClienteDetalhe /></Rota>} />
+          <Route path="/suporte" element={<Rota perm="suporte.ver"><Chamados /></Rota>} />
+          <Route path="/suporte/:id" element={<Rota perm="suporte.ver"><ChamadoDetalhe /></Rota>} />
           <Route path="/pedidos" element={<Rota perm="pedidos.ver"><Pedidos /></Rota>} />
           <Route path="/pedidos/:id" element={<Rota perm="pedidos.ver"><PedidoDetalhe /></Rota>} />
           <Route path="/assinaturas" element={<Rota perm="pedidos.ver"><Assinaturas /></Rota>} />

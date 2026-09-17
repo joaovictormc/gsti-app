@@ -43,9 +43,11 @@ import {
   ManageAccounts as ManageAccountsIcon,
   DevicesOther as DevicesOtherIcon,
   LockOutlined as LockOutlinedIcon,
+  SupportAgent as SupportAgentIcon,
 } from "@mui/icons-material";
 import { ModuloBloqueado } from "./components/ModuloBloqueado";
 import { AvisoAtualizacao } from "./components/Atualizacao";
+import SuporteDialog from "./components/SuporteDialog";
 import { MODULO_DA_TELA } from "./constants/modulos";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -134,6 +136,7 @@ function AppSidebar({
   logoData,
   isOpen,
   onToggle,
+  onSuporte,
 }) {
   const { logout, currentUser, permissoes, temModulo } = useAuth();
   const [reportsOpen, setReportsOpen] = useState(false);
@@ -349,6 +352,13 @@ function AppSidebar({
             </Tooltip>
           )}
           {isOpen ? (
+            <Button variant="outlined" onClick={onSuporte} size="small" startIcon={<SupportAgentIcon />} fullWidth sx={{ color: st.text, borderColor: st.divider }}>Suporte</Button>
+          ) : (
+            <Tooltip title="Suporte" placement="right">
+              <IconButton onClick={onSuporte} size="small" sx={{ color: st.subtext }}><SupportAgentIcon fontSize="small" /></IconButton>
+            </Tooltip>
+          )}
+          {isOpen ? (
             <Button variant="outlined" color="error" onClick={logout} size="small" startIcon={<LogoutIcon />} fullWidth>Logout</Button>
           ) : (
             <Tooltip title="Logout" placement="right">
@@ -381,6 +391,12 @@ function App() {
   const [licenseMotivo, setLicenseMotivo] = useState("");
   const [licenseStatus, setLicenseStatus] = useState(null); // status completo (avisos de vencimento)
   const [licenseBannerClosed, setLicenseBannerClosed] = useState(false);
+  const [suporte, setSuporte] = useState({ aberto: false, captura: null });
+  // Captura a tela antes de abrir o diálogo, para anexar ao chamado se a pessoa quiser
+  const abrirSuporte = async () => {
+    const r = await window.api.captureSupportScreen?.().catch(() => null);
+    setSuporte({ aberto: true, captura: r?.success ? r.previa : null });
+  };
 
   const [brandingConfig, setBrandingConfig] = useState({
     companyName: "GSTI App",
@@ -743,6 +759,13 @@ function App() {
             logoData={brandingConfig.logoData}
             isOpen={sidebarOpen}
             onToggle={toggleSidebar}
+            onSuporte={abrirSuporte}
+          />
+          <SuporteDialog
+            aberto={suporte.aberto}
+            captura={suporte.captura}
+            tela={activeComponent}
+            onFechar={() => setSuporte({ aberto: false, captura: null })}
           />
           <Box
             component="main"

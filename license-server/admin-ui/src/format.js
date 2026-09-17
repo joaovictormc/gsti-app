@@ -34,6 +34,11 @@ export const STATUS = {
   enviado: ["Enviado", "success"],
   simulado: ["Simulado", "info"],
   erro: ["Erro", "error"],
+  aberto: ["Aberto", "info"],
+  em_andamento: ["Em andamento", "info"],
+  aguardando_cliente: ["Aguardando cliente", "warning"],
+  resolvido: ["Resolvido", "success"],
+  fechado: ["Fechado", "default"],
 };
 
 export const PAPEIS_DESC = {
@@ -41,4 +46,5 @@ export const PAPEIS_DESC = {
   licencas: "Licenças, clientes, trials e computadores",
   financeiro: "Pedidos, pagamentos, reembolsos e preços",
   conteudo: "Textos do site, páginas legais e e-mails",
+  suporte: "Chamados de suporte (vê clientes e licenças, sem alterar)",
 };

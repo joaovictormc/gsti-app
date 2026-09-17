@@ -39,6 +39,13 @@ contextBridge.exposeInMainWorld('api', {
   emitirNFSeIntegrada: (dados) => ipcRenderer.invoke('emitir-nfse-integrada', dados),
   atualizarNota: (id) => ipcRenderer.invoke('atualizar-nota', id),
 
+  // Suporte (chamados)
+  getSupportContext: (dados) => ipcRenderer.invoke('support-get-context', dados),
+  captureSupportScreen: () => ipcRenderer.invoke('support-capture-screen'),
+  openSupportTicket: (dados) => ipcRenderer.invoke('support-open-ticket', dados),
+  listSupportTickets: () => ipcRenderer.invoke('support-list-tickets'),
+  openSupportLink: (url) => ipcRenderer.invoke('support-open-link', { url }),
+
   // Atualização automática
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),

@@ -17,6 +17,17 @@
   - Só licenças válidas (ou teste no prazo) recebem; dados e configurações são mantidos.
   - Servidor: `node admin.js publicar-atualizacao dist_electron`; *Painel → Sistema* mostra a
     versão publicada.
+- **Suporte (helpdesk)**: chamados de dúvidas, erros, sugestões e pagamento, com anexos
+  (prints, PDF e logs).
+  - **No app**: botão **Suporte** na barra lateral abre o chamado com dados técnicos
+    (versão, sistema, licença, tela e erros recentes) e captura da tela, ambos opcionais e
+    visíveis antes do envio; aba **Meus chamados** mostra a situação.
+  - **No site**: página **/suporte** para qualquer pessoa (inclusive quem ainda não comprou)
+    e página do chamado para acompanhar e responder; a **área do cliente** lista os chamados.
+  - **No painel**: menu **Suporte** com filtros, responsável, prioridade, situação, notas
+    internas e anexos; papel de equipe **Suporte**; resumo no Painel.
+  - E-mail a cada novidade (cliente e equipe); chamados parados esperando o cliente fecham
+    sozinhos após 7 dias.
 
 ### Compatibilidade
 - Licenças já emitidas e tokens antigos continuam com todos os módulos.

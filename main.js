@@ -19,6 +19,15 @@ const { promisify } = require("util");
 const execFileAsync = promisify(execFile);
 const archiver = require("archiver");
 const unzipper = require("unzipper");
+const { criarSuporteApp, criarRegistroErros } = require("./suporte-app");
+
+// Guarda os últimos erros para os dados técnicos dos chamados de suporte
+const errosRecentes = criarRegistroErros();
+const consoleErrorOriginal = console.error;
+console.error = (...args) => {
+  errosRecentes.registrar(args);
+  consoleErrorOriginal(...args);
+};
 
 // Gera PDF em thread separada para não bloquear o processo principal.
 // Em produção empacotada (ASAR), adicionar "asarUnpack": ["pdf-worker.js"] no electron-builder.
@@ -5045,6 +5054,61 @@ const atualizador = criarAtualizador({
 ipcMain.handle("get-update-status", async () => ({ success: true, estado: atualizador.estado() }));
 ipcMain.handle("check-for-updates", async () => ({ success: true, estado: await atualizador.verificar() }));
 ipcMain.handle("install-update", async () => atualizador.instalar());
+
+// --- SUPORTE (abrir chamado pelo app) ---
+const suporteApp = criarSuporteApp({
+  app,
+  obterServidor: () => licenseManager.serverUrl(),
+  obterToken: () => appConfig?.license?.token || "",
+  obterLicenca: () => licenseManager.evaluate(),
+  erros: errosRecentes,
+});
+// Captura da tela tirada ao clicar em "Suporte" (antes do diálogo abrir), por janela
+const capturasSuporte = new Map();
+
+ipcMain.handle("support-get-context", async (event, { tela } = {}) => ({
+  success: true,
+  ...suporteApp.contexto({ usuario: acesso.usuarioDe(event), tela }),
+  urlSite: suporteApp.urlSite(),
+}));
+
+ipcMain.handle("support-capture-screen", async (event) => {
+  try {
+    const imagem = await event.sender.capturePage();
+    const png = imagem.toPNG();
+    capturasSuporte.set(event.sender.id, png);
+    const previa = imagem.resize({ width: 480 }).toDataURL();
+    return { success: true, previa, tamanho: png.length };
+  } catch (e) {
+    capturasSuporte.delete(event.sender.id);
+    return { success: false, error: "Não foi possível capturar a tela." };
+  }
+});
+
+ipcMain.handle("support-open-ticket", async (event, dados = {}) => {
+  const captura = dados.incluirCaptura ? capturasSuporte.get(event.sender.id) : null;
+  const r = await suporteApp.abrirChamado({
+    categoria: dados.categoria,
+    assunto: dados.assunto,
+    mensagem: dados.mensagem,
+    email: dados.email,
+    incluirDados: dados.incluirDados !== false,
+    captura,
+    usuario: acesso.usuarioDe(event),
+    tela: dados.tela,
+  });
+  if (r.success) capturasSuporte.delete(event.sender.id);
+  return r;
+});
+
+ipcMain.handle("support-list-tickets", async () => suporteApp.listarChamados());
+
+ipcMain.handle("support-open-link", async (_event, { url } = {}) => {
+  const destino = url || suporteApp.urlSite();
+  if (!suporteApp.linkPermitido(destino)) return { success: false, error: "Link inválido." };
+  shell.openExternal(destino);
+  return { success: true };
+});
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null); // barra de título própria, sem Arquivo/Editar/Exibir

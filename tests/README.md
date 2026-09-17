@@ -4,7 +4,7 @@ Dois níveis de teste:
 
 | Comando | O que roda | Tempo |
 |---|---|---|
-| `npm test` | **Unitários** (`tests/unit`): certificado A1, cofre de senhas, controle de acesso, cliente da Notaas (com simulador) e regras de recurso das licenças | segundos |
+| `npm test` | **Unitários** (`tests/unit`): certificado A1, cofre de senhas, controle de acesso, cliente da Notaas (com simulador), regras de recurso e módulos das licenças, atualização automática e suporte (chamados, rotas do site, do app e do painel) | segundos |
 | `npm run test:e2e` | **Ponta a ponta** (`tests/e2e`): compila a interface e abre o app Electron de verdade, com pasta de dados isolada, banco temporário e licença simulada | ~8 min |
 
 Rode os dois antes de gerar uma versão.
@@ -42,6 +42,8 @@ node tests/e2e/rodar.js fiscal notaas
 | `barra` | barra de título própria, layout abaixo da barra, tema dos botões nativos, atalhos |
 | `fiscal` | aceite de responsabilidade, catálogo, credenciais cifradas, certificado A1, registro manual de nota na OS |
 | `notaas` | emissão de NFS-e pela Notaas usando o simulador `tests/lib/notaas-simulado.js` (nenhuma chamada à Notaas real) |
+| `modulos` | venda por módulos: bloqueios no processo principal e na interface |
+| `suporte` | botão Suporte do app contra um servidor de licenças real temporário: chamado com dados técnicos e captura da tela, "Meus chamados" e links permitidos |
 
 ## Capturas de tela
 
@@ -69,7 +71,8 @@ Depois registre o nome em `SUITES` no `tests/e2e/rodar.js`.
 
 - `api("metodo(args)")` chama `window.api` na janela (o mesmo caminho da interface, passando
   pelo controle de acesso).
-- `licenca.recursos` pode ser alterado durante o roteiro (ex.: `["emissorFiscal"]`).
+- `licenca.recursos` pode ser alterado durante o roteiro (ex.: `["emissorFiscal"]`);
+  `licenca.serverUrl` define o servidor de licenças usado pelo app.
 - `arquivos.proximo = caminho` define o arquivo "escolhido" no próximo diálogo; `abertos`
   lista os arquivos que o app tentou abrir.
 - Lembrete: todo canal IPC novo precisa de política em `controle-acesso.js` — o app nem

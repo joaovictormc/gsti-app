@@ -59,6 +59,7 @@
       "controle-acesso.js",
       "modulos.js",
       "atualizacoes.js",
+      "suporte-app.js",
       "fiscal-emissores.js",
       "fiscal-certificado.js",
       "fiscal-notaas.js",

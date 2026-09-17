@@ -1,6 +1,7 @@
 /** Tarefas periódicas: webhooks pendentes, conciliação, lembretes e limpeza. */
 const vendas = require("./vendas");
 const auth = require("./auth");
+const suporte = require("./suporte");
 
 const MIN = 60000;
 
@@ -26,6 +27,7 @@ function iniciar() {
   agendar("conciliacao", 30 * MIN, vendas.reconciliarPendentes, 60000);
   agendar("lembretes", 60 * MIN, vendas.enviarLembretesRenovacao, 120000);
   agendar("limpeza", 6 * 60 * MIN, async () => auth.limparSessoesExpiradas());
+  agendar("chamados", 6 * 60 * MIN, async () => suporte.fecharInativos(), 180000);
 }
 
 module.exports = { iniciar };

@@ -29,6 +29,7 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -323,6 +324,42 @@ body { overflow-x: clip; }
 .tabela th { text-align: left; font: 700 .7rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--texto-suave); padding: 10px 8px; border-bottom: 2px solid var(--linha); }
 .tabela td { padding: 12px 8px; border-bottom: 1px solid var(--papel-2); white-space: nowrap; }
 .carregando, .vazio { color: var(--texto-suave); }
+.portal__chamados { margin-top: 44px; }
+.portal__secao-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: .6rem; }
+.portal__secao-topo h2 { margin: 0; }
+
+/* ---------- Suporte ---------- */
+.suporte { max-width: 760px; margin: 0 auto; }
+.suporte__cabeca { margin-bottom: 28px; }
+.suporte__cabeca h1 { font-size: clamp(2rem, 4.6vw, 3rem); }
+.suporte__cabeca p { color: var(--texto-suave); max-width: 62ch; }
+.suporte__cliente { font-size: .95rem; }
+.suporte__cartao { max-width: none; margin: 0; }
+.suporte__meta { display: flex; gap: .7rem; align-items: center; flex-wrap: wrap; font-size: .92rem; }
+.form__linha { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.suporte .form, .suporte .campo { min-width: 0; }
+.suporte .campo input, .suporte .campo select, .suporte .campo textarea { width: 100%; min-width: 0; max-width: 100%; }
+.campo select, .campo textarea { padding: .7em .9em; border: 1.5px solid var(--linha); border-radius: var(--raio-p); background: #fff; font: inherit; color: var(--texto); }
+.campo select { min-height: 48px; }
+.campo textarea { resize: vertical; min-height: 120px; }
+.campo select:focus, .campo textarea:focus { outline: none; border-color: var(--tinta-3); box-shadow: 0 0 0 3px rgba(255, 106, 43, .3); }
+.campo input[type="file"] { min-height: 0; padding: .55em; background: var(--papel); }
+.campo--oculto { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.conversa { list-style: none; margin: 0 0 28px; padding: 0; display: grid; gap: 14px; }
+.mensagem { background: var(--branco); border: 1px solid var(--linha); border-radius: var(--raio); padding: 16px 20px; }
+.mensagem--equipe { border-left: 4px solid var(--etiqueta); }
+.mensagem--sistema { background: transparent; border-style: dashed; color: var(--texto-suave); font-size: .92rem; }
+.mensagem__topo { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: .85rem; color: var(--texto-suave); margin-bottom: .5rem; }
+.mensagem__topo strong { color: var(--tinta); }
+.mensagem__texto { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.anexos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.anexo { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; padding: .35em .7em; border: 1px solid var(--linha); border-radius: 999px; text-decoration: none; background: var(--papel); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anexo img { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; }
+.status--aberto, .status--em_andamento { background: #e3ecfb; color: #1d4a8f; }
+.status--aguardando_cliente { background: #fff0d9; color: #8a4b00; }
+.status--resolvido { background: #dff3ea; color: #0f6b47; }
+.status--fechado { background: var(--papel-2); color: var(--texto-suave); }
+@media (max-width: 720px) { .form__linha { grid-template-columns: 1fr; } }
 
 /* ---------- Responsivo ---------- */
 @media (max-width: 960px) {

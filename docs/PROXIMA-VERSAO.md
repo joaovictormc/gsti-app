@@ -116,10 +116,12 @@ os avançados depois, sem gerar uma build diferente para cada plano.
    segundo plano, aviso com notas da versão (geradas do CHANGELOG) e seção em Configurações.
    Publicação: `node admin.js publicar-atualizacao dist_electron`. Ver
    [license-server/README.md](../license-server/README.md#atualizações-do-app).
-3. **Suporte e helpdesk básico** — página de suporte no site (relatos, erros, dúvidas, com
-   anexo), tickets no painel admin (atribuição, status, respostas), acompanhamento na área
-   do cliente e aviso por e-mail a cada resposta; atalho "Abrir chamado" dentro do app com
-   versão e dados técnicos preenchidos. Planos podem incluir ou não o suporte.
+3. ~~**Suporte e helpdesk básico**~~ — **entregue**: página /suporte no site (com anexos),
+   chamados no painel (responsável, prioridade, situação, notas internas), acompanhamento
+   pelo link do e-mail e na área do cliente, avisos por e-mail e botão **Suporte** no app com
+   dados técnicos e captura da tela. Ver [license-server/README.md](../license-server/README.md#suporte).
+   *Pendente para depois:* suporte diferenciado por plano (prioridade/prazo) e respostas
+   prontas.
 4. **Prontidão para produção** (em paralelo) — domínio novo, VPS com HTTPS, chaves de
    licença de produção no `license-config.js`, backup do servidor, assinatura digital do
    instalador e compra real de baixo valor testada.

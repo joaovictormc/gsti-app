@@ -59,6 +59,7 @@ ${cfg.MP_API_BASE !== cfg.MP_API_OFICIAL ? `<p class="faixa-homologacao">Ambient
     </a>
     ${nav}
     <div class="topo__acoes">
+      ${n.linkSuporte ? `<a class="link-discreto" href="/suporte">${e(n.linkSuporte)}</a>` : ""}
       <a class="link-discreto" href="/cliente">${e(n.linkCliente)}</a>
       ${semNav || !n.botaoTopo ? "" : `<a class="btn btn--pequeno" href="/#planos">${e(n.botaoTopo)}</a>`}
     </div>
@@ -75,6 +76,7 @@ ${corpo}
     </div>
     <ul class="rodape__links">
       <li><a href="/cliente">${e(n.linkCliente)}</a></li>
+      ${n.linkSuporte ? `<li><a href="/suporte">${e(n.linkSuporte)}</a></li>` : ""}
       <li><a href="/termos">${e(n.linkTermos)}</a></li>
       <li><a href="/privacidade">${e(n.linkPrivacidade)}</a></li>
       ${n.linkEquipe ? `<li><a href="/admin" rel="nofollow">${e(n.linkEquipe)}</a></li>` : ""}
