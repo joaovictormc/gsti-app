@@ -10,8 +10,8 @@ cliente, veja [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
 
 ## 1. Versão e metadados
 
-- [ ] **Atualizar a versão** em `package.json` (`version`). Hoje está em `1.0.0` — ver
-  sugestão de bump em [EVOLUCAO-v1-PARA-ATUAL.md](./EVOLUCAO-v1-PARA-ATUAL.md#5-sugestão-de-versionamento).
+- [ ] **Atualizar a versão** em `package.json` (`version`) e registrar as mudanças no
+  [`CHANGELOG.md`](../CHANGELOG.md).
 - [ ] Conferir `productName` ("GSTI App - Gestão de Serviços de TI") e `appId`
   (`com.joaovmc.gstiapp`).
 - [ ] Confirmar os recursos de marca do instalador em `build_resources/`:
@@ -44,14 +44,12 @@ cliente, veja [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
 > Atenção: o build usa **`asar: false`**, então o código JavaScript vai **legível**
 > dentro da pasta instalada. Não embuta segredos sensíveis no app.
 
-- [ ] **DevTools desligado em produção** — já garantido por `devTools: !app.isPackaged`
-  (`main.js:3791`) e pelo carregamento via arquivo (não `localhost`) quando empacotado
-  (`main.js:3803`). Confirmar que **não há** `openDevTools()` ativo.
-- [ ] Ciente de que as **credenciais do banco ficam em texto puro** no `config.json`
-  (dívida técnica registrada em [PROXIMA-VERSAO.md](./PROXIMA-VERSAO.md)).
-- [ ] Confirmar que **`license-server/` NÃO é empacotado** — ele não está no array
-  `build.files` do `package.json` (apenas `main.js`, `preload.js`, `pdf-worker.js`,
-  `license-manager.js`, `license-config.js`, `package.json` e `renderer/dist/**`).
+- [ ] **DevTools desligado em produção** — garantido por `devTools: !app.isPackaged`
+  em `createWindow` (`main.js`), pelo carregamento via arquivo quando empacotado e pelos
+  atalhos F12/Ctrl+R só fora do pacote. Confirmar que **não há** `openDevTools()` ativo.
+- [ ] Confirmar que **`license-server/` e `tests/` NÃO são empacotados** — o array
+  `build.files` do `package.json` lista só os arquivos do app (`main.js`, `preload.js`,
+  módulos `*.js` da raiz, `script.sql`, `build_resources/icon.ico` e `renderer/dist/**`).
 - [ ] Hook de pre-commit ativo (`git config core.hooksPath` → `.githooks`) e
   nenhuma chave privada no repositório.
 - [ ] **Instalador não é gerado?** (só `win-unpacked`): ative o *Modo de
@@ -59,9 +57,11 @@ cliente, veja [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
 
 ---
 
-## 4. Build do frontend e empacotamento
+## 4. Testes, build do frontend e empacotamento
 
 - [ ] `npm install` na raiz (e em `renderer/`, se necessário).
+- [ ] **Testes passando**: `npm test` e `npm run test:e2e` (ver
+  [tests/README.md](../tests/README.md)).
 - [ ] Garantir que o **frontend é compilado** — `npm run dist:win` já roda `build`
   antes (gera `renderer/dist/**`, que é o que entra no pacote).
 - [ ] Gerar o instalador:
@@ -79,9 +79,8 @@ O instalador **não** instala o banco. Deixar claro nas instruções da release 
 cliente precisa:
 
 - [ ] Ter **PostgreSQL** instalado (Windows 10/11 x64).
-- [ ] Criar o banco (ex.: `gsti_db`) e executar o **`script.sql`** uma vez (o schema
-  base **não** é criado automaticamente; apenas as **migrações incrementais** rodam na
-  primeira conexão).
+- [ ] Criar um banco vazio (ex.: `gsti_db`) — as tabelas são criadas pelo app na
+  configuração inicial.
 - [ ] Ter **internet** no momento da ativação. Apontar para
   [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
 
@@ -94,7 +93,8 @@ Idealmente em uma **máquina limpa** (ou VM):
 - [ ] Instalar o `.exe` gerado.
 - [ ] Rodar o assistente: **Ativação** (trial ou licença real) → **Banco** (testar
   conexão) → **Admin**.
-- [ ] Fazer login, criar/abrir uma **OS** e **gerar um PDF**.
+- [ ] Fazer login, criar/abrir uma **OS**, **gerar um PDF** e **registrar uma nota** na OS
+  finalizada.
 - [ ] Confirmar **ativação online** e **revalidação** (reabrir o app com internet).
 - [ ] Verificar **status da licença** em Configurações → Licenciamento.
 

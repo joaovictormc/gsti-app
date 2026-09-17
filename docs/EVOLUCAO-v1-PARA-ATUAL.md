@@ -112,6 +112,10 @@ Resumo derivado do histórico de commits:
    metas múltiplas, relatório de OS abertas por tempo.
 5. **Licenciamento online** (Ed25519 + trial) e **URL do servidor configurável**.
 6. **Documentação** (manual de uso, instalação/ativação, roadmap).
+7. **1.3.0** — equipamentos, histórico de status, custo e margem, aviso ao cliente,
+   segurança (permissões no processo principal, senhas cifradas), perfil Técnico e
+   permissões por perfil, marca no login e barra de título, nota fiscal (registro manual
+   e Notaas) e testes automatizados. Detalhes no [CHANGELOG](../CHANGELOG.md).
 
 ---
 
@@ -131,7 +135,7 @@ Resumo derivado do histórico de commits:
 Como o produto **mudou de base de dados** (MySQL → PostgreSQL) e ganhou
 **licenciamento/venda**, recomenda-se tratar como uma **major release**:
 
-- Hoje o `package.json` ainda está em **`1.0.0`**.
+- Versão atual: **`1.3.0`** (desenvolvimento/homologação; nada vendido ainda).
 - Sugestão: **`2.0.0`** para a primeira release pública vendável (decisão final do
   desenvolvedor).
 

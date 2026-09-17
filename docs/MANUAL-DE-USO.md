@@ -33,14 +33,17 @@ sistema, consulte [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
 
 ## 1. Introdução e perfis de acesso
 
-O sistema tem dois perfis de usuário:
+O sistema tem três perfis de usuário:
 
 | Perfil | O que acessa |
 |--------|--------------|
 | **Administrador** | Acesso completo a todos os módulos, inclusive Financeiro, Relatórios, Gerenciar Usuários e Configurações. |
-| **Funcionário** | Acesso aos módulos operacionais (Clientes, Produtos/Serviços, OS, Agenda, Estoque, Garantias). O acesso ao **Financeiro** e aos **Relatórios** é liberado individualmente pelo administrador (em Configurações → Permissões de Funcionário). |
+| **Funcionário** | Módulos operacionais (Clientes, Equipamentos, Produtos/Serviços, OS, Agenda, Estoque, Garantias). Por padrão pode cadastrar, editar, excluir e ver custos; **Financeiro** e **Relatórios** vêm desligados. |
+| **Técnico** | Por padrão vê e trabalha **só nas OS em que é o responsável**; clientes, equipamentos, produtos e estoque ficam para consulta, sem custos e sem exclusão. |
 
-O menu lateral mostra apenas os módulos que o usuário atual pode acessar.
+O que cada perfil (Funcionário e Técnico) pode fazer é ajustado pelo administrador em
+**Configurações → Permissões por perfil**. O menu e os botões mostram apenas o que o
+usuário atual pode usar — e as regras também valem internamente, não só na tela.
 
 🖼️ *Tela principal com o menu lateral.*
 
@@ -91,8 +94,15 @@ Cadastro central de clientes.
 - **Excluir**: pede confirmação. Não é possível excluir um cliente que possua
   ordens de serviço vinculadas.
 - **Buscar**: filtre a lista por nome ou CPF/CNPJ.
+- **Histórico**: resumo e lista das OS do cliente.
 
 🖼️ *Lista de clientes e formulário de cadastro.*
+
+### Equipamentos
+Inventário dos aparelhos de cada cliente (tipo, marca, modelo, número de série e
+observações), com o **histórico de OS** de cada aparelho. Ao salvar uma OS, você escolhe
+um equipamento do cliente ou informa um novo — ele é cadastrado automaticamente. O número
+de série não se repete para o mesmo cliente.
 
 ---
 
@@ -104,7 +114,8 @@ Catálogo do que você vende/usa nas OS.
   - **Produto**: movimenta estoque (tem **estoque atual** e **estoque mínimo**);
     a quantidade é **baixada automaticamente** quando a OS é finalizada.
   - **Serviço**: não movimenta estoque (não aparece nos alertas de estoque).
-- **Campos**: descrição, valor, tipo, estoque atual e mínimo (para produtos).
+- **Campos**: descrição, valor de venda, **custo** (opcional, usado na margem), tipo,
+  estoque inicial e mínimo (para produtos). A lista mostra a **margem** de cada item.
 
 > Cadastre corretamente o tipo: serviços marcados como produto apareceriam
 > indevidamente nos alertas de "estoque zerado".
@@ -119,15 +130,18 @@ Coração do sistema: registra cada atendimento.
 
 ### Criar/editar uma OS
 - **Cliente** (busca pelo cadastro).
-- **Equipamento**: tipo, marca, modelo, número de série.
+- **Equipamento**: escolha um aparelho do cliente ou preencha tipo, marca, modelo e
+  número de série de um novo.
 - **Defeito relatado**, **observações de entrada**, **laudo técnico** e
   **solução aplicada**.
-- **Itens**: adicione produtos/serviços do catálogo (quantidade e valor); o
-  **valor total** é calculado.
+- **Itens**: adicione produtos/serviços do catálogo (quantidade, valor e uma **nota**
+  por item, que aparece no recibo de saída); o **valor total** é calculado.
 - **Atendente**: defina quem executou a OS (usado no relatório por atendente).
 - **Status**: Orçamento, Aguardando Autorização, Em Aberto, Aguardando Peça,
   Em Andamento, Finalizado, Entregue, Cancelado.
 - **Garantia**: dias de garantia (padrão 90).
+- **Histórico de status**: a linha do tempo mostra cada mudança de status, com data e
+  usuário.
 
 ### Busca avançada
 Filtre OS por **número da OS, cliente, telefone, equipamento, número de série,
@@ -140,6 +154,25 @@ atendente** e por **status**.
 
 > Ao mudar a OS para **Finalizado**, o estoque dos produtos usados é baixado
 > automaticamente (uma única vez por OS).
+
+### Avisar o cliente
+- **WhatsApp**: o botão verde na lista de OS abre a conversa com uma mensagem pronta
+  conforme o status (as mensagens são editáveis em Configurações).
+- **E-mail automático**: pode ser ligado para os status escolhidos em Configurações.
+
+### Nota fiscal
+Nas OS **finalizadas ou entregues**, o botão de nota fiscal abre as notas da OS:
+
+- **Registrar nota emitida por fora** (todos os planos): informe tipo (NFS-e, NF-e,
+  NFC-e), número, série, data, valor e, se quiser, a chave de acesso, o PDF e o XML. Os
+  anexos ficam no banco e abrem em qualquer computador.
+- **Emitir NFS-e** (quando um emissor integrado estiver configurado, no plano anual com
+  renovação automática): confira os dados, ajuste a descrição e o valor e emita. A lista
+  mostra a situação — processando, emitida, rejeitada (com o motivo) ou cancelada — e
+  guarda PDF e XML.
+- **Cancelar**: nota manual é apenas marcada como cancelada (cancele também onde ela foi
+  emitida); NFS-e emitida pelo app é cancelada no emissor.
+- Uma OS com nota registrada não pode ser excluída.
 
 🖼️ *Formulário da OS, busca avançada e exemplo de PDF de entrada.*
 
@@ -243,9 +276,9 @@ Painel com seletor de período (datas ou atalhos "Este mês", "Mês passado",
 > Apenas administradores.
 
 - **Criar/editar/excluir** usuários.
-- Definir o **papel**: Administrador ou Funcionário.
-- As permissões específicas de funcionário (Financeiro/Relatórios) ficam em
-  **Configurações → Permissões de Funcionário**.
+- Definir o **papel**: Administrador, Funcionário ou Técnico.
+- O que Funcionário e Técnico podem fazer fica em **Configurações → Permissões por perfil**.
+- Não é possível excluir ou rebaixar o próprio usuário, nem deixar o sistema sem administrador.
 
 🖼️ *Tela de gerenciamento de usuários.*
 
@@ -257,11 +290,20 @@ Painel com seletor de período (datas ou atalhos "Este mês", "Mês passado",
 
 - **E-mail (SMTP)**: servidor, porta, SSL/TLS, usuário, senha e remetente. Há
   botão **Testar Envio**. Necessário para reset de senha e notificações.
-- **Personalização (Whitelabel)**: **nome da empresa**, **logo** (exibida na
-  barra lateral) e **imagem de fundo da tela de login**.
-- **Permissões de Funcionário**: liberar **Ver Financeiro** e/ou **Ver Relatórios**.
-- **Notificações por e-mail**: avisar o cliente quando a OS é **finalizada** e/ou
-  avisar o técnico quando uma **nova OS** é criada (e-mail do técnico).
+- **Personalização da marca**: **nome da empresa** (menu, login e barra de título),
+  **logo** (menu, login e, opcionalmente, ícone da janela), **mensagem** e **imagem de
+  fundo da tela de login**, e o **"Desenvolvido por"** do rodapé do login.
+- **Dados da empresa nos documentos**: CNPJ/CPF, telefone, e-mail, endereço e site nos
+  PDFs; textos de **condições de serviço** e **termo de garantia**.
+- **Nota fiscal**: leia e aceite "Como funciona a emissão"; escolha o emissor (Registro
+  manual; Notaas no plano anual com renovação automática), cadastre as credenciais (use
+  **Testar conexão**), os **dados fiscais** da empresa e, se o emissor precisar, o
+  **certificado digital A1** (.pfx). Credenciais e certificado ficam cifrados só neste
+  computador.
+- **Permissões por perfil**: tabela com o que Funcionário e Técnico podem fazer.
+- **Notificações por e-mail**: avisar o cliente quando a OS é **finalizada** ou muda para
+  os status escolhidos, e avisar o técnico quando uma **nova OS** é criada; mensagens por
+  status editáveis (também usadas no WhatsApp).
 - **Backup automático**: ativar, escolher **dias da semana**, **horário**,
   **pasta de destino** e **política de retenção** (dias).
 - **Licenciamento e Ativação**: mostra o status da licença (ativa/teste, validade,
@@ -296,5 +338,8 @@ Painel com seletor de período (datas ou atalhos "Este mês", "Mês passado",
   salve novamente (imagens até 2 MB para logo; até 5 MB para o fundo).
 - **Licença expirada / "Ativação necessária"**: veja
   [INSTALACAO-E-ATIVACAO.md](./INSTALACAO-E-ATIVACAO.md).
+- **"Você não tem permissão para esta ação"**: o perfil do usuário não tem essa
+  permissão; o administrador ajusta em Configurações → Permissões por perfil.
+- **Zoom da tela**: `Ctrl +`, `Ctrl -` e `Ctrl 0`.
 
 **Suporte:** pelo e-mail de suporte informado no site do produto.

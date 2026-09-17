@@ -38,26 +38,18 @@ do dia a dia, veja [MANUAL-DE-USO.md](./MANUAL-DE-USO.md).
 
 1. **Instale o PostgreSQL** e anote o usuário (ex.: `postgres`), a senha e a
    porta (padrão **5432**).
-2. **Crie o banco de dados**, por exemplo `gsti_db`:
+2. **Crie o banco de dados vazio**, por exemplo `gsti_db` (pelo pgAdmin ou):
    ```sql
    CREATE DATABASE gsti_db;
    ```
-3. **Crie o schema** executando o arquivo **`script.sql`** (na raiz do projeto)
-   uma única vez, conectado ao banco recém-criado. Via terminal:
-   ```bash
-   psql -U postgres -d gsti_db -f script.sql
-   ```
-   Ou abra o `script.sql` no **pgAdmin** e execute.
 
-   Isso cria as tabelas: `usuarios`, `clientes`, `equipamentos`,
-   `produtos_servicos`, `ordens_servico`, `os_itens`, `despesas`,
-   `receitas_avulsas` (além dos tipos ENUM e índices).
+Pronto: **as tabelas são criadas automaticamente** na configuração inicial do app
+(opção "Criar novo administrador"), e as atualizações de versões novas são aplicadas
+sozinhas sempre que o app se conecta ao banco.
 
-> **Colunas e tabelas mais recentes** (endereço dividido em CEP/logradouro/
-> número/bairro/cidade/estado, `id_atendente`, `estoque_baixado`, estoque dos
-> produtos e a tabela `metas_financeiras`) são criadas/atualizadas
-> **automaticamente** pelo aplicativo na primeira conexão. Você só precisa rodar
-> o `script.sql` para o schema base.
+> Instalação manual (opcional, para quem prefere): o schema completo está no
+> `script.sql` (`psql -U postgres -d gsti_db -f script.sql`). Ele pode ser executado
+> mais de uma vez sem erro.
 
 ---
 
@@ -100,12 +92,16 @@ Escolha uma das opções:
 
 - **Criar novo administrador** — primeira instalação, banco vazio: informe
   **nome**, **e-mail**, **login**, **senha** (mín. 6 caracteres) e confirmação, e
-  clique em **Salvar Configuração e Criar Admin**.
+  clique em **Salvar Configuração e Criar Admin**. As tabelas do banco são criadas
+  nesse momento.
 - **Já tenho cadastro** — reinstalação ou novo computador usando um banco que já
   tem usuários: informe **login e senha** de um usuário existente e clique em
   **Validar e Entrar**. Nenhum dado é alterado e o sistema já abre logado.
 
-As configurações ficam salvas em `config.json` (na pasta de dados do usuário).
+As configurações ficam salvas em `config.json` (na pasta de dados do usuário). As
+senhas do banco e do e-mail e as credenciais fiscais ficam **cifradas** com a proteção do
+Windows e só abrem neste computador. Se a pasta de dados for copiada para outra máquina
+(ou recriada), o app pede os dados do banco de novo — use **Já tenho cadastro**.
 
 > 🖼️ *Telas do assistente: ativação → banco → administrador.*
 

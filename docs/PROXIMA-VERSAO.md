@@ -2,7 +2,10 @@
 
 Documento único de planejamento: o que já foi entregue, o que está na fila e as
 decisões técnicas pendentes. Substitui o antigo `refinos-futuros.md`.
-Atualizado em 2026-09-16.
+Atualizado em 2026-09-16. Versão atual do app: **1.3.0** (ver [CHANGELOG](../CHANGELOG.md)).
+
+> Contexto: nada foi vendido ainda. O lançamento será feito **por módulos** — primeiro os
+> iniciais, depois os avançados (seção 2).
 
 ---
 
@@ -87,6 +90,9 @@ Atualizado em 2026-09-16.
 - [x] Conexão ociosa derrubada pelo servidor do banco não abre mais janela de erro.
 - [x] **Tabelas criadas automaticamente** na primeira instalação em banco vazio.
 - [x] Código de redefinição de senha: validade corrigida (10 min) e bloqueio após 5 erros.
+- [x] **Testes automatizados** no repositório: `npm test` (unitários) e
+      `npm run test:e2e` (app Electron com banco temporário) — ver [tests/README.md](../tests/README.md).
+- [x] Layout em colunas corrigido nas telas antigas (Grid do MUI 7).
 - [x] **Perfil Técnico e permissões por perfil** (Configurações > Permissões por perfil):
       para Funcionário e Técnico, liga/desliga "Só OS atribuídas", editar clientes e
       equipamentos, editar produtos, ajustar estoque, ver custo e margem, excluir
@@ -96,7 +102,42 @@ Atualizado em 2026-09-16.
 
 ---
 
-## 2. Fila — próximas funcionalidades
+## 2. Próxima versão (1.4.0) — proposta: preparar o lançamento por módulos
+
+Objetivo: deixar o produto pronto para começar a vender só os módulos iniciais e liberar
+os avançados depois, sem gerar uma build diferente para cada plano.
+
+1. **Módulos por plano (licença por módulos)** — generalizar o recurso que já existe no
+   token (`recursos`, hoje só `emissorFiscal`) para **módulos**: cada oferta do painel diz
+   quais módulos inclui; o app esconde menus/telas e o processo principal bloqueia os canais
+   dos módulos não contratados; a área do cliente mostra o que está incluso e como fazer
+   upgrade. Base pronta: `controle-acesso.js` (níveis por canal) e recursos no token.
+2. **Atualização automática do app** — receber versões e módulos novos sem reinstalar
+   (electron-updater publicando no servidor/VPS ou no GitHub Releases), com aviso "nova
+   versão disponível" e notas da versão.
+3. **Suporte e helpdesk básico** — página de suporte no site (relatos, erros, dúvidas, com
+   anexo), tickets no painel admin (atribuição, status, respostas), acompanhamento na área
+   do cliente e aviso por e-mail a cada resposta; atalho "Abrir chamado" dentro do app com
+   versão e dados técnicos preenchidos. Planos podem incluir ou não o suporte.
+4. **Prontidão para produção** (em paralelo) — domínio novo, VPS com HTTPS, chaves de
+   licença de produção no `license-config.js`, backup do servidor, assinatura digital do
+   instalador e compra real de baixo valor testada.
+
+### Sugestão de divisão de módulos (decisão comercial pendente)
+
+| Iniciais (lançamento) | Avançados (depois) |
+|---|---|
+| Clientes e Equipamentos | Financeiro completo (fluxo de caixa, projeção, metas, Excel) |
+| Produtos/Serviços | Relatórios |
+| Ordens de serviço, PDFs, WhatsApp manual | Estoque com baixa automática e alertas |
+| Agenda e Garantias | Perfis e permissões avançadas (Técnico) |
+| Nota fiscal — registro manual | Nota fiscal integrada (Notaas / Emissor Nacional) |
+| Usuários (Admin e Funcionário) | Personalização da marca (whitelabel) |
+| Backup manual | Notificações automáticas por e-mail e backup automático |
+
+---
+
+## 3. Fila — próximas funcionalidades
 
 - **Emissores de nota fiscal integrados** — estrutura, registro manual, certificado A1,
   liberação por plano e **Notaas (NFS-e)** entregues (ver seção 1). Catálogo definido:
@@ -105,16 +146,18 @@ Atualizado em 2026-09-16.
   [PESQUISA-NOTA-FISCAL.md](./PESQUISA-NOTA-FISCAL.md).
 - **Portal do cliente: catálogo de emissores** com guias e "solicitar outro emissor"
   (ranking de pedidos no painel admin).
-- **Telas antigas com `<Grid item xs=…>`** — no MUI 7 essas props são ignoradas (layout
-  em colunas não se aplica). Migrar para `<Grid size={{ xs, md }}>`: tela inicial,
-  Financeiro, Configurações, Estoque, relatórios e Clientes.
 - **Aviso automático também pelo WhatsApp** — hoje o botão abre a conversa com a
   mensagem pronta. Envio automático exige API paga (WhatsApp Business Cloud API,
   Z-API, Twilio); reavaliar se houver demanda.
+- **Página de suporte na landing page e helpdesk básico no admin** — planos com suporte
+  incluso precisam de uma página para receber relatos, erros e solicitações; o admin
+  responde e o cliente acompanha (tickets na área do cliente, e-mail ou mensagem no
+  celular). **Proposto para a 1.4.0** (seção 2, item 3).
+- **Legendas dos gráficos do Resumo Financeiro** cortam nomes longos ("Receitas Avul…").
 
 ---
 
-## 3. Módulo de assistência e diagnóstico (projeto separado)
+## 4. Módulo de assistência e diagnóstico (projeto separado)
 
 Ideia original: ferramenta própria para o técnico diagnosticar computadores,
 notebooks e celulares — drivers, limpeza e otimização, testes de rede/disco/memória/
@@ -137,7 +180,7 @@ um recorte viável:
 
 ---
 
-## 4. Modelo de papéis e acesso
+## 5. Modelo de papéis e acesso
 
 Com o sistema vendido por instância (cada cliente é dono do próprio app + banco):
 
@@ -148,10 +191,10 @@ Com o sistema vendido por instância (cada cliente é dono do próprio app + ban
 
 ---
 
-## 5. Dívida técnica e segurança
+## 6. Dívida técnica e segurança
 
-- **DevTools/console em produção** → `window.api` acessível pelo console; manter
-  DevTools desligado no build (hoje: `devTools: !app.isPackaged`).
+- **Assinatura digital do instalador** (certificado de assinatura de código) → sem ela o
+  Windows SmartScreen alerta "editor desconhecido" ao instalar; necessário antes das vendas.
 - **`main.js` monolítico** (~4.000 linhas) → continuar extraindo módulos por domínio
   (já extraídos: `license-manager.js`, `os-comunicacao.js`, `controle-acesso.js`,
   `config-segredos.js`).
@@ -159,13 +202,10 @@ Com o sistema vendido por instância (cada cliente é dono do próprio app + ban
   `asarUnpack` para o `pdf-worker.js`.
 - **Backup com banco em servidor remoto** → `pg_dump` agendado no servidor,
   snapshots do provedor ou exportação disparada pelo app.
-- **Testes automatizados no repositório** → as consultas novas foram validadas em
-  PostgreSQL temporário durante o desenvolvimento; levar esses testes para o projeto
-  (ex.: `npm test` com banco efêmero).
 
 ---
 
-## 6. Notas de manutenção (licenças)
+## 7. Notas de manutenção (licenças)
 
 - Chaves de assinatura geradas no servidor com `node gerar-chaves.js`; a chave
   pública vai em `publicKeys` no **`license-config.js`** (homologação e produção
