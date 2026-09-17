@@ -16,7 +16,10 @@
     "test": "node --test \"tests/unit/*.test.js\"",
     "test:e2e": "npm run build && node tests/e2e/rodar.js",
     "dist:diagnostico": "node scripts/versao-diagnostico.js && electron-builder --config diagnostico/electron-builder.json --win",
-    "diagnostico": "electron diagnostico/agente/main.js"
+    "diagnostico": "electron diagnostico/agente/main.js",
+    "dist:diagnostico:mac": "node scripts/versao-diagnostico.js && electron-builder --config diagnostico/electron-builder.json --mac",
+    "dist:diagnostico:linux": "node scripts/versao-diagnostico.js && electron-builder --config diagnostico/electron-builder.json --linux",
+    "diagnostico:cli": "node diagnostico/cli.js"
   },
   "keywords": [],
   "author": "João Victor Maciel Campos",

@@ -22,17 +22,22 @@ function autorizarAgente(req, res) {
   }
 }
 
+// ?plataforma=windows-x64 | macos-arm64 | macos-x64 | linux-x64 (padrão: Windows)
 r.get("/diagnostico/info", (req, res) => {
   if (!autorizarAgente(req, res)) return;
-  const info = agente.publicado();
-  if (!info || !info.presente) return res.status(404).json({ success: false, error: "O GSTI Diagnóstico ainda não foi publicado." });
-  res.set("Cache-Control", "no-store").json({ success: true, versao: info.versao, arquivo: info.arquivo, tamanho: info.tamanho, sha512: info.sha512 });
+  try {
+    const { info } = agente.caminhoPublicado(String(req.query.plataforma || ""));
+    const disponiveis = (agente.publicado()?.plataformas || []).filter((p) => p.presente).map((p) => ({ plataforma: p.plataforma, nome: p.nome, versao: p.versao, tamanho: p.tamanho }));
+    res.set("Cache-Control", "no-store").json({ success: true, plataforma: info.plataforma, versao: info.versao, arquivo: info.arquivo, tamanho: info.tamanho, sha512: info.sha512, disponiveis });
+  } catch (e) {
+    res.status(e.status || 404).json({ success: false, error: e.message });
+  }
 });
 
 r.get("/diagnostico/baixar", (req, res) => {
   if (!autorizarAgente(req, res)) return;
   try {
-    const { info, arquivo } = agente.caminhoPublicado();
+    const { info, arquivo } = agente.caminhoPublicado(String(req.query.plataforma || ""));
     res.download(arquivo, info.arquivo, { headers: { "Cache-Control": "private, max-age=3600" } });
   } catch (e) {
     res.status(e.status || 404).json({ success: false, error: e.message });

@@ -323,15 +323,13 @@
       try {
         const r = await api("GET", "/api/cliente/diagnostico");
         if (!r.liberado) return;
-        const mb = r.tamanho ? ` · ${Math.round(r.tamanho / 1048576)} MB` : "";
         caixa.replaceChildren(
-          el("div", { class: "portal__secao-topo" }, [
-            el("h2", { text: "GSTI Diagnóstico" }),
-            r.disponivel ? el("a", { class: "btn btn--pequeno", href: "/cliente/diagnostico/baixar", text: "Baixar" }) : null,
-          ]),
+          el("div", { class: "portal__secao-topo" }, [el("h2", { text: "GSTI Diagnóstico" })]),
           el("p", { class: "portal__ajuda", text: r.disponivel
-            ? `Agente portátil (versão ${r.versao}${mb}) para gerar o laudo técnico do computador do cliente. Copie para um pen drive e rode no equipamento em reparo; o laudo vai para a OS no GSTI App.`
-            : "O agente portátil estará disponível para download em breve." })
+            ? "Agente portátil para gerar o laudo técnico e otimizar o computador do cliente. Copie para um pen drive e rode no equipamento em reparo; o laudo vai para a OS no GSTI App."
+            : "O agente portátil estará disponível para download em breve." }),
+          r.disponivel ? el("div", { class: "licenca__acoes" }, r.plataformas.map((p) =>
+            el("a", { class: "btn btn--contorno btn--pequeno", href: `/cliente/diagnostico/baixar?plataforma=${encodeURIComponent(p.plataforma)}`, text: `${p.nome} · v${p.versao} · ${Math.round(p.tamanho / 1048576)} MB` }))) : null
         );
         caixa.hidden = false;
       } catch { /* sem o módulo ou sessão expirada: nada a mostrar */ }

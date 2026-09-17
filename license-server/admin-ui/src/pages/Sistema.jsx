@@ -96,7 +96,7 @@ export default function Sistema() {
             rotulo="Agente GSTI Diagnóstico publicado"
             ok={!!s.agenteDiagnostico?.presente}
             detalhe={s.agenteDiagnostico
-              ? <>Versão <strong>{s.agenteDiagnostico.versao}</strong> ({(s.agenteDiagnostico.tamanho / 1048576).toFixed(0)} MB) · publicado em {dataHora(s.agenteDiagnostico.publicadoEm)}. Baixado pelo app e pela área do cliente com o módulo Diagnóstico.</>
+              ? <>{s.agenteDiagnostico.plataformas.map((p) => `${p.nome} ${p.versao}${p.presente ? "" : " (arquivo ausente)"}`).join(" · ")}. Baixado pelo app e pela área do cliente com o módulo Diagnóstico.</>
               : <>Não publicado. No servidor: <Box component="span" sx={mono}>node admin.js publicar-diagnostico &lt;GSTI-Diagnostico-x.y.z.exe&gt;</Box></>}
           />
         </Grid>

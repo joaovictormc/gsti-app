@@ -184,6 +184,13 @@ lista de Ordens de Serviço.
    mostra os problemas resolvidos e o que mudou (ex.: SSD novo, espaço livre, bateria); salve o
    **PDF** para entregar ao cliente.
 
+**Otimização (opcional)**: no agente, depois do diagnóstico de entrada, **Otimizar este
+computador** lista ações de limpeza e manutenção (temporários, caches, Windows Update, TRIM,
+verificação de arquivos do sistema…). As que **apagam dados do cliente** (como esvaziar a
+Lixeira) vêm desmarcadas. Informe **quem autorizou**, confirme e execute; ao final, **Gerar
+laudo de saída agora** registra o que foi feito e o espaço liberado no laudo e no PDF. O agente
+também roda no **macOS** e no **Linux** (escolha o sistema em **Baixar GSTI Diagnóstico**).
+
 O laudo aponta problemas **críticos** (disco com falha, SSD gasto, bateria muito fraca,
 superaquecimento, pouco espaço) e **pontos de atenção** (Windows não ativado, sem antivírus,
 desligamentos inesperados, pouca memória). Na primeira vez que receber pela rede, o Windows

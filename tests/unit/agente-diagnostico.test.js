@@ -38,12 +38,28 @@ test("publicação exige a versão no nome e guarda sha512", async () => {
   assert.equal(A.publicado(), null);
   const semVersao = path.join(dados, "agente.exe");
   fs.writeFileSync(semVersao, "x");
-  await assert.rejects(A.publicar(semVersao), /versão/);
+  await assert.rejects(A.publicar(semVersao), /Nome inválido/);
   const info = await A.publicar(exe);
   assert.equal(info.versao, "1.2.3");
-  assert.equal(info.arquivo, "GSTI-Diagnostico-1.2.3.exe");
+  assert.equal(info.arquivo, "GSTI-Diagnostico-1.2.3-windows-x64.exe", "nome antigo do .exe vira Windows x64");
+  assert.equal(info.plataforma, "windows-x64");
   assert.equal(info.sha512, crypto.createHash("sha512").update(fs.readFileSync(exe)).digest("base64"));
-  assert.ok(info.presente);
+  assert.ok(A.publicado().presente);
+});
+
+test("várias plataformas: nome do arquivo define a plataforma; cada uma mantém só a versão atual", async () => {
+  const gerar = (nome) => { const p = path.join(dados, nome); fs.writeFileSync(p, crypto.randomBytes(1024)); return p; };
+  await assert.rejects(A.publicar(gerar("GSTI-Diagnostico-1.2.3-macos-arm64.exe")), /Nome inválido/);
+  await assert.rejects(A.publicar(gerar("GSTI-Diagnostico-1.2.3-solaris-x64.zip")), /Nome inválido/);
+  await A.publicar(gerar("GSTI-Diagnostico-1.2.0-macos-arm64.zip"));
+  await A.publicar(gerar("GSTI-Diagnostico-1.2.4-macos-arm64.zip"));
+  await A.publicar(gerar("GSTI-Diagnostico-1.2.3-linux-x64.AppImage"));
+  const pub = A.publicado();
+  assert.deepEqual(pub.plataformas.map((p) => [p.plataforma, p.versao]).sort(), [["linux-x64", "1.2.3"], ["macos-arm64", "1.2.4"], ["windows-x64", "1.2.3"]]);
+  assert.equal(pub.versao, "1.2.3", "topo do resumo continua sendo o Windows");
+  assert.ok(!fs.readdirSync(A.DIR).includes("GSTI-Diagnostico-1.2.0-macos-arm64.zip"), "versão anterior da mesma plataforma é removida");
+  assert.throws(() => A.caminhoPublicado("macos-x64"), /macOS \(Intel\) ainda não foi publicado/);
+  assert.equal(A.caminhoPublicado("qualquer").info.plataforma, "windows-x64");
 });
 
 test("liberação: licença com o módulo, sem o módulo, antiga (todos) e cliente do portal", () => {
@@ -74,7 +90,10 @@ test("download pelo app confere sha512 e grava na pasta escolhida", async () => 
     assert.equal(r.success, true, r.error);
     assert.equal(r.versao, "1.2.3");
     assert.deepEqual(fs.readFileSync(r.caminho), fs.readFileSync(exe));
-    assert.deepEqual(fs.readdirSync(pasta), ["GSTI-Diagnostico-1.2.3.exe"], "sem arquivo temporário sobrando");
+    const mac = await baixarAgente({ servidor: base, token, pasta, plataforma: "macos-arm64" });
+    assert.equal(mac.versao, "1.2.4");
+    assert.match((await baixarAgente({ servidor: base, token, pasta, plataforma: "macos-x64" })).error, /macOS \(Intel\) ainda não foi publicado/);
+    assert.deepEqual(fs.readdirSync(pasta).sort(), ["GSTI-Diagnostico-1.2.3-windows-x64.exe", "GSTI-Diagnostico-1.2.4-macos-arm64.zip"], "sem arquivo temporário sobrando");
 
     const semModulo = L.emitirLicenca({ email: "semmod@loja.local", plano: "anual", dias: 365, modulos: [] });
     const t2 = L.ativar({ chave: semModulo.chave, maquinaId: maquina() }).token;
@@ -82,7 +101,7 @@ test("download pelo app confere sha512 e grava na pasta escolhida", async () => 
     assert.match((await baixarAgente({ servidor: base, token: "", pasta })).error, /Ative a licença/);
 
     // Arquivo trocado no servidor depois da publicação: download recusado
-    fs.appendFileSync(path.join(A.DIR, "GSTI-Diagnostico-1.2.3.exe"), "corrompido");
+    fs.appendFileSync(path.join(A.DIR, "GSTI-Diagnostico-1.2.3-windows-x64.exe"), "corrompido");
     const pasta2 = fs.mkdtempSync(path.join(os.tmpdir(), "pendrive-"));
     assert.match((await baixarAgente({ servidor: base, token, pasta: pasta2 })).error, /não confere/);
     assert.deepEqual(fs.readdirSync(pasta2), []);

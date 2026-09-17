@@ -5158,13 +5158,13 @@ ipcMain.handle("delete-laudo", async (event, id) => {
   return { success: true };
 });
 
-ipcMain.handle("download-diagnostico-agente", async (event) => {
+ipcMain.handle("download-diagnostico-agente", async (event, { plataforma } = {}) => {
   const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
     title: "Onde salvar o GSTI Diagnóstico (ex.: pen drive)",
     properties: ["openDirectory", "createDirectory"],
   });
   if (canceled || !filePaths[0]) return { success: false, cancelado: true };
-  const r = await laudosModulo.baixarAgente({ servidor: licenseManager.serverUrl(), token: appConfig?.license?.token, pasta: filePaths[0] });
+  const r = await laudosModulo.baixarAgente({ servidor: licenseManager.serverUrl(), token: appConfig?.license?.token, pasta: filePaths[0], plataforma });
   if (r.success) shell.showItemInFolder(r.caminho);
   return r;
 });

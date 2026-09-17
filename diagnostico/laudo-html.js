@@ -10,6 +10,19 @@ const SITUACAO = { ok: ["Sem problemas encontrados", "ok"], atencao: ["Pontos de
 const NIVEL = { critico: "Crítico", atencao: "Atenção", info: "Informação", resolvido: "Resolvido" };
 const MOMENTO = { entrada: "Entrada (antes do reparo)", saida: "Saída (depois do reparo)" };
 const SAUDE = { Healthy: "Saudável", Warning: "Atenção", Unhealthy: "Com falha" };
+const PLATAFORMA = { windows: "Windows", macos: "macOS", linux: "Linux" };
+const mbOuGb = (bytes) => (bytes >= 1073741824 ? `${(bytes / 1073741824).toFixed(1)} GB` : `${Math.round((bytes || 0) / 1048576)} MB`);
+
+// Otimizações executadas pelo agente (registradas no laudo gerado depois delas)
+function blocoServicos(servicos) {
+  if (!servicos?.acoes?.length) return "";
+  const status = { ok: "Concluída", erro: "Falhou", pulado: "Não executada" };
+  return `<h2>Serviços executados pelo agente</h2>
+  <p class="nota">${dataHora(servicos.executadoEm)} · autorizado por <b>${esc(servicos.autorizadoPor)}</b>${servicos.tecnico ? ` · técnico ${esc(servicos.tecnico)}` : ""} · espaço liberado: <b>${mbOuGb(servicos.liberadoTotalBytes)}</b></p>
+  <table class="fixa"><colgroup><col style="width:34%"><col style="width:12%"><col style="width:12%"><col></colgroup><thead><tr><th>Ação</th><th>Situação</th><th>Liberado</th><th>Detalhe</th></tr></thead><tbody>
+  ${servicos.acoes.map((a) => `<tr><td>${esc(a.nome)}${a.personalizado ? ' <small class="nota">(script da assistência)</small>' : ""}</td><td class="${a.status === "ok" ? "melhorou" : "piorou"}">${esc(status[a.status] || a.status)}</td><td>${a.liberadoBytes ? mbOuGb(a.liberadoBytes) : "—"}</td><td>${esc(a.detalhe)}</td></tr>`).join("")}
+  </tbody></table>`;
+}
 
 const CSS = `
 @page { size: A4; margin: 14mm 12mm; }
@@ -89,7 +102,7 @@ function laudoHtml(laudo, { empresa } = {}) {
     <div><span>Fabricante / modelo</span>${valor([e.fabricante, e.modelo].filter(Boolean).join(" "))}</div>
     <div><span>Tipo</span>${valor(e.tipo)}</div>
     <div><span>Número de série</span>${valor(e.numeroSerie)}</div>
-    <div><span>Nome do computador</span>${valor(e.computador)}</div>
+    <div><span>Nome do computador</span>${valor(e.computador)}${l.plataforma ? ` <small class="nota">(${esc(PLATAFORMA[l.plataforma] || l.plataforma)})</small>` : ""}</div>
     <div><span>Placa-mãe</span>${valor(e.placaMae)}</div>
     <div><span>BIOS</span>${valor(e.bios)}</div>
     <div><span>Processador</span>${valor((l.processador || []).map((p) => `${p.nome} (${p.nucleos}n/${p.threads}t)`).join("; "))}</div>
@@ -102,7 +115,7 @@ function laudoHtml(laudo, { empresa } = {}) {
 
   <h2>Sistema</h2>
   <div class="grade">
-    <div><span>Windows</span>${valor(s.nome)}</div>
+    <div><span>Sistema</span>${valor(s.nome)}</div>
     <div><span>Versão / build</span>${valor([s.versao, s.arquitetura].filter(Boolean).join(" · "))}</div>
     <div><span>Ativação</span>${valor(s.ativacao)}</div>
     <div><span>Instalado em</span>${data(s.instaladoEm)}</div>
@@ -146,6 +159,7 @@ function laudoHtml(laudo, { empresa } = {}) {
   ${l.eventos.errosRecentes.slice(0, 8).map((x) => `<tr><td style="white-space:nowrap">${dataHora(x.data)}</td><td>${esc(x.origem)}</td><td>${esc(x.mensagem)}</td></tr>`).join("")}
   </tbody></table>` : ""}
 
+  ${blocoServicos(l.servicos)}
   ${l.observacao ? `<h2>Observações do técnico</h2><p>${esc(l.observacao)}</p>` : ""}
   ${(l.limitacoes || []).length ? `<p class="nota">${l.limitacoes.map(esc).join(" ")}</p>` : ""}
 
@@ -177,6 +191,7 @@ function comparativoHtml(entrada, saida, { empresa } = {}) {
   ${c.linhas.length ? `<table><thead><tr><th>Item</th><th>Antes</th><th>Depois</th><th></th></tr></thead><tbody>
   ${c.linhas.map((x) => `<tr><td>${esc(x.grupo)} · ${esc(x.item)}</td><td>${esc(x.antes)}</td><td>${esc(x.depois)}</td><td class="${esc(x.efeito)}">${esc(efeito[x.efeito])}</td></tr>`).join("")}
   </tbody></table>` : `<p class="nota">Nenhuma diferença medida entre os laudos.</p>`}
+  ${blocoServicos(saida.servicos)}
   ${saida.observacao ? `<h2>Observações do técnico</h2><p>${esc(saida.observacao)}</p>` : ""}
   <div class="assinaturas"><div>Técnico responsável</div><div>Cliente</div></div>
   <footer><span>Entrada ${esc(String(entrada.id).slice(0, 8))} · Saída ${esc(String(saida.id).slice(0, 8))}</span><span>GSTI Diagnóstico</span></footer>`;

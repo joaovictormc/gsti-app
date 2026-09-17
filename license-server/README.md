@@ -324,15 +324,19 @@ O agente portátil do módulo Diagnóstico é distribuído pelo servidor (detalh
 [diagnostico/README.md](../diagnostico/README.md)):
 
 ```bash
-npm run dist:diagnostico                                   # na raiz do repositório
-node admin.js publicar-diagnostico dist_diagnostico/GSTI-Diagnostico-1.0.0.exe
+# arquivos gerados na raiz (npm run dist:diagnostico / :mac / :linux) ou pelo GitHub Actions
+node admin.js publicar-diagnostico GSTI-Diagnostico-1.1.0-windows-x64.exe
+node admin.js publicar-diagnostico GSTI-Diagnostico-1.1.0-macos-arm64.zip
+node admin.js publicar-diagnostico GSTI-Diagnostico-1.1.0-macos-x64.zip
+node admin.js publicar-diagnostico GSTI-Diagnostico-1.1.0-linux-x64.AppImage
 ```
 
-- Fica em `data/atualizacoes/diagnostico` (só a versão atual, com sha512 em `info.json`).
-- **App**: `/atualizacoes/diagnostico/info` e `/baixar` com o token da licença (válida e com o
-  módulo; teste grátis conforme os módulos do teste). O app confere o sha512.
-- **Área do cliente**: seção *GSTI Diagnóstico* com o botão Baixar para quem tem licença ativa
-  com o módulo.
+- Fica em `data/atualizacoes/diagnostico`: um arquivo por plataforma (só a versão atual de
+  cada uma), com sha512 em `info.json`. A plataforma sai do nome do arquivo.
+- **App**: `/atualizacoes/diagnostico/info?plataforma=` e `/baixar?plataforma=`
+  (`windows-x64`, `macos-arm64`, `macos-x64`, `linux-x64`) com o token da licença (válida e
+  com o módulo). O app confere o sha512.
+- **Área do cliente**: seção *GSTI Diagnóstico* com um botão por plataforma publicada.
 - *Painel → Sistema* mostra a versão publicada.
 
 ### Suporte

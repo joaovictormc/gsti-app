@@ -9,7 +9,7 @@
     "name": "gsti-diagnostico",
     "main": "diagnostico/agente/main.js",
     "description": "Agente portátil de diagnóstico e laudo técnico do GSTI App",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "files": [
     "diagnostico/agente/**",
@@ -19,6 +19,11 @@
     "diagnostico/laudo-html.js",
     "diagnostico/rede-local.js",
     "diagnostico/versao.json",
+    "diagnostico/coleta.js",
+    "diagnostico/coleta-macos.js",
+    "diagnostico/coleta-linux.js",
+    "diagnostico/otimizacao.js",
+    "diagnostico/cli.js",
     "!node_modules/**"
   ],
   "asar": true,
@@ -33,10 +38,38 @@
     ],
     "icon": "build_resources/icon.ico",
     "requestedExecutionLevel": "requireAdministrator",
-    "artifactName": "GSTI-Diagnostico-${version}.${ext}"
+    "artifactName": "GSTI-Diagnostico-${version}-windows-${arch}.${ext}"
   },
   "portable": {
     "unpackDirName": "gsti-diagnostico"
   },
-  "publish": null
+  "publish": null,
+  "mac": {
+    "target": [
+      {
+        "target": "zip",
+        "arch": [
+          "x64",
+          "arm64"
+        ]
+      }
+    ],
+    "icon": "build_resources/icon.icns",
+    "category": "public.app-category.utilities",
+    "identity": null,
+    "artifactName": "GSTI-Diagnostico-${version}-macos-${arch}.${ext}"
+  },
+  "linux": {
+    "target": [
+      {
+        "target": "AppImage",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "build_resources/icons",
+    "category": "Utility",
+    "artifactName": "GSTI-Diagnostico-${version}-linux-${arch}.${ext}"
+  }
 }

@@ -1,0 +1,79 @@
+# GSTI Diagnóstico: testa a coleta de verdade no Windows, macOS e Linux e gera o agente
+# portátil das três plataformas. Rode em Actions → "GSTI Diagnóstico" → Run workflow, ou
+# com uma tag diagnostico-v1.2.3. Os arquivos ficam nos artefatos da execução; publique no
+# servidor com: node admin.js publicar-diagnostico <arquivo>
+name: GSTI Diagnóstico
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["diagnostico-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  coleta:
+    name: Coleta real (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Testes do diagnóstico (sem dependências)
+        run: node --test tests/unit/diagnostico.test.js tests/unit/diagnostico-plataformas.test.js tests/unit/otimizacao.test.js
+      - name: smartmontools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q smartmontools
+      - name: Coleta como usuário comum
+        run: node diagnostico/cli.js --sem-disco --saida laudo-usuario.gstilaudo --html laudo-usuario.html
+      - name: Coleta como root (Linux e macOS)
+        if: runner.os != 'Windows'
+        run: sudo "$(which node)" diagnostico/cli.js --sem-rede --saida laudo-root.gstilaudo --html laudo-root.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: laudos-${{ matrix.os }}
+          path: |
+            laudo-*.gstilaudo
+            laudo-*.html
+
+  agente:
+    name: Agente portátil (${{ matrix.os }})
+    needs: coleta
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:diagnostico
+          - os: macos-latest
+            script: dist:diagnostico:mac
+          - os: ubuntu-latest
+            script: dist:diagnostico:linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Binário do Electron
+        run: node node_modules/electron/install.js
+      - name: Gerar o agente
+        run: npm run ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gsti-diagnostico-${{ matrix.os }}
+          path: |
+            dist_diagnostico/GSTI-Diagnostico-*.exe
+            dist_diagnostico/GSTI-Diagnostico-*.zip
+            dist_diagnostico/GSTI-Diagnostico-*.AppImage
+          if-no-files-found: error

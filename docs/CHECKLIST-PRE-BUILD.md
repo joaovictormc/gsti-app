@@ -102,9 +102,10 @@ Idealmente em uma **máquina limpa** (ou VM):
 
 ## 7. Agente GSTI Diagnóstico (se mudou)
 
-- [ ] Atualizar `diagnostico/versao.json` e rodar `npm run dist:diagnostico`.
-- [ ] Testar o `.exe` em um computador (como administrador): diagnóstico, PDF e envio à OS.
-- [ ] Publicar: `node admin.js publicar-diagnostico <GSTI-Diagnostico-x.y.z.exe>`.
+- [ ] Atualizar `diagnostico/versao.json` e rodar o workflow **GSTI Diagnóstico** no GitHub Actions
+  (coleta real nos três sistemas + agentes); ou `npm run dist:diagnostico[:mac|:linux]` em cada sistema.
+- [ ] Testar em cada sistema (como administrador): diagnóstico, otimização, PDF e envio à OS.
+- [ ] Publicar cada arquivo: `node admin.js publicar-diagnostico <GSTI-Diagnostico-x.y.z-plataforma.ext>`.
 
 ---
 

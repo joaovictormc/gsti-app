@@ -84,4 +84,19 @@ input:focus, textarea:focus { outline: 2px solid #c7d2fe; border-color: var(--pr
 .loja small { color: var(--suave); display: block; }
 .erro { color: var(--critico); background: #fef2f2; border-radius: 8px; padding: 8px 10px; margin: 0; }
 .sucesso { color: #065f46; background: #ecfdf5; border-radius: 8px; padding: 8px 10px; margin: 0; }
+.grupos { display: grid; gap: 14px; }
+.grupo h2 { margin-bottom: 8px; }
+.acao { display: flex; gap: 12px; align-items: flex-start; padding: 10px 4px; border-top: 1px solid var(--linha); cursor: pointer; }
+.acao:first-of-type { border-top: 0; }
+.acao input { width: auto; margin-top: 3px; }
+.acao small { display: block; color: var(--suave); }
+.selos { display: inline-flex; gap: 6px; margin-left: 6px; vertical-align: middle; }
+.selo { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; border-radius: 5px; padding: 1px 6px; background: #eef2ff; color: var(--primaria-escura); }
+.selo--risco { background: #fef2f2; color: #991b1b; }
+.selo--lento { background: #fffbeb; color: #92400e; }
+.check-autorizacao { display: flex; gap: 8px; align-items: center; }
+.check-autorizacao input { width: auto; }
+.etapas li.erro-etapa { color: var(--critico); }
+.etapas li.erro-etapa::before { background: var(--critico); border-color: var(--critico); }
+.etapas li small { display: block; font-weight: 400; color: var(--suave); }
 @media (max-width: 860px) { .grade, .linha { grid-template-columns: 1fr; } }

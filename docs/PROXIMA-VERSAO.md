@@ -92,6 +92,9 @@ Atualizado em 2026-09-17. Versão atual do app: **1.3.0**; **1.4.0 em desenvolvi
       SMART, bateria, temperaturas, eventos, testes rápidos), laudo com alertas e PDF, envio à
       OS pela rede local ou arquivo, comparativo antes/depois e download do agente pelo app e
       pela área do cliente. Ver [diagnostico/README.md](../diagnostico/README.md).
+- [x] **Diagnóstico multiplataforma e otimização**: coleta no Windows, macOS e Linux, agentes
+      para os três sistemas (CI no GitHub Actions), otimização autorizada e registrada no laudo,
+      scripts próprios da assistência.
 
 ### Segurança
 - [x] **Permissões checadas no processo principal** (`controle-acesso.js`): cada canal IPC
@@ -183,6 +186,21 @@ os avançados depois, sem gerar uma build diferente para cada plano.
 repositório, laudo anexado à OS por rede local ou arquivo) — ver
 [diagnostico/README.md](../diagnostico/README.md).
 
+Entregue também: coleta no **macOS e Linux**, **otimização** com registro e **scripts da
+assistência**.
+
+**Em decisão — drivers pós-formatação** (proposta em fases, por segurança e licenciamento):
+1. **Identificar** dispositivos sem driver/com erro (Get-PnpDevice, códigos 28/10) com os IDs de
+   hardware e o fabricante (base pública pci.ids/usb.ids) no laudo.
+2. **Backup e restauração de drivers** com ferramentas do próprio Windows: exportar os drivers
+   do cliente antes de formatar (`Export-WindowsDriver`/`pnputil /export-driver`) para o pen
+   drive e reinstalar depois (`pnputil /add-driver /subdirs /install`) — resolve inclusive a
+   rede sem driver.
+3. **Instalar pelo Windows Update** (drivers assinados da Microsoft) pela API oficial.
+4. **Ferramentas dos fabricantes** quando detectadas (Dell Command | Update, Lenovo System
+   Update/Thin Installer, HP Image Assistant) e repositório próprio da assistência.
+Linux: `ubuntu-drivers` e `fwupdmgr`; macOS: não se aplica.
+
 Próximos passos possíveis: laudo também no recibo de saída da OS, histórico de laudos por
 equipamento, testes de estresse opcionais (CPU/memória), assinatura digital do agente e
 diagnóstico de celulares.
@@ -255,5 +273,6 @@ Feita por último, depois das funcionalidades:
 - [ ] Chaves de licença de **produção** no `license-config.js` e `serverUrl` HTTPS.
 - [ ] Mercado Pago em produção, SMTP real e **compra real de baixo valor** testada (e reembolsada).
 - [ ] **Assinatura digital do instalador** e do agente GSTI Diagnóstico (certificado de assinatura de código).
-- [ ] Publicar o agente GSTI Diagnóstico no servidor de produção.
+- [ ] Publicar o agente GSTI Diagnóstico no servidor de produção (Windows, macOS e Linux).
+- [ ] Assinar e notarizar o agente de macOS (Apple Developer) para abrir sem aviso do Gatekeeper.
 - [ ] Primeira publicação da atualização automática no servidor de produção.

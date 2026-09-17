@@ -11,6 +11,10 @@
   let estado = null;
   let laudo = null;
   let comparativo = null;
+  let ultimasOpcoes = null;
+  // Otimização feita nesta visita: entra no próximo laudo de saída
+  let servicosSessao = null;
+  const mb = (b) => (b >= 1073741824 ? `${(b / 1073741824).toFixed(1)} GB` : `${Math.round((b || 0) / 1048576)} MB`);
 
   function el(tag, attrs = {}, filhos = []) {
     const n = document.createElement(tag);
@@ -34,17 +38,28 @@
     estado = await api.estado();
     $("[data-versao]").textContent = `versão ${estado.versao}`;
     $("[data-aviso-admin]").hidden = estado.admin;
+    if (estado.plataforma !== "win32") {
+      $("[data-acao='reabrir-admin']").hidden = true;
+      $("[data-aviso-admin] span").textContent = estado.plataforma === "linux"
+        ? "Sem root: para ler a saúde SMART dos discos, rode o programa com sudo (e instale smartmontools)."
+        : "No macOS, as ações de otimização que exigem administrador pedem a senha na hora.";
+    }
     $("#form-inicio").tecnico.value = estado.config.tecnico || "";
   }
 
   // ----- Diagnóstico -----
-  $("#form-inicio").addEventListener("submit", async (ev) => {
+  $("#form-inicio").addEventListener("submit", (ev) => {
     ev.preventDefault();
     const f = ev.target;
-    const opcoes = {
+    diagnosticar({
       momento: f.momento.value, os: f.os.value, tecnico: f.tecnico.value, observacao: f.observacao.value,
       testeDisco: f.testeDisco.checked, testeRede: f.testeRede.checked,
-    };
+    });
+  });
+
+  async function diagnosticar(opcoes) {
+    ultimasOpcoes = opcoes;
+    if (opcoes.momento === "saida" && servicosSessao) opcoes = { ...opcoes, servicos: servicosSessao };
     $$("[data-etapa]").forEach((li) => {
       li.className = "";
       li.hidden = (li.dataset.etapa === "disco" && !opcoes.testeDisco) || (li.dataset.etapa === "rede" && !opcoes.testeRede);
@@ -66,8 +81,9 @@
     }
     laudo = r.laudo;
     comparativo = null;
+    if (laudo.servicos) servicosSessao = null; // já registrada neste laudo
     mostrarResultado();
-  });
+  }
 
   function mostrarResultado() {
     const e = laudo.equipamento;
@@ -127,11 +143,95 @@
       if (r.success) mensagem(`PDF do comparativo salvo em ${r.caminho}`, "sucesso");
       return;
     }
+    if (acao === "otimizar") return abrirOtimizacao();
+    if (acao === "voltar-resultado") return mostrarTela("resultado");
+    if (acao === "laudo-saida") return diagnosticar({ ...(ultimasOpcoes || {}), momento: "saida" });
     if (acao === "enviar") return abrirEnvio();
     if (acao === "procurar") return procurar();
     if (acao === "fechar-envio") return $("#dialogo-enviar").close();
     if (acao === "config") return abrirConfig();
     if (acao === "fechar-config") return $("#dialogo-config").close();
+  });
+
+  // ----- Otimização -----
+  let acoesOtimizacao = [];
+
+  async function abrirOtimizacao() {
+    const r = await api.otimizacaoCatalogo();
+    acoesOtimizacao = r.acoes || [];
+    const grupos = [
+      ["Recomendadas", (a) => !a.personalizado && a.risco === "baixo" && !a.lento],
+      ["Demoradas (vários minutos)", (a) => !a.personalizado && a.risco === "baixo" && a.lento],
+      ["Apagam dados — só com autorização do cliente", (a) => !a.personalizado && a.risco !== "baixo"],
+      ["Scripts da assistência", (a) => a.personalizado],
+    ];
+    const caixas = grupos.map(([titulo, filtro]) => {
+      const itens = acoesOtimizacao.filter(filtro);
+      if (!itens.length) return null;
+      return el("div", { class: "cartao grupo" }, [
+        el("h2", { text: titulo }),
+        ...itens.map((a) => el("label", { class: "acao" }, [
+          el("input", { type: "checkbox", name: "acao", value: a.id, checked: a.padrao }),
+          el("span", {}, [
+            el("b", { text: a.nome }),
+            el("span", { class: "selos" }, [
+              a.admin ? el("span", { class: "selo", text: "Administrador" }) : null,
+              a.lento ? el("span", { class: "selo selo--lento", text: "Demorada" }) : null,
+              a.risco !== "baixo" ? el("span", { class: "selo selo--risco", text: "Apaga dados" }) : null,
+            ]),
+            el("small", { text: a.descricao }),
+          ]),
+        ])),
+      ]);
+    }).filter(Boolean);
+    caixas.push(el("p", { class: "nota", text: `Scripts próprios: coloque arquivos ${estado.plataforma === "win32" ? ".ps1" : ".sh"} em ${r.pastaScripts} (cabeçalho com "# nome:", "# descricao:", "# risco:").` }));
+    $("[data-grupos]").replaceChildren(...caixas);
+    const f = $("#form-otimizacao");
+    f.confirmo.checked = false;
+    $("[data-erro-otimizacao]").hidden = true;
+    mostrarTela("otimizacao");
+  }
+
+  $("#form-otimizacao").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    const erro = $("[data-erro-otimizacao]");
+    const ids = $$("input[name=acao]:checked", f).map((c) => c.value);
+    const falha = !ids.length ? "Escolha ao menos uma ação." : !f.autorizadoPor.value.trim() ? "Informe quem autorizou." : !f.confirmo.checked ? "Confirme que o cliente autorizou as ações." : "";
+    if (falha) {
+      erro.textContent = falha;
+      erro.hidden = false;
+      return;
+    }
+    const lista = $("[data-lista-otimizacao]");
+    lista.replaceChildren(...ids.map((id) => el("li", { "data-otimizacao": id, text: acoesOtimizacao.find((a) => a.id === id)?.nome || id })));
+    $("[data-fim-otimizacao]").hidden = true;
+    $("[data-titulo-otimizando]").textContent = "Otimizando…";
+    mostrarTela("otimizando");
+    const parar = api.aoProgredirOtimizacao((p) => {
+      const li = $(`[data-otimizacao="${CSS.escape(p.id)}"]`, lista);
+      if (!li) return;
+      if (p.fase === "inicio") li.className = "ativa";
+      else {
+        const r = p.resultado;
+        li.className = r.status === "ok" ? "feita" : "erro-etapa";
+        li.replaceChildren(el("span", {}, [document.createTextNode(`${r.nome}${r.liberadoBytes ? ` · ${mb(r.liberadoBytes)} liberados` : ""}`), el("small", { text: r.detalhe })]));
+      }
+    });
+    const r = await api.otimizar({ ids, autorizadoPor: f.autorizadoPor.value, tecnico: $("#form-inicio").tecnico.value });
+    parar();
+    $("[data-titulo-otimizando]").textContent = r.success ? "Otimização concluída" : "Otimização não executada";
+    const total = $("[data-total-otimizacao]");
+    if (r.success) {
+      servicosSessao = r.servicos;
+      const falhas = r.servicos.acoes.filter((a) => a.status !== "ok").length;
+      total.className = `situacao ${falhas ? "atencao" : "ok"}`;
+      total.textContent = `${mb(r.servicos.liberadoTotalBytes)} liberados · ${r.servicos.acoes.length - falhas} ação(ões) concluída(s)${falhas ? `, ${falhas} com falha` : ""}. Gere o laudo de saída para registrar.`;
+    } else {
+      total.className = "situacao critico";
+      total.textContent = r.error;
+    }
+    $("[data-fim-otimizacao]").hidden = false;
   });
 
   // ----- Envio pela rede -----

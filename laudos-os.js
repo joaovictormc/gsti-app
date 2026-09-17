@@ -131,27 +131,27 @@ function criarLaudosOS({ obterPool, BrowserWindow, dialog, obterEmpresa, notific
 
 // Baixa o agente portátil publicado no servidor de licenças (licença com o módulo)
 // para a pasta escolhida (pen drive), conferindo o sha512.
-async function baixarAgente({ servidor, token, pasta, http = require("axios") }) {
+async function baixarAgente({ servidor, token, pasta, plataforma = "windows-x64", http = require("axios") }) {
   const base = String(servidor || "").replace(/\/+$/, "");
   if (!base || !token) return { success: false, error: "Ative a licença para baixar o GSTI Diagnóstico." };
   const headers = { "x-gsti-licenca": token };
   const erro = (e) => {
     const status = e?.response?.status;
     if (status === 403) return "O plano desta licença não inclui o módulo Diagnóstico.";
-    if (status === 404) return "O GSTI Diagnóstico ainda não foi publicado no servidor.";
+    if (status === 404) return e?.response?.data?.error || "O GSTI Diagnóstico ainda não foi publicado no servidor.";
     if (status === 401) return "A licença não foi reconhecida pelo servidor.";
     return "Sem conexão com o servidor para baixar o GSTI Diagnóstico.";
   };
   let info;
   try {
-    ({ data: info } = await http.get(`${base}/atualizacoes/diagnostico/info`, { headers, timeout: 15000 }));
+    ({ data: info } = await http.get(`${base}/atualizacoes/diagnostico/info`, { headers, params: { plataforma }, timeout: 15000 }));
   } catch (e) {
     return { success: false, error: erro(e) };
   }
   const destino = require("path").join(pasta, info.arquivo);
   const temp = `${destino}.baixando`;
   try {
-    const resp = await http.get(`${base}/atualizacoes/diagnostico/baixar`, { headers, responseType: "stream", timeout: 600000 });
+    const resp = await http.get(`${base}/atualizacoes/diagnostico/baixar`, { headers, params: { plataforma }, responseType: "stream", timeout: 600000 });
     const hash = require("crypto").createHash("sha512");
     await new Promise((resolve, reject) => {
       const saida = fs.createWriteStream(temp);

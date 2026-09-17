@@ -5,15 +5,22 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require("electron")
 const path = require("path");
 const fs = require("fs");
 const { execFile, spawn } = require("child_process");
-const { coletarBruto } = require("../coleta-windows");
+const { coletar } = require("../coleta");
 const { executarTestes } = require("../testes-rapidos");
-const { montarLaudo, validarLaudo, comparar } = require("../laudo");
+const { montarLaudoDeSecoes, validarLaudo, comparar } = require("../laudo");
+const otimizacao = require("../otimizacao");
 const { laudoHtml, comparativoHtml } = require("../laudo-html");
 const rede = require("../rede-local");
 
 const VERSAO = require("../versao.json").versao;
-// Portátil: configurações e laudos ficam ao lado do .exe (pen drive)
-const PASTA_BASE = process.env.PORTABLE_EXECUTABLE_DIR || (app.isPackaged ? path.dirname(process.execPath) : path.join(app.getPath("userData")));
+// Portátil: configurações, laudos e scripts ficam ao lado do programa (pen drive)
+function pastaDoPrograma() {
+  if (process.env.PORTABLE_EXECUTABLE_DIR) return process.env.PORTABLE_EXECUTABLE_DIR; // Windows (.exe portátil)
+  if (process.env.APPIMAGE) return path.dirname(process.env.APPIMAGE); // Linux (AppImage)
+  if (app.isPackaged && process.platform === "darwin") return path.resolve(process.execPath, "..", "..", "..", ".."); // pasta do .app
+  return app.isPackaged ? path.dirname(process.execPath) : app.getPath("userData");
+}
+const PASTA_BASE = pastaDoPrograma();
 const ARQ_CONFIG = path.join(PASTA_BASE, "gsti-diagnostico.json");
 const EXTENSAO = "gstilaudo";
 
@@ -47,9 +54,11 @@ function nomeArquivo(laudo, extensao) {
   return `laudo-${ref}-${laudo.momento}-${carimbo}.${extensao}`.replace(/[^\w.-]+/g, "_");
 }
 
-// "net session" só funciona com permissão de administrador
+// Windows: "net session" só funciona com administrador; macOS/Linux: root
 const ehAdministrador = () =>
-  new Promise((resolve) => execFile("net", ["session"], { windowsHide: true }, (erro) => resolve(!erro)));
+  process.platform === "win32"
+    ? new Promise((resolve) => execFile("net", ["session"], { windowsHide: true }, (erro) => resolve(!erro)))
+    : Promise.resolve(typeof process.getuid === "function" && process.getuid() === 0);
 
 function criarJanela() {
   Menu.setApplicationMenu(null);
@@ -94,6 +103,8 @@ async function salvarComo(conteudo, nomePadrao, filtro) {
 // ---------------------------------------------------------------------------
 ipcMain.handle("agente:estado", async () => ({
   versao: VERSAO,
+  plataforma: process.platform,
+  pastaScripts: path.join(PASTA_BASE, "scripts"),
   admin: await ehAdministrador(),
   config: lerConfig(),
   pastaLaudos: pastaLaudos(),
@@ -111,11 +122,12 @@ ipcMain.handle("agente:diagnosticar", async (event, opcoes = {}) => {
   const avisar = (etapa) => event.sender.send("agente:progresso", etapa);
   try {
     avisar("coleta");
-    const bruto = await coletarBruto();
+    const secoes = await coletar();
     const testes = await executarTestes({ disco: opcoes.testeDisco !== false, rede: opcoes.testeRede !== false, aoProgredir: avisar });
     avisar("laudo");
-    const laudo = montarLaudo(bruto, {
+    const laudo = montarLaudoDeSecoes(secoes, {
       testes, momento: opcoes.momento, os: String(opcoes.os || "").trim(), tecnico: opcoes.tecnico, observacao: opcoes.observacao, agente: VERSAO,
+      servicos: opcoes.servicos || null,
     });
     return { success: true, laudo };
   } catch (e) {
@@ -161,6 +173,25 @@ ipcMain.handle("agente:salvar-pdf-comparativo", async (_e, { entrada, saida }) =
   return salvarComo(pdf, nomeArquivo(saida, "pdf").replace("laudo-", "comparativo-"), { name: "PDF", extensions: ["pdf"] });
 });
 
+// --- Otimização ---
+ipcMain.handle("agente:otimizacao-catalogo", async () => ({
+  success: true,
+  acoes: otimizacao.paraTela(otimizacao.catalogo({ pastaBase: PASTA_BASE })),
+  pastaScripts: path.join(PASTA_BASE, "scripts", { win32: "windows", darwin: "macos", linux: "linux" }[process.platform] || ""),
+}));
+
+ipcMain.handle("agente:otimizar", async (event, { ids = [], autorizadoPor, tecnico } = {}) => {
+  try {
+    const servicos = await otimizacao.executar(ids, {
+      pastaBase: PASTA_BASE, autorizadoPor, tecnico,
+      aoProgredir: (p) => event.sender.send("agente:otimizacao-progresso", p),
+    });
+    return { success: true, servicos };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 ipcMain.handle("agente:descobrir", async () => ({ success: true, itens: await rede.descobrir() }));
 
 ipcMain.handle("agente:enviar", async (_e, { destino, codigo, laudo }) => {
@@ -179,8 +210,9 @@ ipcMain.handle("agente:abrir-pasta", async () => {
   return { success: true };
 });
 
-// Reabre como administrador (SMART dos discos e temperaturas)
+// Reabre como administrador (SMART dos discos e temperaturas) — só no Windows
 ipcMain.handle("agente:reabrir-admin", async () => {
+  if (process.platform !== "win32") return { success: false, error: "Abra o programa como administrador (Linux: sudo)." };
   const exe = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
   const args = app.isPackaged ? [] : [path.join(__dirname)];
   const lista = args.map((a) => `'${a.replace(/'/g, "''")}'`).join(",");

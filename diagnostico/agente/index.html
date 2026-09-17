@@ -78,9 +78,42 @@
           <button class="botao botao--contorno" type="button" data-acao="pdf">Salvar PDF</button>
           <button class="botao botao--contorno" type="button" data-acao="arquivo">Salvar arquivo do laudo</button>
           <button class="botao botao--contorno" type="button" data-acao="comparar" data-so-saida hidden>Comparar com o laudo de entrada</button>
+          <button class="botao botao--contorno" type="button" data-acao="otimizar">Otimizar este computador</button>
           <p class="nota" data-mensagem role="status"></p>
           <button class="link" type="button" data-acao="pasta">Abrir pasta de laudos</button>
         </div>
+      </div>
+    </section>
+    <!-- Otimização -->
+    <section class="tela" data-tela="otimizacao" hidden>
+      <div class="resultado__topo">
+        <div>
+          <p class="rotulo">Otimização</p>
+          <h1>Otimizar este computador</h1>
+          <p class="sub">Escolha as ações. As que apagam dados do cliente vêm desmarcadas e só devem ser usadas com autorização. Tudo fica registrado no laudo de saída.</p>
+        </div>
+        <button class="botao botao--leve" type="button" data-acao="voltar-resultado">Voltar</button>
+      </div>
+      <form class="formulario" id="form-otimizacao">
+        <div data-grupos class="grupos"></div>
+        <div class="cartao formulario">
+          <label class="campo"><span>Autorizado por (cliente ou responsável)</span><input name="autorizadoPor" maxlength="120" required></label>
+          <label class="check-autorizacao"><input type="checkbox" name="confirmo"> O cliente foi informado e autorizou as ações marcadas.</label>
+          <p class="erro" data-erro-otimizacao hidden></p>
+          <button class="botao botao--grande" type="submit">Executar otimização</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Execução da otimização -->
+    <section class="tela" data-tela="otimizando" hidden>
+      <h1 data-titulo-otimizando>Otimizando…</h1>
+      <p class="sub" data-sub-otimizando>Não desligue o computador. Ações demoradas podem levar vários minutos; no macOS e no Linux o sistema pede a senha de administrador uma vez.</p>
+      <ol class="cartao etapas" data-lista-otimizacao></ol>
+      <div class="cartao acoes" data-fim-otimizacao hidden>
+        <p class="situacao ok" data-total-otimizacao></p>
+        <button class="botao" type="button" data-acao="laudo-saida">Gerar laudo de saída agora</button>
+        <button class="botao botao--leve" type="button" data-acao="voltar-resultado">Voltar ao laudo</button>
       </div>
     </section>
   </main>

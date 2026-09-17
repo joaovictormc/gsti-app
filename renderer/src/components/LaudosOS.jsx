@@ -10,6 +10,14 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import WifiTetheringIcon from "@mui/icons-material/WifiTethering";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import DownloadIcon from "@mui/icons-material/Download";
+import Menu from "@mui/material/Menu";
+
+const PLATAFORMAS_AGENTE = [
+  ["windows-x64", "Windows"],
+  ["macos-arm64", "macOS (Apple Silicon: M1, M2…)"],
+  ["macos-x64", "macOS (Intel)"],
+  ["linux-x64", "Linux (AppImage)"],
+];
 import ConfirmDialog from "./ConfirmDialog";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -154,10 +162,12 @@ export default function LaudosOS({ os, onClose, onAlterado }) {
   };
 
   const [baixando, setBaixando] = useState(false);
-  const baixarAgente = async () => {
+  const [menuBaixar, setMenuBaixar] = useState(null);
+  const baixarAgente = async (plataforma) => {
+    setMenuBaixar(null);
     setMensagem(null);
     setBaixando(true);
-    const r = await window.api.downloadDiagnosticoAgente();
+    const r = await window.api.downloadDiagnosticoAgente(plataforma);
     setBaixando(false);
     if (r.success) setMensagem({ tipo: "success", texto: `GSTI Diagnóstico ${r.versao} salvo em ${r.caminho}.` });
     else if (!r.cancelado) setMensagem({ tipo: "error", texto: r.error });
@@ -185,9 +195,12 @@ export default function LaudosOS({ os, onClose, onAlterado }) {
           <Button variant="contained" startIcon={<WifiTetheringIcon />} onClick={receber} disabled={!!recebendo}>Receber pela rede</Button>
           <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={importar}>Importar arquivo (.gstilaudo)</Button>
           <Box sx={{ flex: 1 }} />
-          <Button startIcon={baixando ? <CircularProgress size={16} /> : <DownloadIcon />} onClick={baixarAgente} disabled={baixando}>
+          <Button startIcon={baixando ? <CircularProgress size={16} /> : <DownloadIcon />} onClick={(e) => setMenuBaixar(e.currentTarget)} disabled={baixando}>
             {baixando ? "Baixando…" : "Baixar GSTI Diagnóstico"}
           </Button>
+          <Menu anchorEl={menuBaixar} open={!!menuBaixar} onClose={() => setMenuBaixar(null)}>
+            {PLATAFORMAS_AGENTE.map(([id, nome]) => <MenuItem key={id} onClick={() => baixarAgente(id)}>{nome}</MenuItem>)}
+          </Menu>
         </Stack>
         {recebendo && <PainelRecebimento info={recebendo} onParar={parar} />}
 

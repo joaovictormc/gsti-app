@@ -14,6 +14,13 @@ contextBridge.exposeInMainWorld("agente", {
   salvarArquivo: (laudo) => ipcRenderer.invoke("agente:salvar-arquivo", laudo),
   comparar: (laudo) => ipcRenderer.invoke("agente:comparar", laudo),
   salvarPdfComparativo: (par) => ipcRenderer.invoke("agente:salvar-pdf-comparativo", par),
+  otimizacaoCatalogo: () => ipcRenderer.invoke("agente:otimizacao-catalogo"),
+  otimizar: (dados) => ipcRenderer.invoke("agente:otimizar", dados),
+  aoProgredirOtimizacao: (fn) => {
+    const ouvinte = (_e, p) => fn(p);
+    ipcRenderer.on("agente:otimizacao-progresso", ouvinte);
+    return () => ipcRenderer.removeListener("agente:otimizacao-progresso", ouvinte);
+  },
   descobrir: () => ipcRenderer.invoke("agente:descobrir"),
   enviar: (dados) => ipcRenderer.invoke("agente:enviar", dados),
   abrirPasta: () => ipcRenderer.invoke("agente:abrir-pasta"),

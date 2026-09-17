@@ -131,7 +131,8 @@ const agenteDiagnostico = require("../lib/agente-diagnostico");
 r.get("/api/cliente/diagnostico", exigirCliente, rota((req) => {
   const info = agenteDiagnostico.publicado();
   const liberado = agenteDiagnostico.clienteTemModulo(req.cliente.id);
-  return { success: true, liberado, disponivel: !!(info && info.presente), versao: info?.versao || null, tamanho: info?.tamanho || null };
+  const plataformas = (info?.plataformas || []).filter((p) => p.presente).map((p) => ({ plataforma: p.plataforma, nome: p.nome, versao: p.versao, tamanho: p.tamanho }));
+  return { success: true, liberado, disponivel: plataformas.length > 0, plataformas };
 }));
 
 r.get("/cliente/diagnostico/baixar", (req, res) => {
@@ -139,7 +140,7 @@ r.get("/cliente/diagnostico/baixar", (req, res) => {
   if (!s) return res.redirect(303, "/cliente");
   if (!agenteDiagnostico.clienteTemModulo(s.cliente.id)) return res.status(403).type("text").send("Seu plano não inclui o módulo Diagnóstico.");
   try {
-    const { info, arquivo } = agenteDiagnostico.caminhoPublicado();
+    const { info, arquivo } = agenteDiagnostico.caminhoPublicado(String(req.query.plataforma || ""));
     res.download(arquivo, info.arquivo);
   } catch (e) {
     res.status(404).type("text").send(e.message);

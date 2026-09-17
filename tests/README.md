@@ -4,7 +4,7 @@ Dois níveis de teste:
 
 | Comando | O que roda | Tempo |
 |---|---|---|
-| `npm test` | **Unitários** (`tests/unit`): certificado A1, cofre de senhas, controle de acesso, cliente da Notaas (com simulador), regras de recurso e módulos das licenças, atualização automática, suporte (chamados, rotas do site, do app e do painel), emissores e diagnóstico (laudo com amostra real anonimizada, alertas, comparativo, rede local e download do agente) | segundos |
+| `npm test` | **Unitários** (`tests/unit`): certificado A1, cofre de senhas, controle de acesso, cliente da Notaas (com simulador), regras de recurso e módulos das licenças, atualização automática, suporte (chamados, rotas do site, do app e do painel), emissores e diagnóstico (laudo com amostra real anonimizada, coleta de Linux e macOS com amostras, otimização, alertas, comparativo, rede local e download do agente por plataforma) | segundos |
 | `npm run test:e2e` | **Ponta a ponta** (`tests/e2e`): compila a interface e abre o app Electron de verdade, com pasta de dados isolada, banco temporário e licença simulada | ~8 min |
 
 Rode os dois antes de gerar uma versão.

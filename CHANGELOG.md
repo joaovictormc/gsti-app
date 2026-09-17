@@ -42,6 +42,14 @@
     lista de laudos, PDF e **comparativo antes/depois do reparo**.
   - O agente é baixado pelo próprio app (**Baixar GSTI Diagnóstico**) ou pela área do cliente,
     só para planos com o módulo.
+  - **Windows, macOS e Linux** (agente 1.1.0): coleta própria de cada sistema, agente em .exe,
+    .zip (Intel e Apple Silicon) e AppImage, e diagnóstico pelo terminal (`diagnostico/cli.js`).
+  - **Otimização** pelo agente: limpeza de temporários e caches, Windows Update, DNS, TRIM/
+    desfragmentação, DISM/SFC (Windows), journal e pacotes (Linux), Spotlight e verificação de
+    volume (macOS), com ponto de restauração no Windows. Ações que apagam dados vêm desmarcadas;
+    exige quem autorizou e fica registrada no laudo de saída e no PDF.
+  - **Scripts da assistência**: scripts próprios (`scripts/<sistema>/` ao lado do agente)
+    aparecem na otimização com nome, descrição e risco.
 
 ### Correções
 - Legendas dos gráficos do Resumo Financeiro não cortam mais nomes longos.

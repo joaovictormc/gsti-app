@@ -48,7 +48,7 @@ contextBridge.exposeInMainWorld('api', {
   saveLaudoPdf: (id) => ipcRenderer.invoke('save-laudo-pdf', id),
   laudoComparativo: (dados) => ipcRenderer.invoke('laudo-comparativo', dados),
   deleteLaudo: (id) => ipcRenderer.invoke('delete-laudo', id),
-  downloadDiagnosticoAgente: () => ipcRenderer.invoke('download-diagnostico-agente'),
+  downloadDiagnosticoAgente: (plataforma) => ipcRenderer.invoke('download-diagnostico-agente', { plataforma }),
   onLaudoRecebido: (callback) => {
     const ouvinte = (_evento, dados) => callback(dados);
     ipcRenderer.on('laudo-recebido', ouvinte);
