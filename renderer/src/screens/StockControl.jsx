@@ -180,16 +180,16 @@ export default function StockControl() {
 
       {/* Stats */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon={CheckCircleOutlineIcon} label="Com estoque OK" value={counts.ok} color="success" />
         </Grid>
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon={WarningAmberIcon} label="Abaixo do mínimo" value={counts.baixo} color="warning" />
         </Grid>
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon={ErrorOutlineIcon} label="Sem estoque" value={counts.sem} color="error" />
         </Grid>
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon={ErrorOutlineIcon} label="Total de itens" value={counts.total} color="primary" />
         </Grid>
       </Grid>

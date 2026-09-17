@@ -224,16 +224,16 @@ export default function WarrantyPanel() {
 
       {/* Stat cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon={ShieldIcon} label="Total em garantia" value={counts.total} color="primary" />
         </Grid>
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon={ErrorOutlineIcon} label="Críticas (≤ 7 dias)" value={counts.critica} color="error" />
         </Grid>
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon={WarningAmberIcon} label="Em alerta (8–30 dias)" value={counts.alerta} color="warning" />
         </Grid>
-        <Grid item xs={6} sm={3}>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <StatCard icon={CheckCircleOutlineIcon} label="OK (> 30 dias)" value={counts.ok} color="success" />
         </Grid>
       </Grid>

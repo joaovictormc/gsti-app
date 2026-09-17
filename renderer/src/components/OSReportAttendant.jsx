@@ -133,13 +133,13 @@ function OSReportAttendant() {
       {selectedUser && (
         <>
           <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <StatCard icon={AssignmentIcon} label="Total de OS" value={totalOS} color="primary" />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <StatCard icon={CheckCircleIcon} label="Finalizadas / Entregues" value={finalizadas} color="success" />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
               <StatCard icon={AttachMoneyIcon} label="Receita Total" value={formatCurrency(totalValor)} color="warning" />
             </Grid>
           </Grid>

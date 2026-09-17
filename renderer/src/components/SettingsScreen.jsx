@@ -470,7 +470,7 @@ function SettingsScreen() {
         )}
 
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={8}>
+          <Grid size={{ xs: 12, sm: 8 }}>
             <TextField
               label="Servidor SMTP (Host)"
               name="host"
@@ -483,7 +483,7 @@ function SettingsScreen() {
               size="small"
             />
           </Grid>
-          <Grid item xs={6} sm={4}>
+          <Grid size={{ xs: 6, sm: 4 }}>
             <TextField
               label="Porta"
               name="port"
@@ -497,7 +497,7 @@ function SettingsScreen() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               label="Usuário SMTP (Email)"
               name="user"
@@ -511,7 +511,7 @@ function SettingsScreen() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
               label="Senha SMTP / Chave API"
               name="pass"
@@ -526,7 +526,7 @@ function SettingsScreen() {
               helperText="Deixe em branco se não quiser alterar"
             />
           </Grid>
-          <Grid item xs={12} sm={8}>
+          <Grid size={{ xs: 12, sm: 8 }}>
             <TextField
               label="E-mail Remetente (Verificado)"
               name="from"

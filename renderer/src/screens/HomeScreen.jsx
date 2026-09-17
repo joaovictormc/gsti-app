@@ -84,7 +84,7 @@ function KpiCard({ gradient, icon: Icon, label, value, loading, isCurrency = fal
         <Typography variant="caption" sx={{ opacity: 0.82, display: "block", mb: 0.5 }}>{label}</Typography>
         {loading
           ? <CircularProgress size={22} sx={{ color: "rgba(255,255,255,0.8)" }} />
-          : <Typography variant="h5" fontWeight={700}>{isCurrency ? formatCurrency(value) : value}</Typography>
+          : <Typography variant="h5" fontWeight={700} sx={{ whiteSpace: "nowrap" }}>{isCurrency ? formatCurrency(value) : value}</Typography>
         }
       </Box>
     </Box>
@@ -424,7 +424,7 @@ export default function HomeScreen() {
       {visibleCards.length > 0 && (
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {visibleCards.map((c) => (
-            <Grid item xs={12} sm={6} lg={3} key={c.key}>
+            <Grid size={{ xs: 12, sm: 6, lg: 3 }} key={c.key}>
               <KpiCard gradient={c.gradient} icon={c.icon} label={c.label} value={c.value} loading={loading} isCurrency={c.isCurrency} />
             </Grid>
           ))}
@@ -435,7 +435,7 @@ export default function HomeScreen() {
       <Grid container spacing={3}>
         {/* Garantias Vencendo */}
         {widgets.secaoGarantias && (
-          <Grid item xs={12} md={5}>
+          <Grid size={{ xs: 12, md: 5 }}>
             <Paper sx={{ p: 2.5, height: "100%" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
                 <WarningAmberIcon color="warning" />
@@ -473,7 +473,7 @@ export default function HomeScreen() {
 
         {/* Últimas OS Ativas */}
         {widgets.secaoUltimasOS && (
-          <Grid item xs={12} md={widgets.secaoGarantias ? 7 : 12}>
+          <Grid size={{ xs: 12, md: widgets.secaoGarantias ? 7 : 12 }}>
             <Paper sx={{ p: 2.5, height: "100%" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
                 <AccessTimeIcon color="primary" />
@@ -513,28 +513,28 @@ export default function HomeScreen() {
 
         {/* Estoque Crítico */}
         {widgets.secaoEstoque && (
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <SecaoEstoqueCritico />
           </Grid>
         )}
 
         {/* Serviços Mais Utilizados */}
         {widgets.secaoServicos && (
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <SecaoServicos />
           </Grid>
         )}
 
         {/* OS Agendadas */}
         {widgets.secaoAgenda && (
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <SecaoAgenda />
           </Grid>
         )}
 
         {/* Resumo Financeiro */}
         {widgets.secaoFinanceiro && temFinanceiro && (
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <SecaoFinanceiro financeiro={data?.financeiro} loading={loading} />
           </Grid>
         )}

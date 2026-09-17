@@ -129,7 +129,7 @@ function SummaryCards({
   return (
     <Grid container spacing={2} sx={{ mb: 4 }}>
       {cards.map((card) => (
-        <Grid item xs={12} sm={6} md={4} lg={2} key={card.label}>
+        <Grid size={{ xs: 12, sm: 6, md: 4, xl: 2 }} key={card.label}>
           {card.tooltip ? (
             <MuiTooltip title={card.tooltip}>
               <span style={{ display: "block", height: "100%" }}>

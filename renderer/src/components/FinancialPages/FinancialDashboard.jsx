@@ -415,7 +415,7 @@ function FinancialDashboard() {
       {/* --- GRÁFICOS PIZZA --- */}
       <Grid container spacing={3} sx={{ mt: 1, mb: 1 }}>
         {/* Receitas por Fonte */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
               Receitas por Fonte
@@ -464,7 +464,7 @@ function FinancialDashboard() {
         </Grid>
 
         {/* Despesas por Categoria */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
               Despesas por Categoria
