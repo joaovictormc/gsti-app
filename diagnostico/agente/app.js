@@ -413,7 +413,8 @@
         ])),
       ]);
     }).filter(Boolean);
-    $("[data-programas]").replaceChildren(...grupos, el("p", { class: "nota", text: `Programas próprios e instaladores offline: arquivo programas.json na pasta ${r.pastaProgramas} (formato no README do agente).` }));
+    $("[data-programas]").replaceChildren(...grupos);
+    $("[data-programas-rodape]").textContent = `Programas próprios e instaladores offline: arquivo programas.json na pasta ${r.pastaProgramas} (formato no README do agente).`;
     const f = $("#form-programas");
     f.confirmo.checked = false;
     $("[data-erro-programas]").hidden = true;

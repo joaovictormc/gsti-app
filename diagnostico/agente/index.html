@@ -159,16 +159,15 @@
         <button class="botao botao--leve" type="button" data-acao="voltar">Voltar</button>
       </div>
       <form class="formulario" id="form-programas">
-        <div class="cartao">
-          <div class="pos-formatacao">
-            <p class="nota" data-programas-contagem></p>
-            <div class="pos-formatacao__botoes">
-              <button class="link" type="button" data-acao="programas-padrao">Marcar os básicos</button>
-              <button class="link" type="button" data-acao="programas-nenhum">Desmarcar todos</button>
-            </div>
+        <div class="barra-programas">
+          <b data-programas-contagem></b>
+          <div class="pos-formatacao__botoes">
+            <button class="link" type="button" data-acao="programas-padrao">Marcar os básicos</button>
+            <button class="link" type="button" data-acao="programas-nenhum">Desmarcar todos</button>
           </div>
         </div>
-        <div data-programas class="grupos colunas"></div>
+        <div data-programas class="colunas"></div>
+        <p class="nota" data-programas-rodape></p>
         <div class="cartao formulario">
           <label class="campo"><span>Autorizado por (cliente ou responsável)</span><input name="autorizadoPor" maxlength="120" required></label>
           <label class="check-autorizacao"><input type="checkbox" name="confirmo"> O cliente escolheu os programas e está ciente das licenças (ex.: Microsoft 365, WinRAR).</label>
