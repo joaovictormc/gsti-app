@@ -26,6 +26,8 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import ConfirmDialog from "./ConfirmDialog";
 import NotasFiscaisOS from "./NotasFiscaisOS";
+import LaudosOS from "./LaudosOS";
+import MonitorHeartIcon from "@mui/icons-material/MonitorHeart";
 import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
 import Badge from "@mui/material/Badge";
 import { useAuth } from "../contexts/AuthContext";
@@ -66,7 +68,7 @@ const modalStyle = {
 };
 
 function OSGrid() {
-  const { permissoes } = useAuth();
+  const { permissoes, temModulo } = useAuth();
   const [osList, setOSList] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOS, setEditingOS] = useState(null);
@@ -195,6 +197,7 @@ function OSGrid() {
   };
 
   const [osNotas, setOsNotas] = useState(null);
+  const [osLaudos, setOsLaudos] = useState(null);
 
   const handleClearFilters = () => { setSearchTerm(""); setStatusFilter("Todos"); };
 
@@ -235,13 +238,25 @@ function OSGrid() {
     {
       field: "actions",
       headerName: "Ações",
-      width: 250,
+      width: 280,
       sortable: false,
       renderCell: (p) => (
         <>
           <IconButton onClick={() => handleWhatsApp(p.row.id)} title="Avisar cliente pelo WhatsApp" size="small" sx={{ color: "#25D366" }}>
             <WhatsAppIcon fontSize="small" />
           </IconButton>
+          {temModulo("diagnostico") && (
+            <IconButton
+              onClick={() => setOsLaudos(p.row)}
+              title={p.row.laudos ? `Laudos técnicos (${p.row.laudos})` : "Laudos técnicos (GSTI Diagnóstico)"}
+              size="small"
+              color={p.row.laudos ? "primary" : "default"}
+            >
+              <Badge badgeContent={p.row.laudos} color="primary" invisible={!p.row.laudos} max={9}>
+                <MonitorHeartIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+          )}
           <IconButton onClick={() => handlePrintReceipt(p.row.id)} title="Comprovante de Entrada" size="small">
             <PrintIcon fontSize="small" />
           </IconButton>
@@ -355,6 +370,7 @@ function OSGrid() {
       </Modal>
 
       <NotasFiscaisOS os={osNotas} onClose={() => setOsNotas(null)} onAlterado={fetchOSList} />
+      {temModulo("diagnostico") && <LaudosOS os={osLaudos} onClose={() => setOsLaudos(null)} onAlterado={fetchOSList} />}
 
       <ConfirmDialog
         open={confirmDialog.open}

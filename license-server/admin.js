@@ -41,6 +41,7 @@ Equipe (área admin)
 Atualizações do app
   publicar-atualizacao <pasta>     Publica a versão gerada por "npm run dist:win" (pasta dist_electron)
   atualizacao                      Mostra a versão publicada
+  publicar-diagnostico <exe>       Publica o agente portátil (npm run dist:diagnostico)
 
 Outros
   importar-clientes <clientes.json>  Emite licenças para os clientes ativos do formato v1
@@ -196,6 +197,12 @@ Usuário criado: ${r.usuario.email} (${r.usuario.papeis.join(", ")})`);
       if (!info) return console.log("Nenhuma atualização publicada.");
       console.log(`Versão ${info.versao} · ${info.arquivo} · publicada em ${new Date(info.dataPublicacao).toLocaleString("pt-BR")}`);
       console.log(`Instalador: ${info.instaladorPresente ? "ok" : "AUSENTE"} · blockmap: ${info.blockmapPresente ? "ok" : "ausente"}`);
+      break;
+    }
+    case "publicar-diagnostico": {
+      if (!pos[0]) throw new Error("Informe o .exe gerado (dist_diagnostico/GSTI-Diagnostico-x.y.z.exe).");
+      const info = await require("./lib/agente-diagnostico").publicar(pos[0]);
+      console.log(`\nGSTI Diagnóstico ${info.versao} publicado (${(info.tamanho / 1048576).toFixed(1)} MB). Disponível para licenças com o módulo Diagnóstico.\n`);
       break;
     }
     case "auditoria":

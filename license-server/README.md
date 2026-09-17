@@ -55,6 +55,7 @@ em *Painel → Planos e preços*:
 
 | Chave | Módulo | O que libera |
 |---|---|---|
+| `diagnostico` | Diagnóstico e laudo técnico | Agente portátil GSTI Diagnóstico e laudos na OS (download do agente só para planos com o módulo) |
 | `financeiro` | Financeiro completo | Despesas, receitas avulsas, resumo, projeção, metas, Excel e valores na tela inicial |
 | `relatorios` | Relatórios | Todos os relatórios |
 | `estoque` | Controle de estoque | Tela de estoque, ajustes e alerta de estoque crítico |
@@ -316,6 +317,23 @@ node admin.js atualizacao # versão publicada
   `build.publish` no `package.json` é só referência.
 - Enquanto o instalador não tiver assinatura digital, o Windows pode exibir o SmartScreen na
   instalação manual; a atualização automática não passa por ele.
+
+### Agente GSTI Diagnóstico
+
+O agente portátil do módulo Diagnóstico é distribuído pelo servidor (detalhes em
+[diagnostico/README.md](../diagnostico/README.md)):
+
+```bash
+npm run dist:diagnostico                                   # na raiz do repositório
+node admin.js publicar-diagnostico dist_diagnostico/GSTI-Diagnostico-1.0.0.exe
+```
+
+- Fica em `data/atualizacoes/diagnostico` (só a versão atual, com sha512 em `info.json`).
+- **App**: `/atualizacoes/diagnostico/info` e `/baixar` com o token da licença (válida e com o
+  módulo; teste grátis conforme os módulos do teste). O app confere o sha512.
+- **Área do cliente**: seção *GSTI Diagnóstico* com o botão Baixar para quem tem licença ativa
+  com o módulo.
+- *Painel → Sistema* mostra a versão publicada.
 
 ### Suporte
 

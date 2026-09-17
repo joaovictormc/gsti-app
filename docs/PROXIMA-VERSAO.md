@@ -88,6 +88,10 @@ Atualizado em 2026-09-17. Versão atual do app: **1.3.0**; **1.4.0 em desenvolvi
       catálogo do app) e **pedidos de novos emissores** pela área do cliente e pelo app, com
       ranking, situação, nota pública e aviso por e-mail no painel.
 - [x] Legendas dos gráficos do Resumo Financeiro não cortam mais nomes longos.
+- [x] **Módulo Diagnóstico (MVP)**: agente portátil GSTI Diagnóstico (hardware, sistema,
+      SMART, bateria, temperaturas, eventos, testes rápidos), laudo com alertas e PDF, envio à
+      OS pela rede local ou arquivo, comparativo antes/depois e download do agente pelo app e
+      pela área do cliente. Ver [diagnostico/README.md](../diagnostico/README.md).
 
 ### Segurança
 - [x] **Permissões checadas no processo principal** (`controle-acesso.js`): cada canal IPC
@@ -169,11 +173,21 @@ os avançados depois, sem gerar uma build diferente para cada plano.
 
 > Itens que dependem de ação externa: validar a Notaas com certificado real, Emissor
 > Nacional direto (quando houver certificado A1) e WhatsApp automático (se houver demanda).
-> Próximo passo de desenvolvimento: **módulo de assistência e diagnóstico** (seção 4).
+> Módulo de assistência e diagnóstico: MVP entregue (seção 4).
 
 ---
 
-## 4. Módulo de assistência e diagnóstico (projeto separado)
+## 4. Módulo de assistência e diagnóstico
+
+**MVP entregue** como módulo vendável do próprio GSTI App (decisão: agente portátil no mesmo
+repositório, laudo anexado à OS por rede local ou arquivo) — ver
+[diagnostico/README.md](../diagnostico/README.md).
+
+Próximos passos possíveis: laudo também no recibo de saída da OS, histórico de laudos por
+equipamento, testes de estresse opcionais (CPU/memória), assinatura digital do agente e
+diagnóstico de celulares.
+
+### Estudo original
 
 Ideia original: ferramenta própria para o técnico diagnosticar computadores,
 notebooks e celulares — drivers, limpeza e otimização, testes de rede/disco/memória/
@@ -182,8 +196,8 @@ CPU, e no celular (via USB ou QR code) diagnóstico, limpeza e detecção de ví
 Recomendação: tratar como **produto à parte** (repositório próprio), começando por
 um recorte viável:
 
-1. **MVP — laudo técnico no Windows**: agente leve que coleta hardware, saúde do
-   disco (SMART), bateria, memória, temperatura e rede, gera um laudo e o **anexa à
+1. ~~**MVP — laudo técnico no Windows**~~ — **entregue**: agente leve que coleta hardware,
+   saúde do disco (SMART), bateria, memória, temperatura e rede, gera um laudo e o **anexa à
    OS** no GSTI App.
 2. **Depois**: testes de estresse opcionais, comparativo antes/depois do reparo.
 3. **Pontos com barreiras a estudar antes de prometer**:
@@ -240,5 +254,6 @@ Feita por último, depois das funcionalidades:
 - [ ] VPS com HTTPS (Nginx + certbot), serviço systemd e backup diário de `data/`.
 - [ ] Chaves de licença de **produção** no `license-config.js` e `serverUrl` HTTPS.
 - [ ] Mercado Pago em produção, SMTP real e **compra real de baixo valor** testada (e reembolsada).
-- [ ] **Assinatura digital do instalador** (certificado de assinatura de código).
+- [ ] **Assinatura digital do instalador** e do agente GSTI Diagnóstico (certificado de assinatura de código).
+- [ ] Publicar o agente GSTI Diagnóstico no servidor de produção.
 - [ ] Primeira publicação da atualização automática no servidor de produção.

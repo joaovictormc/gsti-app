@@ -8,6 +8,37 @@ const { LicencaErro } = require("../lib/erros");
 
 const r = express.Router();
 
+// --- Agente GSTI Diagnóstico (módulo "diagnostico") ---
+const agente = require("../lib/agente-diagnostico");
+
+function autorizarAgente(req, res) {
+  try {
+    agente.autorizarApp(req.get("x-gsti-licenca"));
+    return true;
+  } catch (e) {
+    const status = e instanceof LicencaErro ? e.status || 401 : 401;
+    res.status(status).json({ success: false, error: e.message, code: e.codigo });
+    return false;
+  }
+}
+
+r.get("/diagnostico/info", (req, res) => {
+  if (!autorizarAgente(req, res)) return;
+  const info = agente.publicado();
+  if (!info || !info.presente) return res.status(404).json({ success: false, error: "O GSTI Diagnóstico ainda não foi publicado." });
+  res.set("Cache-Control", "no-store").json({ success: true, versao: info.versao, arquivo: info.arquivo, tamanho: info.tamanho, sha512: info.sha512 });
+});
+
+r.get("/diagnostico/baixar", (req, res) => {
+  if (!autorizarAgente(req, res)) return;
+  try {
+    const { info, arquivo } = agente.caminhoPublicado();
+    res.download(arquivo, info.arquivo, { headers: { "Cache-Control": "private, max-age=3600" } });
+  } catch (e) {
+    res.status(e.status || 404).json({ success: false, error: e.message });
+  }
+});
+
 r.get("/win/:arquivo", (req, res) => {
   try {
     atualizacoes.autorizar(req.get("x-gsti-licenca"));

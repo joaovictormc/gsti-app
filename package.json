@@ -14,7 +14,9 @@
     "dist:mac": "node scripts/notas-da-versao.js && npm run build && electron-builder --mac",
     "dist:linux": "node scripts/notas-da-versao.js && npm run build && electron-builder --linux --docker",
     "test": "node --test \"tests/unit/*.test.js\"",
-    "test:e2e": "npm run build && node tests/e2e/rodar.js"
+    "test:e2e": "npm run build && node tests/e2e/rodar.js",
+    "dist:diagnostico": "node scripts/versao-diagnostico.js && electron-builder --config diagnostico/electron-builder.json --win",
+    "diagnostico": "electron diagnostico/agente/main.js"
   },
   "keywords": [],
   "author": "João Victor Maciel Campos",
@@ -60,6 +62,10 @@
       "modulos.js",
       "atualizacoes.js",
       "suporte-app.js",
+      "laudos-os.js",
+      "diagnostico/laudo.js",
+      "diagnostico/laudo-html.js",
+      "diagnostico/rede-local.js",
       "fiscal-emissores.js",
       "fiscal-certificado.js",
       "fiscal-notaas.js",

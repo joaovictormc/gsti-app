@@ -34,6 +34,15 @@
   pedidos, a situação (em análise, planejado, disponível…), uma nota para os clientes e avisa
   por e-mail quem pediu quando o emissor fica disponível.
 
+- **Diagnóstico e laudo técnico** (novo módulo vendável `diagnostico`):
+  - **GSTI Diagnóstico**, agente portátil (pen drive) que coleta hardware, sistema, saúde dos
+    discos (SMART), bateria, temperaturas, ativação, antivírus e erros do Windows, faz testes
+    rápidos (gravação no disco, internet, CPU) e gera o **laudo técnico** com alertas e PDF.
+  - Laudo enviado à OS **pela rede local** (código de 6 dígitos) ou **por arquivo**; na OS:
+    lista de laudos, PDF e **comparativo antes/depois do reparo**.
+  - O agente é baixado pelo próprio app (**Baixar GSTI Diagnóstico**) ou pela área do cliente,
+    só para planos com o módulo.
+
 ### Correções
 - Legendas dos gráficos do Resumo Financeiro não cortam mais nomes longos.
 - Site: formulários marcados como ocultos continuavam visíveis (afetava o login da área do

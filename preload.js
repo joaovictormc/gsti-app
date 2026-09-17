@@ -39,6 +39,22 @@ contextBridge.exposeInMainWorld('api', {
   emitirNFSeIntegrada: (dados) => ipcRenderer.invoke('emitir-nfse-integrada', dados),
   atualizarNota: (id) => ipcRenderer.invoke('atualizar-nota', id),
 
+  // Laudos técnicos na OS (módulo Diagnóstico)
+  getOSLaudos: (osId) => ipcRenderer.invoke('get-os-laudos', osId),
+  importLaudoArquivo: (osId) => ipcRenderer.invoke('import-laudo-arquivo', osId),
+  startLaudoReceiver: (osId) => ipcRenderer.invoke('start-laudo-receiver', osId),
+  stopLaudoReceiver: () => ipcRenderer.invoke('stop-laudo-receiver'),
+  viewLaudo: (id) => ipcRenderer.invoke('view-laudo', id),
+  saveLaudoPdf: (id) => ipcRenderer.invoke('save-laudo-pdf', id),
+  laudoComparativo: (dados) => ipcRenderer.invoke('laudo-comparativo', dados),
+  deleteLaudo: (id) => ipcRenderer.invoke('delete-laudo', id),
+  downloadDiagnosticoAgente: () => ipcRenderer.invoke('download-diagnostico-agente'),
+  onLaudoRecebido: (callback) => {
+    const ouvinte = (_evento, dados) => callback(dados);
+    ipcRenderer.on('laudo-recebido', ouvinte);
+    return () => ipcRenderer.removeListener('laudo-recebido', ouvinte);
+  },
+
   // Suporte (chamados)
   getSupportContext: (dados) => ipcRenderer.invoke('support-get-context', dados),
   captureSupportScreen: () => ipcRenderer.invoke('support-capture-screen'),

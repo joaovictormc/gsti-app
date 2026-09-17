@@ -100,6 +100,7 @@ function portal({ logado }) {
     <p class="form__erro" role="alert" hidden></p>
     <div data-licencas class="portal__licencas"><p class="carregando">Carregando…</p></div>
     <section class="portal__pedidos"><h2>Pedidos</h2><div data-pedidos></div></section>
+    <section class="portal__pedidos portal__diagnostico" id="diagnostico" data-diagnostico hidden></section>
     <section class="portal__pedidos portal__chamados" id="emissores">
       <div class="portal__secao-topo"><h2>Emissores de nota fiscal</h2><a class="btn btn--contorno btn--pequeno" href="/emissores">Ver guias</a></div>
       <p class="portal__ajuda">Usa um emissor que ainda não está no GSTI App? Peça a integração: os mais pedidos entram primeiro e avisamos por e-mail quando chegar.</p>

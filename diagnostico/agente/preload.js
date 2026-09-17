@@ -1,0 +1,21 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("agente", {
+  estado: () => ipcRenderer.invoke("agente:estado"),
+  salvarConfig: (cfg) => ipcRenderer.invoke("agente:salvar-config", cfg),
+  diagnosticar: (opcoes) => ipcRenderer.invoke("agente:diagnosticar", opcoes),
+  aoProgredir: (fn) => {
+    const ouvinte = (_e, etapa) => fn(etapa);
+    ipcRenderer.on("agente:progresso", ouvinte);
+    return () => ipcRenderer.removeListener("agente:progresso", ouvinte);
+  },
+  verLaudo: (laudo) => ipcRenderer.invoke("agente:ver-laudo", laudo),
+  salvarPdf: (laudo) => ipcRenderer.invoke("agente:salvar-pdf", laudo),
+  salvarArquivo: (laudo) => ipcRenderer.invoke("agente:salvar-arquivo", laudo),
+  comparar: (laudo) => ipcRenderer.invoke("agente:comparar", laudo),
+  salvarPdfComparativo: (par) => ipcRenderer.invoke("agente:salvar-pdf-comparativo", par),
+  descobrir: () => ipcRenderer.invoke("agente:descobrir"),
+  enviar: (dados) => ipcRenderer.invoke("agente:enviar", dados),
+  abrirPasta: () => ipcRenderer.invoke("agente:abrir-pasta"),
+  reabrirAdmin: () => ipcRenderer.invoke("agente:reabrir-admin"),
+});

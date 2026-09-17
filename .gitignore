@@ -1,6 +1,7 @@
 node_modules
 .vs
 dist_electron
+dist_diagnostico
 # Segredos do licenciamento — NUNCA versionar
 *.key
 *.pem

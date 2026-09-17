@@ -166,6 +166,29 @@ atendente** e por **status**.
   conforme o status (as mensagens são editáveis em Configurações).
 - **E-mail automático**: pode ser ligado para os status escolhidos em Configurações.
 
+### Laudos técnicos (módulo Diagnóstico)
+
+Com o módulo **Diagnóstico**, cada OS ganha o ícone de **laudos** (monitor com coração) na
+lista de Ordens de Serviço.
+
+1. **Baixe o agente** uma vez: no diálogo de laudos, **Baixar GSTI Diagnóstico** e escolha o
+   pen drive.
+2. No **computador do cliente**, abra o **GSTI Diagnóstico** pelo pen drive (confirme a
+   permissão de administrador), marque **Entrada**, informe o nº da OS e clique em
+   **Iniciar diagnóstico** (menos de 1 minuto). Nada é instalado no computador do cliente.
+3. Mande o laudo para a OS:
+   - **Pela rede** (mesma rede da loja): na OS, **Receber pela rede** mostra um código; no
+     agente, **Enviar para o GSTI App**, escolha a loja e digite o código.
+   - **Por arquivo**: no agente, **Salvar arquivo do laudo**; na OS, **Importar arquivo**.
+4. Depois do reparo, repita com **Saída**. Na OS, **Comparativo antes e depois do reparo**
+   mostra os problemas resolvidos e o que mudou (ex.: SSD novo, espaço livre, bateria); salve o
+   **PDF** para entregar ao cliente.
+
+O laudo aponta problemas **críticos** (disco com falha, SSD gasto, bateria muito fraca,
+superaquecimento, pouco espaço) e **pontos de atenção** (Windows não ativado, sem antivírus,
+desligamentos inesperados, pouca memória). Na primeira vez que receber pela rede, o Windows
+pode pedir para liberar o GSTI App no firewall: escolha **Redes privadas**.
+
 ### Nota fiscal
 Nas OS **finalizadas ou entregues**, o botão de nota fiscal abre as notas da OS:
 

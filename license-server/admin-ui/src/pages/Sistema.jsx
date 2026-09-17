@@ -92,6 +92,15 @@ export default function Sistema() {
           />
         </Grid>
         <Grid size={12}>
+          <Item
+            rotulo="Agente GSTI Diagnóstico publicado"
+            ok={!!s.agenteDiagnostico?.presente}
+            detalhe={s.agenteDiagnostico
+              ? <>Versão <strong>{s.agenteDiagnostico.versao}</strong> ({(s.agenteDiagnostico.tamanho / 1048576).toFixed(0)} MB) · publicado em {dataHora(s.agenteDiagnostico.publicadoEm)}. Baixado pelo app e pela área do cliente com o módulo Diagnóstico.</>
+              : <>Não publicado. No servidor: <Box component="span" sx={mono}>node admin.js publicar-diagnostico &lt;GSTI-Diagnostico-x.y.z.exe&gt;</Box></>}
+          />
+        </Grid>
+        <Grid size={12}>
           {!/^https:/.test(s.publicUrl) && <Alert severity="warning">PUBLIC_URL não usa HTTPS: o Mercado Pago não envia notificações para este endereço. A conciliação automática (a cada 30 min) continua funcionando.</Alert>}
         </Grid>
       </Grid>

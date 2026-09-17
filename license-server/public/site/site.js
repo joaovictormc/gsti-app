@@ -316,6 +316,27 @@
     }
     carregarChamados();
 
+    // Download do agente GSTI Diagnóstico (só para planos com o módulo)
+    (async () => {
+      const caixa = $("[data-diagnostico]", painel);
+      if (!caixa) return;
+      try {
+        const r = await api("GET", "/api/cliente/diagnostico");
+        if (!r.liberado) return;
+        const mb = r.tamanho ? ` · ${Math.round(r.tamanho / 1048576)} MB` : "";
+        caixa.replaceChildren(
+          el("div", { class: "portal__secao-topo" }, [
+            el("h2", { text: "GSTI Diagnóstico" }),
+            r.disponivel ? el("a", { class: "btn btn--pequeno", href: "/cliente/diagnostico/baixar", text: "Baixar" }) : null,
+          ]),
+          el("p", { class: "portal__ajuda", text: r.disponivel
+            ? `Agente portátil (versão ${r.versao}${mb}) para gerar o laudo técnico do computador do cliente. Copie para um pen drive e rode no equipamento em reparo; o laudo vai para a OS no GSTI App.`
+            : "O agente portátil estará disponível para download em breve." })
+        );
+        caixa.hidden = false;
+      } catch { /* sem o módulo ou sessão expirada: nada a mostrar */ }
+    })();
+
     // Pedidos de novos emissores de nota fiscal
     const formEmissor = $("#emissor-form");
     async function carregarEmissores() {

@@ -15,6 +15,7 @@ const SUITES = [
   { nome: "notaas" },
   { nome: "modulos" },
   { nome: "suporte" },
+  { nome: "diagnostico" },
 ];
 
 const filtro = process.argv.slice(2);

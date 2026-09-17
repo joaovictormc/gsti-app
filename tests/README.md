@@ -4,7 +4,7 @@ Dois níveis de teste:
 
 | Comando | O que roda | Tempo |
 |---|---|---|
-| `npm test` | **Unitários** (`tests/unit`): certificado A1, cofre de senhas, controle de acesso, cliente da Notaas (com simulador), regras de recurso e módulos das licenças, atualização automática e suporte (chamados, rotas do site, do app e do painel) | segundos |
+| `npm test` | **Unitários** (`tests/unit`): certificado A1, cofre de senhas, controle de acesso, cliente da Notaas (com simulador), regras de recurso e módulos das licenças, atualização automática, suporte (chamados, rotas do site, do app e do painel), emissores e diagnóstico (laudo com amostra real anonimizada, alertas, comparativo, rede local e download do agente) | segundos |
 | `npm run test:e2e` | **Ponta a ponta** (`tests/e2e`): compila a interface e abre o app Electron de verdade, com pasta de dados isolada, banco temporário e licença simulada | ~8 min |
 
 Rode os dois antes de gerar uma versão.
@@ -43,6 +43,7 @@ node tests/e2e/rodar.js fiscal notaas
 | `fiscal` | aceite de responsabilidade, catálogo, credenciais cifradas, certificado A1, registro manual de nota na OS |
 | `notaas` | emissão de NFS-e pela Notaas usando o simulador `tests/lib/notaas-simulado.js` (nenhuma chamada à Notaas real) |
 | `modulos` | venda por módulos: bloqueios no processo principal e na interface |
+| `diagnostico` | laudos na OS: bloqueio sem o módulo, importar arquivo (duplicado e alterado recusados), receber pela rede com código, PDF do laudo e do comparativo, ícone e diálogo na lista de OS |
 | `suporte` | botão Suporte do app contra um servidor de licenças real temporário: chamado com dados técnicos e captura da tela, "Meus chamados" e links permitidos |
 
 ## Capturas de tela

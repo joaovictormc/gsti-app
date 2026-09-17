@@ -134,6 +134,10 @@ CREATE TABLE IF NOT EXISTS notas_fiscais (
 );
 CREATE INDEX IF NOT EXISTS ix_notas_fiscais_os ON notas_fiscais(id_os);
 
+-- Laudos técnicos do agente GSTI Diagnóstico (módulo "diagnostico")
+CREATE TABLE IF NOT EXISTS os_laudos (id SERIAL PRIMARY KEY, id_os INT NOT NULL REFERENCES ordens_servico(id) ON DELETE CASCADE, laudo_id VARCHAR(40) NOT NULL, momento VARCHAR(10) NOT NULL, gerado_em TIMESTAMP NOT NULL, situacao VARCHAR(10) NOT NULL, equipamento TEXT, numero_serie VARCHAR(120), resumo JSONB NOT NULL, dados JSONB NOT NULL, origem VARCHAR(10) NOT NULL, id_usuario INT REFERENCES usuarios(id) ON DELETE SET NULL, criado_em TIMESTAMP NOT NULL DEFAULT NOW());
+CREATE UNIQUE INDEX IF NOT EXISTS ux_os_laudos ON os_laudos(id_os, laudo_id);
+
 -- Tabela de Despesas
 CREATE TABLE IF NOT EXISTS despesas (
     id            SERIAL PRIMARY KEY,

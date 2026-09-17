@@ -20,6 +20,7 @@ const execFileAsync = promisify(execFile);
 const archiver = require("archiver");
 const unzipper = require("unzipper");
 const { criarSuporteApp, criarRegistroErros } = require("./suporte-app");
+const laudosModulo = require("./laudos-os");
 
 // Guarda os últimos erros para os dados técnicos dos chamados de suporte
 const errosRecentes = criarRegistroErros();
@@ -288,6 +289,8 @@ function initializeDbPool() {
         "CREATE INDEX IF NOT EXISTS ix_ordens_servico_equipamento ON ordens_servico(id_equipamento)",
         // Migra os equipamentos das OS antigas (idempotente: só OS ainda sem vínculo)
         "INSERT INTO equipamentos (cliente_id, tipo, marca, modelo, numero_serie) SELECT DISTINCT ON (os.id_cliente, lower(COALESCE(NULLIF(TRIM(os.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(os.tipo_equipamento, '')) || '|' || TRIM(COALESCE(os.marca, '')) || '|' || TRIM(COALESCE(os.modelo, ''))))) os.id_cliente, COALESCE(NULLIF(TRIM(os.tipo_equipamento), ''), 'Outro'), NULLIF(TRIM(os.marca), ''), NULLIF(TRIM(os.modelo), ''), NULLIF(TRIM(os.numero_serie), '') FROM ordens_servico os WHERE os.id_equipamento IS NULL AND NOT EXISTS (SELECT 1 FROM equipamentos e WHERE e.cliente_id = os.id_cliente AND lower(COALESCE(NULLIF(TRIM(e.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(e.tipo, '')) || '|' || TRIM(COALESCE(e.marca, '')) || '|' || TRIM(COALESCE(e.modelo, '')))) = lower(COALESCE(NULLIF(TRIM(os.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(os.tipo_equipamento, '')) || '|' || TRIM(COALESCE(os.marca, '')) || '|' || TRIM(COALESCE(os.modelo, ''))))) ORDER BY os.id_cliente, lower(COALESCE(NULLIF(TRIM(os.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(os.tipo_equipamento, '')) || '|' || TRIM(COALESCE(os.marca, '')) || '|' || TRIM(COALESCE(os.modelo, '')))), os.data_entrada DESC",
+        // Laudos técnicos do agente GSTI Diagnóstico (módulo "diagnostico")
+        ...laudosModulo.SQL_TABELA,
         "UPDATE ordens_servico os SET id_equipamento = e.id FROM equipamentos e WHERE os.id_equipamento IS NULL AND e.cliente_id = os.id_cliente AND lower(COALESCE(NULLIF(TRIM(e.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(e.tipo, '')) || '|' || TRIM(COALESCE(e.marca, '')) || '|' || TRIM(COALESCE(e.modelo, '')))) = lower(COALESCE(NULLIF(TRIM(os.numero_serie), ''), 'sem-serie|' || TRIM(COALESCE(os.tipo_equipamento, '')) || '|' || TRIM(COALESCE(os.marca, '')) || '|' || TRIM(COALESCE(os.modelo, ''))))",
       ].reduce(
         (anterior, sql) =>
@@ -1720,7 +1723,8 @@ ipcMain.handle("get-os-list", async (event) => {
       os.numero_serie, os.status, os.data_entrada, os.valor_total,
       c.nome AS nome_cliente, c.telefone AS telefone_cliente,
       u.nome AS nome_atendente,
-      (SELECT COUNT(*) FROM notas_fiscais nf WHERE nf.id_os = os.id AND nf.status NOT IN ('cancelada', 'erro'))::int AS notas
+      (SELECT COUNT(*) FROM notas_fiscais nf WHERE nf.id_os = os.id AND nf.status NOT IN ('cancelada', 'erro'))::int AS notas,
+      (SELECT COUNT(*) FROM os_laudos ol WHERE ol.id_os = os.id)::int AS laudos
     FROM ordens_servico AS os
     JOIN clientes AS c ON os.id_cliente = c.id
     LEFT JOIN usuarios u ON u.id = os.id_atendente
@@ -5054,6 +5058,118 @@ const atualizador = criarAtualizador({
 ipcMain.handle("get-update-status", async () => ({ success: true, estado: atualizador.estado() }));
 ipcMain.handle("check-for-updates", async () => ({ success: true, estado: await atualizador.verificar() }));
 ipcMain.handle("install-update", async () => atualizador.instalar());
+
+// --- LAUDOS TÉCNICOS (módulo "diagnostico") ---
+const laudosOS = laudosModulo.criarLaudosOS({
+  obterPool: () => dbPool,
+  BrowserWindow,
+  dialog,
+  obterEmpresa: () => laudosModulo.empresaParaLaudo({ branding: brandingAtivo(), empresa: appConfig.empresa || {} }),
+  notificar: (evento) => {
+    for (const janela of BrowserWindow.getAllWindows()) janela.webContents.send("laudo-recebido", evento);
+  },
+});
+
+async function laudoComAcesso(event, id) {
+  if (!dbPool) return { erro: { success: false, error: "Banco de dados não configurado." } };
+  const laudo = await laudosOS.obterLaudo(id);
+  if (!laudo) return { erro: { success: false, error: "Laudo não encontrado." } };
+  const negado = await negarOSAlheia(event, laudo.id_os);
+  return negado ? { erro: negado } : { laudo };
+}
+
+ipcMain.handle("get-os-laudos", async (event, osId) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const negado = await negarOSAlheia(event, osId);
+    if (negado) return negado;
+    return { success: true, data: await laudosOS.listar(osId), recebendo: laudosOS.recebendo() };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("import-laudo-arquivo", async (event, osId) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  const negado = await negarOSAlheia(event, osId);
+  if (negado) return negado;
+  const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: "Importar laudo do GSTI Diagnóstico",
+    filters: [{ name: "Laudo GSTI", extensions: [laudosModulo.EXTENSAO] }],
+    properties: ["openFile"],
+  });
+  if (canceled || !filePaths[0]) return { success: false, cancelado: true };
+  const lido = laudosOS.importarArquivo(filePaths[0]);
+  if (!lido.success) return lido;
+  try {
+    return await laudosOS.salvar(osId, lido.laudo, { origem: "arquivo", usuarioId: acesso.usuarioDe(event)?.id });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("start-laudo-receiver", async (event, osId) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  const negado = await negarOSAlheia(event, osId);
+  if (negado) return negado;
+  return laudosOS.iniciarRecebimento(osId, { usuarioId: acesso.usuarioDe(event)?.id, nomeLoja: brandingAtivo().companyName });
+});
+
+ipcMain.handle("stop-laudo-receiver", async () => {
+  laudosOS.encerrarRecebimento();
+  return { success: true };
+});
+
+ipcMain.handle("view-laudo", async (event, id) => {
+  const { laudo, erro } = await laudoComAcesso(event, id);
+  if (erro) return erro;
+  laudosOS.abrirHtml(BrowserWindow.fromWebContents(event.sender), laudosOS.htmlDoLaudo(laudo.dados), `Laudo técnico · OS ${laudo.id_os}`);
+  return { success: true };
+});
+
+ipcMain.handle("save-laudo-pdf", async (event, id) => {
+  const { laudo, erro } = await laudoComAcesso(event, id);
+  if (erro) return erro;
+  return laudosOS.salvarPdf(BrowserWindow.fromWebContents(event.sender), laudosOS.htmlDoLaudo(laudo.dados), laudosModulo.nomeArquivoPdf(laudo.id_os, laudo.dados.momento));
+});
+
+// Comparativo antes/depois: acao "ver" abre a janela, "pdf" salva
+ipcMain.handle("laudo-comparativo", async (event, { entradaId, saidaId, acao } = {}) => {
+  const a = await laudoComAcesso(event, entradaId);
+  if (a.erro) return a.erro;
+  const b = await laudoComAcesso(event, saidaId);
+  if (b.erro) return b.erro;
+  if (a.laudo.id_os !== b.laudo.id_os) return { success: false, error: "Os laudos precisam ser da mesma OS." };
+  const [entrada, saida] = new Date(a.laudo.dados.geradoEm) <= new Date(b.laudo.dados.geradoEm) ? [a.laudo.dados, b.laudo.dados] : [b.laudo.dados, a.laudo.dados];
+  const html = laudosOS.htmlComparativo(entrada, saida);
+  const mesmoEquipamento = laudosOS.comparar(entrada, saida).mesmoEquipamento;
+  if (acao === "pdf") {
+    const r = await laudosOS.salvarPdf(BrowserWindow.fromWebContents(event.sender), html, `comparativo-OS${a.laudo.id_os}.pdf`);
+    return { ...r, mesmoEquipamento };
+  }
+  laudosOS.abrirHtml(BrowserWindow.fromWebContents(event.sender), html, `Comparativo do reparo · OS ${a.laudo.id_os}`);
+  return { success: true, mesmoEquipamento };
+});
+
+ipcMain.handle("delete-laudo", async (event, id) => {
+  const { laudo, erro } = await laudoComAcesso(event, id);
+  if (erro) return erro;
+  await dbPool.query("DELETE FROM os_laudos WHERE id = $1", [laudo.id]);
+  return { success: true };
+});
+
+ipcMain.handle("download-diagnostico-agente", async (event) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: "Onde salvar o GSTI Diagnóstico (ex.: pen drive)",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (canceled || !filePaths[0]) return { success: false, cancelado: true };
+  const r = await laudosModulo.baixarAgente({ servidor: licenseManager.serverUrl(), token: appConfig?.license?.token, pasta: filePaths[0] });
+  if (r.success) shell.showItemInFolder(r.caminho);
+  return r;
+});
+
+app.on("before-quit", () => laudosOS.encerrarRecebimento());
 
 // --- SUPORTE (abrir chamado pelo app) ---
 const suporteApp = criarSuporteApp({

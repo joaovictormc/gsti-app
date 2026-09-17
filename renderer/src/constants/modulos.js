@@ -7,6 +7,7 @@ export const MODULOS = [
   { chave: "perfis", nome: "Perfis e permissões avançadas", descricao: "Perfil Técnico e permissões configuráveis por perfil." },
   { chave: "marca", nome: "Personalização da marca", descricao: "Logo, fundo e mensagem da tela de login e logo como ícone da janela." },
   { chave: "automacoes", nome: "Automações", descricao: "Avisos automáticos por e-mail e backup automático." },
+  { chave: "diagnostico", nome: "Diagnóstico e laudo técnico", descricao: "Agente portátil que gera o laudo do equipamento (hardware, saúde dos discos e bateria, testes) e anexa à OS, com comparativo antes/depois do reparo." },
 ];
 
 export const moduloPorChave = (chave) => MODULOS.find((m) => m.chave === chave) || { chave, nome: chave, descricao: "" };

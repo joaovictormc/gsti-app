@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>GSTI Diagnóstico</title>
+  <link rel="stylesheet" href="estilo.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topo">
+    <div class="marca"><span class="marca__icone" aria-hidden="true">✚</span><div><strong>GSTI Diagnóstico</strong><small data-versao></small></div></div>
+    <button class="botao botao--leve" type="button" data-acao="config">Dados da assistência</button>
+  </header>
+
+  <div class="aviso aviso--atencao" data-aviso-admin hidden>
+    <span>Sem permissão de administrador: saúde dos discos (SMART) e temperaturas podem ficar de fora.</span>
+    <button class="botao botao--pequeno" type="button" data-acao="reabrir-admin">Abrir como administrador</button>
+  </div>
+
+  <main>
+    <!-- Início -->
+    <section class="tela" data-tela="inicio">
+      <h1>Novo diagnóstico</h1>
+      <p class="sub">A coleta é só leitura: nada é instalado ou alterado neste computador. O teste de disco grava um arquivo temporário de 256 MB e apaga em seguida.</p>
+      <form class="cartao formulario" id="form-inicio">
+        <fieldset class="momento">
+          <legend>Momento</legend>
+          <label class="opcao"><input type="radio" name="momento" value="entrada" checked><span><b>Entrada</b><small>Antes do reparo</small></span></label>
+          <label class="opcao"><input type="radio" name="momento" value="saida"><span><b>Saída</b><small>Depois do reparo</small></span></label>
+        </fieldset>
+        <div class="linha">
+          <label class="campo"><span>Nº da OS <em>(opcional)</em></span><input name="os" inputmode="numeric" maxlength="20"></label>
+          <label class="campo"><span>Técnico</span><input name="tecnico" maxlength="80"></label>
+        </div>
+        <label class="campo"><span>Observação <em>(opcional)</em></span><textarea name="observacao" rows="3" maxlength="1000" placeholder="Relato do cliente ou serviço realizado"></textarea></label>
+        <div class="checks">
+          <label><input type="checkbox" name="testeDisco" checked> Teste de gravação do disco</label>
+          <label><input type="checkbox" name="testeRede" checked> Teste de internet (latência e download de 10 MB)</label>
+        </div>
+        <button class="botao botao--grande" type="submit">Iniciar diagnóstico</button>
+      </form>
+    </section>
+
+    <!-- Progresso -->
+    <section class="tela" data-tela="progresso" hidden>
+      <h1>Diagnosticando…</h1>
+      <p class="sub">Leva de 20 segundos a 1 minuto. Não desligue o computador.</p>
+      <ol class="cartao etapas">
+        <li data-etapa="coleta">Coletando hardware, sistema e saúde</li>
+        <li data-etapa="cpu">Medindo uso do processador</li>
+        <li data-etapa="disco">Testando gravação do disco</li>
+        <li data-etapa="rede">Testando internet</li>
+        <li data-etapa="laudo">Montando o laudo</li>
+      </ol>
+    </section>
+
+    <!-- Resultado -->
+    <section class="tela" data-tela="resultado" hidden>
+      <div class="resultado__topo">
+        <div>
+          <p class="rotulo" data-momento></p>
+          <h1 data-equipamento></h1>
+          <p class="sub" data-resumo></p>
+        </div>
+        <button class="botao botao--leve" type="button" data-acao="novo">Novo diagnóstico</button>
+      </div>
+      <div class="situacao" data-situacao></div>
+      <div class="grade">
+        <div class="cartao">
+          <h2>Diagnóstico</h2>
+          <ul class="alertas" data-alertas></ul>
+        </div>
+        <div class="cartao acoes">
+          <h2>Laudo</h2>
+          <button class="botao" type="button" data-acao="enviar">Enviar para o GSTI App</button>
+          <button class="botao botao--contorno" type="button" data-acao="ver">Ver laudo completo</button>
+          <button class="botao botao--contorno" type="button" data-acao="pdf">Salvar PDF</button>
+          <button class="botao botao--contorno" type="button" data-acao="arquivo">Salvar arquivo do laudo</button>
+          <button class="botao botao--contorno" type="button" data-acao="comparar" data-so-saida hidden>Comparar com o laudo de entrada</button>
+          <p class="nota" data-mensagem role="status"></p>
+          <button class="link" type="button" data-acao="pasta">Abrir pasta de laudos</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Enviar -->
+  <dialog id="dialogo-enviar" class="dialogo">
+    <form method="dialog" class="formulario" id="form-enviar">
+      <h2>Enviar para o GSTI App</h2>
+      <p class="sub">No GSTI App, abra a OS e clique em <b>Laudos → Receber pela rede</b>. Digite aqui o código que aparecer.</p>
+      <div class="lojas" data-lojas><p class="nota">Procurando o GSTI App na rede…</p></div>
+      <button class="link" type="button" data-acao="procurar">Procurar de novo</button>
+      <label class="campo" data-manual hidden><span>Endereço mostrado no GSTI App (IP:porta)</span><input name="manual" placeholder="192.168.0.10:52344"></label>
+      <label class="campo"><span>Código de 6 dígitos</span><input name="codigo" inputmode="numeric" maxlength="6" autocomplete="off" class="codigo"></label>
+      <p class="erro" data-erro-envio hidden></p>
+      <div class="rodape-dialogo">
+        <button class="botao botao--leve" type="button" data-acao="fechar-envio">Cancelar</button>
+        <button class="botao" type="submit" value="enviar">Enviar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Configurações -->
+  <dialog id="dialogo-config" class="dialogo">
+    <form method="dialog" class="formulario" id="form-config">
+      <h2>Dados da assistência</h2>
+      <p class="sub">Aparecem no cabeçalho do PDF. Ficam salvos junto do programa (pen drive).</p>
+      <label class="campo"><span>Nome da assistência</span><input name="empresa" maxlength="80"></label>
+      <label class="campo"><span>Contato (telefone, site)</span><input name="contato" maxlength="120"></label>
+      <label class="campo"><span>Técnico padrão</span><input name="tecnico" maxlength="80"></label>
+      <div class="rodape-dialogo">
+        <button class="botao botao--leve" type="button" data-acao="fechar-config">Cancelar</button>
+        <button class="botao" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

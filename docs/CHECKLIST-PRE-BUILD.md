@@ -100,7 +100,15 @@ Idealmente em uma **máquina limpa** (ou VM):
 
 ---
 
-## 7. Publicar a atualização automática
+## 7. Agente GSTI Diagnóstico (se mudou)
+
+- [ ] Atualizar `diagnostico/versao.json` e rodar `npm run dist:diagnostico`.
+- [ ] Testar o `.exe` em um computador (como administrador): diagnóstico, PDF e envio à OS.
+- [ ] Publicar: `node admin.js publicar-diagnostico <GSTI-Diagnostico-x.y.z.exe>`.
+
+---
+
+## 8. Publicar a atualização automática
 
 - [ ] Seção `## <versão>` no `CHANGELOG.md` (vira as notas exibidas no app).
 - [ ] Conferir em `dist_electron/latest.yml` a versão, o `path` `GSTI-App-Setup-<versão>.exe`
@@ -112,7 +120,7 @@ Idealmente em uma **máquina limpa** (ou VM):
 
 ---
 
-## 8. Publicação no GitHub Release
+## 9. Publicação no GitHub Release
 
 - [ ] Criar **tag** igual à versão do `package.json` (ex.: `v2.0.0`).
 - [ ] Anexar o **instalador** de `dist_electron/`.

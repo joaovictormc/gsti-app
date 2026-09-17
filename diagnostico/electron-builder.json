@@ -1,0 +1,42 @@
+{
+  "appId": "com.joaovmc.gstidiagnostico",
+  "productName": "GSTI Diagnóstico",
+  "directories": {
+    "output": "dist_diagnostico",
+    "buildResources": "build_resources"
+  },
+  "extraMetadata": {
+    "name": "gsti-diagnostico",
+    "main": "diagnostico/agente/main.js",
+    "description": "Agente portátil de diagnóstico e laudo técnico do GSTI App",
+    "version": "1.0.0"
+  },
+  "files": [
+    "diagnostico/agente/**",
+    "diagnostico/coleta-windows.js",
+    "diagnostico/testes-rapidos.js",
+    "diagnostico/laudo.js",
+    "diagnostico/laudo-html.js",
+    "diagnostico/rede-local.js",
+    "diagnostico/versao.json",
+    "!node_modules/**"
+  ],
+  "asar": true,
+  "win": {
+    "target": [
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "build_resources/icon.ico",
+    "requestedExecutionLevel": "requireAdministrator",
+    "artifactName": "GSTI-Diagnostico-${version}.${ext}"
+  },
+  "portable": {
+    "unpackDirName": "gsti-diagnostico"
+  },
+  "publish": null
+}

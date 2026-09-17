@@ -125,6 +125,27 @@ function licencaDoCliente(req, licencaId) {
   return lic;
 }
 
+// Agente GSTI Diagnóstico para quem tem o módulo
+const agenteDiagnostico = require("../lib/agente-diagnostico");
+
+r.get("/api/cliente/diagnostico", exigirCliente, rota((req) => {
+  const info = agenteDiagnostico.publicado();
+  const liberado = agenteDiagnostico.clienteTemModulo(req.cliente.id);
+  return { success: true, liberado, disponivel: !!(info && info.presente), versao: info?.versao || null, tamanho: info?.tamanho || null };
+}));
+
+r.get("/cliente/diagnostico/baixar", (req, res) => {
+  const s = auth.sessaoCliente(req);
+  if (!s) return res.redirect(303, "/cliente");
+  if (!agenteDiagnostico.clienteTemModulo(s.cliente.id)) return res.status(403).type("text").send("Seu plano não inclui o módulo Diagnóstico.");
+  try {
+    const { info, arquivo } = agenteDiagnostico.caminhoPublicado();
+    res.download(arquivo, info.arquivo);
+  } catch (e) {
+    res.status(404).type("text").send(e.message);
+  }
+});
+
 r.post("/api/cliente/sair", (req, res) => {
   auth.encerrarSessao(req, res, "cliente");
   res.json({ success: true });

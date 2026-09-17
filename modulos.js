@@ -9,6 +9,7 @@ const MODULOS = [
   { chave: "perfis", nome: "Perfis e permissões avançadas", descricao: "Perfil Técnico e permissões configuráveis por perfil." },
   { chave: "marca", nome: "Personalização da marca", descricao: "Logo, fundo e mensagem da tela de login e logo como ícone da janela." },
   { chave: "automacoes", nome: "Automações", descricao: "Avisos automáticos por e-mail e backup automático." },
+  { chave: "diagnostico", nome: "Diagnóstico e laudo técnico", descricao: "Agente portátil que gera o laudo do equipamento (hardware, saúde dos discos e bateria, testes) e anexa à OS, com comparativo antes/depois do reparo." },
 ];
 
 const CHAVES = MODULOS.map((m) => m.chave);
@@ -21,6 +22,15 @@ const CANAIS_DE_MODULO = {
   "select-background-file": "marca",
   "select-backup-folder": "automacoes",
   "get-stock": "estoque",
+  "get-os-laudos": "diagnostico",
+  "import-laudo-arquivo": "diagnostico",
+  "start-laudo-receiver": "diagnostico",
+  "stop-laudo-receiver": "diagnostico",
+  "view-laudo": "diagnostico",
+  "save-laudo-pdf": "diagnostico",
+  "laudo-comparativo": "diagnostico",
+  "delete-laudo": "diagnostico",
+  "download-diagnostico-agente": "diagnostico",
 };
 
 module.exports = { MODULOS, CHAVES, CANAIS_DE_MODULO, nomeDoModulo };

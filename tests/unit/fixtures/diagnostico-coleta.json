@@ -1,0 +1,154 @@
+{
+  "admin": false,
+  "computador": "PC-CLIENTE",
+  "cpu": {
+    "Name": "Intel(R) Core(TM) i5-6200U CPU @ 2.30GHz",
+    "Manufacturer": "GenuineIntel",
+    "NumberOfCores": 2,
+    "NumberOfLogicalProcessors": 4,
+    "MaxClockSpeed": 2401
+  },
+  "placa": {
+    "Manufacturer": "Acidanthera",
+    "Product": "Mac-473D31EABEB93F9B",
+    "SerialNumber": "PLACA0001"
+  },
+  "bios": {
+    "Manufacturer": "Acidanthera",
+    "SMBIOSBIOSVersion": "529.120.1.0.0",
+    "SerialNumber": "SERIE-TESTE-001"
+  },
+  "sistema": {
+    "Manufacturer": "Acidanthera",
+    "Model": "MacBookPro13,1",
+    "TotalPhysicalMemory": 17039978496,
+    "PCSystemType": 2
+  },
+  "os": {
+    "Caption": "Microsoft Windows 11 Home Single Language",
+    "Version": "10.0.26200",
+    "BuildNumber": "26200",
+    "OSArchitecture": "64 bits",
+    "InstallDate": "2026-07-19T12:50:02.0000000-03:00",
+    "LastBootUpTime": "2026-09-16T20:40:52.3642000-03:00",
+    "FreePhysicalMemory": 7021512,
+    "TotalVisibleMemorySize": 16640604
+  },
+  "memoria": [
+    {
+      "Capacity": 8589934592,
+      "Speed": 1600,
+      "ConfiguredClockSpeed": 1600,
+      "Manufacturer": "0816",
+      "PartNumber": "M471B1G73BH0-YK0",
+      "DeviceLocator": "ChannelA-DIMM0",
+      "SMBIOSMemoryType": 24,
+      "FormFactor": 12
+    },
+    {
+      "Capacity": 8589934592,
+      "Speed": 1600,
+      "ConfiguredClockSpeed": 1600,
+      "Manufacturer": "0816",
+      "PartNumber": "M471B1G73BH0-YK0",
+      "DeviceLocator": "ChannelB-DIMM0",
+      "SMBIOSMemoryType": 24,
+      "FormFactor": 12
+    }
+  ],
+  "slotsMemoria": 2,
+  "gpu": {
+    "Name": "Intel(R) HD Graphics 520",
+    "AdapterRAM": 1073741824,
+    "DriverVersion": "21.20.16.4599",
+    "CurrentHorizontalResolution": 1366,
+    "CurrentVerticalResolution": 768
+  },
+  "discos": [
+    {
+      "DeviceId": "1",
+      "FriendlyName": "KINGSTON SA400S37240G",
+      "MediaType": "SSD",
+      "BusType": "SATA",
+      "Size": 240057409536,
+      "HealthStatus": "Healthy",
+      "OperationalStatus": "OK",
+      "SerialNumber": "DISCO0000"
+    },
+    {
+      "DeviceId": "0",
+      "FriendlyName": "P3-512",
+      "MediaType": "SSD",
+      "BusType": "SATA",
+      "Size": 512110190592,
+      "HealthStatus": "Healthy",
+      "OperationalStatus": "OK",
+      "SerialNumber": "DISCO0001"
+    }
+  ],
+  "confiabilidade": null,
+  "volumes": {
+    "DriveLetter": "C",
+    "FileSystemLabel": "",
+    "FileSystem": "NTFS",
+    "Size": 510984712192,
+    "SizeRemaining": 343141818368,
+    "HealthStatus": "Healthy"
+  },
+  "bitlocker": null,
+  "baterias": {
+    "Id": null,
+    "Manufacturer": null,
+    "Chemistry": null,
+    "DesignCapacity": 0,
+    "FullChargeCapacity": 0,
+    "CycleCount": 0
+  },
+  "cargaBateria": null,
+  "temperaturas": null,
+  "ativacao": {
+    "Name": "Windows(R), CoreSingleLanguage edition",
+    "LicenseStatus": 1
+  },
+  "antivirus": {
+    "displayName": "Windows Defender",
+    "productState": 397568
+  },
+  "rede": [
+    {
+      "Name": "Ethernet",
+      "InterfaceDescription": "Realtek PCIe GBE Family Controller",
+      "Status": "Disconnected",
+      "LinkSpeed": "0 bps",
+      "MacAddress": "00-00-00-00-00-00"
+    },
+    {
+      "Name": "Wi-Fi",
+      "InterfaceDescription": "Intel(R) Dual Band Wireless-AC 3160",
+      "Status": "Up",
+      "LinkSpeed": "433.3 Mbps",
+      "MacAddress": "00-00-00-00-00-01"
+    }
+  ],
+  "ultimasFalhas": [
+    {
+      "Data": "2026-09-16T19:25:30.3304318-03:00",
+      "ProviderName": "Service Control Manager",
+      "Id": 7023,
+      "Mensagem": "O serviço FDResPub terminou com o erro: "
+    },
+    {
+      "Data": "2026-09-16T19:24:59.0502829-03:00",
+      "ProviderName": "Microsoft-Windows-Kernel-Power",
+      "Id": 41,
+      "Mensagem": "O sistema foi reiniciado sem um desligamento correto primeiro. Esse erro pode se"
+    },
+    {
+      "Data": "2026-09-16T19:25:08.1725044-03:00",
+      "ProviderName": "EventLog",
+      "Id": 6008,
+      "Mensagem": "O desligamento do sistema que ocorreu às 19:24:59 do dia ‎16/‎09/‎2026 não era e"
+    }
+  ],
+  "desligamentosInesperados": 1
+}

@@ -1,0 +1,206 @@
+/* GSTI Diagnóstico — interface do agente (sem bibliotecas). */
+(() => {
+  "use strict";
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const api = window.agente;
+  const ETAPAS = ["coleta", "cpu", "disco", "rede", "laudo"];
+  const SITUACAO = { ok: "Nenhum problema encontrado", atencao: "Pontos de atenção encontrados", critico: "Problemas críticos encontrados" };
+  const NIVEL = { critico: "Crítico", atencao: "Atenção", info: "Informação" };
+
+  let estado = null;
+  let laudo = null;
+  let comparativo = null;
+
+  function el(tag, attrs = {}, filhos = []) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") n.className = v;
+      else if (k === "text") n.textContent = v;
+      else if (v != null && v !== false) n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const f of [].concat(filhos)) if (f != null) n.append(f);
+    return n;
+  }
+
+  const mostrarTela = (nome) => $$("[data-tela]").forEach((t) => { t.hidden = t.dataset.tela !== nome; });
+  const mensagem = (texto, tipo = "") => {
+    const p = $("[data-mensagem]");
+    p.textContent = texto || "";
+    p.className = `nota ${tipo}`;
+  };
+
+  async function iniciar() {
+    estado = await api.estado();
+    $("[data-versao]").textContent = `versão ${estado.versao}`;
+    $("[data-aviso-admin]").hidden = estado.admin;
+    $("#form-inicio").tecnico.value = estado.config.tecnico || "";
+  }
+
+  // ----- Diagnóstico -----
+  $("#form-inicio").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    const opcoes = {
+      momento: f.momento.value, os: f.os.value, tecnico: f.tecnico.value, observacao: f.observacao.value,
+      testeDisco: f.testeDisco.checked, testeRede: f.testeRede.checked,
+    };
+    $$("[data-etapa]").forEach((li) => {
+      li.className = "";
+      li.hidden = (li.dataset.etapa === "disco" && !opcoes.testeDisco) || (li.dataset.etapa === "rede" && !opcoes.testeRede);
+    });
+    mostrarTela("progresso");
+    const parar = api.aoProgredir((etapa) => {
+      const i = ETAPAS.indexOf(etapa);
+      $$("[data-etapa]").forEach((li) => {
+        const j = ETAPAS.indexOf(li.dataset.etapa);
+        li.className = j < i ? "feita" : j === i ? "ativa" : "";
+      });
+    });
+    const r = await api.diagnosticar(opcoes);
+    parar();
+    if (!r.success) {
+      mostrarTela("inicio");
+      window.alert(`Não foi possível concluir o diagnóstico: ${r.error}`);
+      return;
+    }
+    laudo = r.laudo;
+    comparativo = null;
+    mostrarResultado();
+  });
+
+  function mostrarResultado() {
+    const e = laudo.equipamento;
+    $("[data-momento]").textContent = `${laudo.momento === "saida" ? "Saída" : "Entrada"}${laudo.os ? ` · OS ${laudo.os}` : ""}`;
+    $("[data-equipamento]").textContent = [e.fabricante, e.modelo].filter(Boolean).join(" ") || e.computador;
+    const disco = laudo.discos[0];
+    $("[data-resumo]").textContent = [
+      laudo.processador[0]?.nome, laudo.memoria.totalGB ? `${laudo.memoria.totalGB} GB RAM` : "",
+      disco ? `${disco.tipo} ${disco.tamanhoGB} GB` : "", laudo.sistema.nome,
+    ].filter(Boolean).join(" · ");
+    const s = $("[data-situacao]");
+    s.className = `situacao ${laudo.situacao}`;
+    s.textContent = SITUACAO[laudo.situacao];
+    const lista = $("[data-alertas]");
+    lista.replaceChildren(...(laudo.alertas.length
+      ? laudo.alertas.map((a) => el("li", { class: a.nivel }, [el("b", { text: `${NIVEL[a.nivel]} · ${a.area}: ${a.titulo}` }), a.detalhe ? el("small", { text: a.detalhe }) : null]))
+      : [el("li", { class: "ok", text: "Nenhum problema encontrado." })]));
+    $("[data-so-saida]").hidden = laudo.momento !== "saida";
+    mensagem("");
+    mostrarTela("resultado");
+  }
+
+  // ----- Ações do resultado -----
+  document.addEventListener("click", async (ev) => {
+    const alvo = ev.target.closest("[data-acao]");
+    if (!alvo) return;
+    const acao = alvo.dataset.acao;
+    if (acao === "novo") return mostrarTela("inicio");
+    if (acao === "ver") return api.verLaudo(laudo);
+    if (acao === "pasta") return api.abrirPasta();
+    if (acao === "reabrir-admin") return api.reabrirAdmin();
+    if (acao === "pdf") {
+      const r = await api.salvarPdf(laudo);
+      if (r.success) mensagem(`PDF salvo em ${r.caminho}`, "sucesso");
+      return;
+    }
+    if (acao === "arquivo") {
+      const r = await api.salvarArquivo(laudo);
+      if (r.success) mensagem(`Laudo salvo em ${r.caminho}. Importe no GSTI App se não puder enviar pela rede.`, "sucesso");
+      return;
+    }
+    if (acao === "comparar") {
+      const r = await api.comparar(laudo);
+      if (r.success) {
+        comparativo = { entrada: r.entrada, saida: r.saida };
+        mensagem(r.mesmoEquipamento ? "Comparativo aberto. Use Salvar PDF do comparativo abaixo." : "Atenção: os laudos parecem ser de equipamentos diferentes.", r.mesmoEquipamento ? "sucesso" : "erro");
+        let b = $("[data-acao='pdf-comparativo']");
+        if (!b) {
+          b = el("button", { class: "botao botao--contorno", type: "button", "data-acao": "pdf-comparativo", text: "Salvar PDF do comparativo" });
+          $("[data-so-saida]").after(b);
+        }
+      } else if (!r.cancelado) mensagem(r.error, "erro");
+      return;
+    }
+    if (acao === "pdf-comparativo" && comparativo) {
+      const r = await api.salvarPdfComparativo(comparativo);
+      if (r.success) mensagem(`PDF do comparativo salvo em ${r.caminho}`, "sucesso");
+      return;
+    }
+    if (acao === "enviar") return abrirEnvio();
+    if (acao === "procurar") return procurar();
+    if (acao === "fechar-envio") return $("#dialogo-enviar").close();
+    if (acao === "config") return abrirConfig();
+    if (acao === "fechar-config") return $("#dialogo-config").close();
+  });
+
+  // ----- Envio pela rede -----
+  async function procurar() {
+    const caixa = $("[data-lojas]");
+    caixa.replaceChildren(el("p", { class: "nota", text: "Procurando o GSTI App na rede…" }));
+    const r = await api.descobrir();
+    const itens = r.itens || [];
+    const opcoes = itens.map((l, i) =>
+      el("label", { class: "loja" }, [
+        el("input", { type: "radio", name: "destino", value: String(i), checked: i === 0 }),
+        el("span", {}, [el("b", { text: l.nome }), el("small", { text: `${l.hosts.join(", ")} · porta ${l.porta}` })]),
+      ])
+    );
+    opcoes.push(el("label", { class: "loja" }, [el("input", { type: "radio", name: "destino", value: "manual", checked: !itens.length }), el("span", {}, [el("b", { text: "Digitar o endereço" }), el("small", { text: "Se o GSTI App não aparecer na lista" })])]));
+    caixa.replaceChildren(...opcoes);
+    caixa._itens = itens;
+    atualizarManual();
+  }
+  const atualizarManual = () => {
+    const sel = $("#form-enviar input[name=destino]:checked");
+    $("[data-manual]").hidden = !sel || sel.value !== "manual";
+  };
+  $("[data-lojas]").addEventListener("change", atualizarManual);
+
+  function abrirEnvio() {
+    const f = $("#form-enviar");
+    f.codigo.value = "";
+    $("[data-erro-envio]").hidden = true;
+    $("#dialogo-enviar").showModal();
+    procurar();
+  }
+
+  $("#form-enviar").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    const erro = $("[data-erro-envio]");
+    erro.hidden = true;
+    const sel = $("input[name=destino]:checked", f);
+    const destino = !sel || sel.value === "manual" ? f.manual.value : $("[data-lojas]")._itens[Number(sel.value)];
+    const botao = $("button[type=submit]", f);
+    botao.disabled = true;
+    botao.textContent = "Enviando…";
+    const r = await api.enviar({ destino, codigo: f.codigo.value, laudo });
+    botao.disabled = false;
+    botao.textContent = "Enviar";
+    if (r.success) {
+      $("#dialogo-enviar").close();
+      mensagem(`Laudo enviado ao GSTI App${r.os ? ` e anexado à OS ${r.os}` : ""}.`, "sucesso");
+    } else {
+      erro.textContent = r.error;
+      erro.hidden = false;
+    }
+  });
+
+  // ----- Configurações -----
+  function abrirConfig() {
+    const f = $("#form-config");
+    f.empresa.value = estado.config.empresa || "";
+    f.contato.value = estado.config.contato || "";
+    f.tecnico.value = estado.config.tecnico || "";
+    $("#dialogo-config").showModal();
+  }
+  $("#form-config").addEventListener("submit", async (ev) => {
+    const f = ev.target;
+    estado.config = { empresa: f.empresa.value.trim(), contato: f.contato.value.trim(), tecnico: f.tecnico.value.trim() };
+    await api.salvarConfig(estado.config);
+    if (!$("#form-inicio").tecnico.value) $("#form-inicio").tecnico.value = estado.config.tecnico;
+  });
+
+  iniciar();
+})();
