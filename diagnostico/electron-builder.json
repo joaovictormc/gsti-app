@@ -13,17 +13,8 @@
   },
   "files": [
     "diagnostico/agente/**",
-    "diagnostico/coleta-windows.js",
-    "diagnostico/testes-rapidos.js",
-    "diagnostico/laudo.js",
-    "diagnostico/laudo-html.js",
-    "diagnostico/rede-local.js",
+    "diagnostico/*.js",
     "diagnostico/versao.json",
-    "diagnostico/coleta.js",
-    "diagnostico/coleta-macos.js",
-    "diagnostico/coleta-linux.js",
-    "diagnostico/otimizacao.js",
-    "diagnostico/cli.js",
     "!node_modules/**"
   ],
   "asar": true,

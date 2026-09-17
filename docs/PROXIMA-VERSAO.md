@@ -204,8 +204,23 @@ não a fonte principal; a formatação termina sempre com a versão **mais nova 
 4. **Laudo de saída**: driver a driver, versão antes × depois, origem (Windows Update,
    fabricante, backup) e o que ficou pendente.
 5. Repositório de drivers da assistência (pasta no pen drive/servidor da loja) com os mais
-   recentes por hardware ID, usado antes do backup do cliente.
+   recentes por hardware ID, usado antes do backup do cliente — como montar:
+   [REPOSITORIO-DE-DRIVERS.md](./REPOSITORIO-DE-DRIVERS.md).
 Linux: `ubuntu-drivers` e `fwupdmgr`; macOS: não se aplica.
+
+**Repositórios dos fabricantes** — usar só os que têm **catálogo oficial e público** (feitos
+para ferramentas automáticas), baixando direto do fabricante na hora e conferindo a
+assinatura digital; nunca guardar/redistribuir no nosso servidor nem raspar sites:
+- **Dell**: catálogo `CatalogPC.cab` / Driver Pack Catalog (usado pelo Dell Command | Update).
+- **Lenovo**: catálogo XML por tipo de máquina (usado pelo System Update/Thin Installer).
+- **HP**: arquivos de referência do HP Image Assistant (SoftPaqs por plataforma).
+- **Microsoft Update**: drivers de quase todos os componentes (Intel, AMD, Realtek, NVIDIA,
+  Qualcomm…) pela API do Windows Update — cobre as marcas sem catálogo (Acer, ASUS,
+  Positivo, Samsung, Multilaser) e placas-mãe de desktop.
+- **GPU**: preferir as ferramentas oficiais (NVIDIA App, AMD Adrenalin, Intel Driver & Support
+  Assistant) em vez de consultar APIs não documentadas.
+- Sem catálogo público (Acer, ASUS, Positivo, fabricantes de placa-mãe): Windows Update +
+  repositório da assistência; raspar os sites quebra com frequência e pode violar os termos.
 
 Próximos passos possíveis: laudo também no recibo de saída da OS, histórico de laudos por
 equipamento, testes de estresse opcionais (CPU/memória), assinatura digital do agente e

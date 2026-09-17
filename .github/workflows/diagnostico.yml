@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: 22
       - name: Testes do diagnóstico (sem dependências)
-        run: node --test tests/unit/diagnostico.test.js tests/unit/diagnostico-plataformas.test.js tests/unit/otimizacao.test.js
+        run: node --test tests/unit/diagnostico.test.js tests/unit/diagnostico-plataformas.test.js tests/unit/otimizacao.test.js tests/unit/empacotamento.test.js
       - name: smartmontools (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y -q smartmontools
