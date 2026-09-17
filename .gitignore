@@ -6,3 +6,6 @@ dist_electron
 *.pem
 license-server/data/
 license-server/trials.json
+
+# Capturas dos testes de ponta a ponta
+tests/e2e/saida/

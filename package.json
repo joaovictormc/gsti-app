@@ -12,7 +12,9 @@
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win --x64",
     "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux --docker"
+    "dist:linux": "npm run build && electron-builder --linux --docker",
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "test:e2e": "npm run build && node tests/e2e/rodar.js"
   },
   "keywords": [],
   "author": "João Victor Maciel Campos",
