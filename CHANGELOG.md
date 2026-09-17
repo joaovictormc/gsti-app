@@ -50,6 +50,12 @@
     exige quem autorizou e fica registrada no laudo de saída e no PDF.
   - **Scripts da assistência**: scripts próprios (`scripts/<sistema>/` ao lado do agente)
     aparecem na otimização com nome, descrição e risco.
+  - **Desempenho e aparência**: efeitos visuais, sugestões e apps patrocinados, Game Bar,
+    agendamento de GPU, alto desempenho em desktops, apps em segundo plano, barra de tarefas,
+    hibernação (Windows); animações e Dock (macOS); animações do GNOME e swappiness (Linux).
+    Todo ajuste guarda o valor original e pode ser revertido com **Desfazer ajustes**.
+  - Limpeza extra: relatórios de erro e despejos de memória e cache dos navegadores (sem apagar
+    senhas, histórico ou logins).
 
 ### Correções
 - Legendas dos gráficos do Resumo Financeiro não cortam mais nomes longos.

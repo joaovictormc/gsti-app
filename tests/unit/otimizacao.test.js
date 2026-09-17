@@ -69,6 +69,13 @@ test("execução no Windows: uma chamada por ação, autorização obrigatória"
   assert.deepEqual(r.acoes.map((a) => [a.id, a.status]), [["dns", "ok"], ["sfc", "erro"]]);
 });
 
+test("execução segue a ordem do catálogo: ponto de restauração antes das mudanças", async () => {
+  const ordem = [];
+  const executor = async (_cmd, args) => { const sc = Buffer.from(args[args.length - 1], "base64").toString("utf16le"); ordem.push(/Checkpoint-Computer/.test(sc) ? "ponto" : /VisualFXSetting/.test(sc) ? "efeitos" : "outra"); return { saida: "", codigo: 0 }; };
+  await O.executar(["efeitos-visuais", "ponto-restauracao"], { plataforma: "win32", autorizadoPor: "Cliente", executor });
+  assert.deepEqual(ordem, ["ponto", "efeitos"]);
+});
+
 test("execução no macOS/Linux: usuário primeiro, administrador em lote com um pedido de senha", async () => {
   const chamadas = [];
   const executor = async (cmd, args) => {
@@ -118,4 +125,76 @@ test("serviços executados entram no laudo de saída, no PDF e no comparativo", 
   assert.match(html, /Cliente &lt;b&gt;/);
   assert.ok(comparar(entrada, saida).linhas.some((l) => l.grupo === "Otimização" && l.depois === "3072 MB"));
   assert.equal(montarLaudoDeSecoes(secoes, { servicos: { acoes: [] } }).servicos, null, "otimização vazia não é registrada");
+});
+
+// --- Ajustes reversíveis: registro real numa chave de teste (Windows) ---
+test("Windows: Definir guarda o original e desfazer restaura (chave de teste no registro)", { skip: process.platform !== "win32" && "só no Windows" }, () => {
+  const W = require(path.join(RAIZ, "diagnostico", "otimizacao-windows.js"));
+  const desfazer = W.ACOES.find((a) => a.id === "desfazer-ajustes").script;
+  const arquivo = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "gsti-ajustes-")), "ajustes.json");
+  const chave = "HKCU:\\Software\\GSTI-Teste-Otimizacao";
+  const ps = (script) => execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand",
+    Buffer.from(`[Console]::OutputEncoding = [Text.Encoding]::UTF8\n${W.UTIL}\n${script}`, "utf16le").toString("base64")], { encoding: "utf8", env: { ...process.env, GSTI_AJUSTES_ARQUIVO: arquivo } });
+  const estado = () => JSON.parse(ps(`$i = Get-Item -LiteralPath "${chave}"; @{ dword = $i.GetValue("Numero"); texto = $i.GetValue("Texto"); binario = [Convert]::ToBase64String($i.GetValue("Binario")); nomes = @($i.GetValueNames() | Sort-Object) } | ConvertTo-Json -Compress`).trim());
+  try {
+    ps(`New-Item -Path "${chave}" -Force | Out-Null
+New-ItemProperty -LiteralPath "${chave}" -Name Numero -Value 7 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -LiteralPath "${chave}" -Name Texto -Value "400" -PropertyType String -Force | Out-Null
+New-ItemProperty -LiteralPath "${chave}" -Name Binario -Value ([byte[]](1,2,3)) -PropertyType Binary -Force | Out-Null`);
+    const original = estado();
+    ps(`Definir "${chave}" "Numero" 0 DWord
+Definir "${chave}" "Numero" 5 DWord
+Definir "${chave}" "Texto" "100" String
+Definir "${chave}" "Binario" ([byte[]](0x90,0x12)) Binary
+Definir "${chave}" "Novo" 1 DWord`);
+    const alterado = estado();
+    assert.equal(alterado.dword, 5);
+    assert.equal(alterado.texto, "100");
+    assert.ok(alterado.nomes.includes("Novo"));
+    const registro = JSON.parse(fs.readFileSync(arquivo, "utf8").replace(/^﻿/, ""));
+    assert.equal(registro.filter((r) => r.nome === "Numero").length, 1, "o original é guardado só na primeira alteração");
+    assert.match(ps(desfazer), /Restaurados 4 ajuste/);
+    assert.deepEqual(estado(), original, "valores (DWord, String, Binary) voltam ao original e o valor criado é removido");
+    assert.ok(!fs.existsSync(arquivo), "registro de ajustes apagado depois de desfazer");
+    assert.match(ps(desfazer), /Nenhum ajuste/);
+  } finally {
+    ps(`Remove-Item -LiteralPath "${chave}" -Recurse -Force`);
+  }
+});
+
+// --- Ajustes reversíveis no macOS/Linux: bash com "defaults" simulado ---
+test("macOS/Linux: definir_default e desfazer restauram o valor anterior (bash)", { skip: (() => { try { execFileSync("bash", ["-c", "true"]); return false; } catch { return "bash indisponível"; } })() }, () => {
+  const U = require(path.join(RAIZ, "diagnostico", "otimizacao-unix.js"));
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), "gsti-unix-"));
+  const banco = path.join(pasta, "defaults.txt").split(path.sep).join("/");
+  const desfazerArq = path.join(pasta, "desfazer.sh").split(path.sep).join("/");
+  fs.writeFileSync(banco, "com.apple.dock|launchanim|1\n");
+  // "defaults" simulado: guarda dominio|chave|valor num arquivo (exportado para o bash do desfazer)
+  const simulador = [
+    `BANCO="${banco}"`,
+    "defaults() {",
+    '  acao="$1"; dom="$2"; ch="$3"',
+    '  case "$acao" in',
+    '    read) linha=$(grep "^$dom|$ch|" "$BANCO") || return 1; echo "${linha##*|}";;',
+    '    write) grep -v "^$dom|$ch|" "$BANCO" > "$BANCO.tmp"; mv "$BANCO.tmp" "$BANCO"; echo "$dom|$ch|$5" >> "$BANCO";;',
+    '    delete) grep -v "^$dom|$ch|" "$BANCO" > "$BANCO.tmp"; mv "$BANCO.tmp" "$BANCO";;',
+    "  esac",
+    "}",
+    "export -f defaults",
+    "export BANCO",
+    "killall() { :; }",
+  ].join("\n");
+  const bash = (script) => execFileSync("bash", ["-c", `${simulador}\n${U.UTIL}\n${script}`], { encoding: "utf8", env: { ...process.env, GSTI_DESFAZER_ARQUIVO: desfazerArq } });
+  const dock = U.MACOS.find((a) => a.id === "dock-rapido").script;
+  bash(dock);
+  bash(dock); // segunda vez não sobrescreve o original guardado
+  let valores = fs.readFileSync(banco, "utf8");
+  assert.match(valores, /com\.apple\.dock\|launchanim\|false/);
+  assert.match(valores, /expose-animation-duration\|0\.1/);
+  assert.equal((fs.readFileSync(desfazerArq, "utf8").match(/^# com\.apple\.dock launchanim$/gm) || []).length, 1);
+  assert.match(bash(U.MACOS.find((a) => a.id === "desfazer-ajustes").script), /Restaurados 4 ajuste/);
+  valores = fs.readFileSync(banco, "utf8");
+  assert.match(valores, /com\.apple\.dock\|launchanim\|1/, "valor existente volta ao original");
+  assert.doesNotMatch(valores, /expose-animation-duration|autohide-delay|mineffect/, "chaves que não existiam são apagadas");
+  assert.ok(!fs.existsSync(desfazerArq));
 });

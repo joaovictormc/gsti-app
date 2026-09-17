@@ -190,6 +190,9 @@ verificação de arquivos do sistema…). As que **apagam dados do cliente** (co
 Lixeira) vêm desmarcadas. Informe **quem autorizou**, confirme e execute; ao final, **Gerar
 laudo de saída agora** registra o que foi feito e o espaço liberado no laudo e no PDF. O agente
 também roda no **macOS** e no **Linux** (escolha o sistema em **Baixar GSTI Diagnóstico**).
+Os ajustes de **Desempenho e aparência** (efeitos visuais, plano de energia, barra de tarefas…)
+podem ser revertidos a qualquer momento pelo próprio agente em **Desfazer ajustes**; os marcados
+com **Reiniciar** só valem depois de reiniciar o computador.
 
 O laudo aponta problemas **críticos** (disco com falha, SSD gasto, bateria muito fraca,
 superaquecimento, pouco espaço) e **pontos de atenção** (Windows não ativado, sem antivírus,

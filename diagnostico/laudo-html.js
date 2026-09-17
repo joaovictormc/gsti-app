@@ -18,7 +18,7 @@ function blocoServicos(servicos) {
   if (!servicos?.acoes?.length) return "";
   const status = { ok: "Concluída", erro: "Falhou", pulado: "Não executada" };
   return `<h2>Serviços executados pelo agente</h2>
-  <p class="nota">${dataHora(servicos.executadoEm)} · autorizado por <b>${esc(servicos.autorizadoPor)}</b>${servicos.tecnico ? ` · técnico ${esc(servicos.tecnico)}` : ""} · espaço liberado: <b>${mbOuGb(servicos.liberadoTotalBytes)}</b></p>
+  <p class="nota">${dataHora(servicos.executadoEm)} · autorizado por <b>${esc(servicos.autorizadoPor)}</b>${servicos.tecnico ? ` · técnico ${esc(servicos.tecnico)}` : ""} · espaço liberado: <b>${mbOuGb(servicos.liberadoTotalBytes)}</b>${servicos.acoes.some((a) => a.categoria === "desempenho" && a.status === "ok") ? " · ajustes de desempenho reversíveis pelo agente (Desfazer ajustes)" : ""}</p>
   <table class="fixa"><colgroup><col style="width:34%"><col style="width:12%"><col style="width:12%"><col></colgroup><thead><tr><th>Ação</th><th>Situação</th><th>Liberado</th><th>Detalhe</th></tr></thead><tbody>
   ${servicos.acoes.map((a) => `<tr><td>${esc(a.nome)}${a.personalizado ? ' <small class="nota">(script da assistência)</small>' : ""}</td><td class="${a.status === "ok" ? "melhorou" : "piorou"}">${esc(status[a.status] || a.status)}</td><td>${a.liberadoBytes ? mbOuGb(a.liberadoBytes) : "—"}</td><td>${esc(a.detalhe)}</td></tr>`).join("")}
   </tbody></table>`;

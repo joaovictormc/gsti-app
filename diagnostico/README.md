@@ -40,11 +40,23 @@ entrada e na saída do reparo (com comparativo antes/depois).
 
 ## Otimização
 
-| Sistema | Ações incluídas |
-|---|---|
-| Windows | Ponto de restauração · temporários (+1 dia) · cache de miniaturas · downloads do Windows Update · cache DNS · DISM limpeza de componentes (demorada) · otimizar unidade (TRIM/desfragmentação) · SFC (demorada) · Lixeira (apaga dados) |
-| macOS | Caches do usuário · logs antigos · cache DNS · verificar volume (demorada) · reindexar Spotlight (demorada) · Lixeira (apaga dados) |
-| Linux | Cache de pacotes (apt/dnf/pacman/zypper) · journal (7 dias) · miniaturas · TRIM · cache DNS · pacotes órfãos (apaga dados) · Lixeira (apaga dados) |
+| Sistema | Limpeza | Desempenho e aparência (reversível) | Manutenção |
+|---|---|---|---|
+| Windows | Temporários (+1 dia) · miniaturas · downloads do Windows Update · relatórios de erro e despejos · cache dos navegadores · DISM (demorada) · Lixeira* | Efeitos visuais para desempenho · sugestões/anúncios/apps automáticos · gravação de jogos (Game Bar) · agendamento de GPU por hardware · alto desempenho (só desktops) · apps da Loja em segundo plano · barra de tarefas leve (widgets, notícias, Copilot) · hibernação · remover apps patrocinados* | Ponto de restauração (sempre primeiro) · TRIM/desfragmentação · DNS · SFC (demorada) |
+| macOS | Caches do usuário · logs antigos · Lixeira* | Menos animações e transparência · Dock e Mission Control mais rápidos | DNS · verificar volume · reindexar Spotlight |
+| Linux | Cache de pacotes · journal (7 dias) · miniaturas · cache dos navegadores · Lixeira* | Animações do GNOME · swappiness 10 · pacotes órfãos* | TRIM · DNS |
+
+\* apagam dados ou removem programas: desmarcadas e num grupo separado.
+
+**Desfazer ajustes**: cada ajuste de desempenho guarda o valor anterior antes de mudar
+(Windows: `%ProgramData%\GSTI-Diagnostico\ajustes.json` — registro, plano de energia,
+hibernação; macOS/Linux: script de desfazer na pasta do usuário e `/etc/sysctl.d/99-gsti-diagnostico.conf`).
+A ação **Desfazer ajustes** restaura os originais, mesmo em outra visita. Apps removidos não
+voltam (reinstalam-se pela loja).
+
+Ficaram de fora de propósito ajustes sem ganho real ou com risco (desligar serviços como
+SysMain/indexação, "limpadores de registro", mexer em arquivo de paginação, desativar Windows
+Defender ou atualizações).
 
 - Ações que **apagam dados do cliente** vêm desmarcadas e aparecem num grupo separado.
 - Exige **nome de quem autorizou** e confirmação; o registro (ação, situação, espaço liberado,

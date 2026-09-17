@@ -189,16 +189,22 @@ repositório, laudo anexado à OS por rede local ou arquivo) — ver
 Entregue também: coleta no **macOS e Linux**, **otimização** com registro e **scripts da
 assistência**.
 
-**Em decisão — drivers pós-formatação** (proposta em fases, por segurança e licenciamento):
-1. **Identificar** dispositivos sem driver/com erro (Get-PnpDevice, códigos 28/10) com os IDs de
-   hardware e o fabricante (base pública pci.ids/usb.ids) no laudo.
-2. **Backup e restauração de drivers** com ferramentas do próprio Windows: exportar os drivers
-   do cliente antes de formatar (`Export-WindowsDriver`/`pnputil /export-driver`) para o pen
-   drive e reinstalar depois (`pnputil /add-driver /subdirs /install`) — resolve inclusive a
-   rede sem driver.
-3. **Instalar pelo Windows Update** (drivers assinados da Microsoft) pela API oficial.
-4. **Ferramentas dos fabricantes** quando detectadas (Dell Command | Update, Lenovo System
-   Update/Thin Installer, HP Image Assistant) e repositório próprio da assistência.
+**Em decisão — drivers pós-formatação.** Estratégia proposta: o backup é **rede de segurança**,
+não a fonte principal; a formatação termina sempre com a versão **mais nova disponível**:
+1. **Inventário na entrada**: cada driver de terceiros com dispositivo, fabricante, versão,
+   data e hardware ID (Get-PnpDevice/Win32_PnPSignedDriver + pci.ids), e dispositivos sem
+   driver (código 28) — tudo no laudo.
+2. **Backup de segurança** (`pnputil /export-driver`) só dos drivers de terceiros, com
+   manifesto de versão/data; marca como "antigo" o que tiver mais de 2–3 anos.
+3. **Pós-formatação em camadas**: (a) só o essencial do backup para ter rede (placa de rede e
+   Wi-Fi), mesmo que antigo; (b) **Windows Update** (drivers assinados e mais novos); (c)
+   ferramenta do **fabricante** quando detectada (Dell Command | Update, Lenovo System
+   Update/Thin Installer, HP Image Assistant; Intel DSA/AMD/NVIDIA para vídeo); (d) do backup,
+   só o que continuar faltando, comparando versões para **nunca rebaixar** um driver.
+4. **Laudo de saída**: driver a driver, versão antes × depois, origem (Windows Update,
+   fabricante, backup) e o que ficou pendente.
+5. Repositório de drivers da assistência (pasta no pen drive/servidor da loja) com os mais
+   recentes por hardware ID, usado antes do backup do cliente.
 Linux: `ubuntu-drivers` e `fwupdmgr`; macOS: não se aplica.
 
 Próximos passos possíveis: laudo também no recibo de saída da OS, histórico de laudos por

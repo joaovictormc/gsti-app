@@ -160,16 +160,19 @@
     const r = await api.otimizacaoCatalogo();
     acoesOtimizacao = r.acoes || [];
     const grupos = [
-      ["Recomendadas", (a) => !a.personalizado && a.risco === "baixo" && !a.lento],
-      ["Demoradas (vários minutos)", (a) => !a.personalizado && a.risco === "baixo" && a.lento],
-      ["Apagam dados — só com autorização do cliente", (a) => !a.personalizado && a.risco !== "baixo"],
-      ["Scripts da assistência", (a) => a.personalizado],
+      ["Manutenção e reparo", (a) => a.categoria === "manutencao", "O ponto de restauração é criado antes de qualquer outra ação."],
+      ["Limpeza", (a) => a.categoria === "limpeza" && a.risco === "baixo", "Libera espaço sem apagar arquivos do cliente."],
+      ["Desempenho e aparência", (a) => a.categoria === "desempenho" && a.risco === "baixo", "Ajustes guardados: podem ser desfeitos depois em “Desfazer ajustes”."],
+      ["Apagam dados ou removem programas — só com autorização do cliente", (a) => !a.personalizado && a.risco !== "baixo", ""],
+      ["Desfazer ajustes", (a) => a.categoria === "reverter", "Use se o cliente quiser voltar às configurações anteriores."],
+      ["Scripts da assistência", (a) => a.personalizado, ""],
     ];
-    const caixas = grupos.map(([titulo, filtro]) => {
+    const caixas = grupos.map(([titulo, filtro, ajuda]) => {
       const itens = acoesOtimizacao.filter(filtro);
       if (!itens.length) return null;
       return el("div", { class: "cartao grupo" }, [
         el("h2", { text: titulo }),
+        ajuda ? el("p", { class: "nota", text: ajuda }) : null,
         ...itens.map((a) => el("label", { class: "acao" }, [
           el("input", { type: "checkbox", name: "acao", value: a.id, checked: a.padrao }),
           el("span", {}, [
@@ -177,6 +180,7 @@
             el("span", { class: "selos" }, [
               a.admin ? el("span", { class: "selo", text: "Administrador" }) : null,
               a.lento ? el("span", { class: "selo selo--lento", text: "Demorada" }) : null,
+              a.reinicio ? el("span", { class: "selo selo--lento", text: "Reiniciar" }) : null,
               a.risco !== "baixo" ? el("span", { class: "selo selo--risco", text: "Apaga dados" }) : null,
             ]),
             el("small", { text: a.descricao }),
@@ -226,7 +230,7 @@
       servicosSessao = r.servicos;
       const falhas = r.servicos.acoes.filter((a) => a.status !== "ok").length;
       total.className = `situacao ${falhas ? "atencao" : "ok"}`;
-      total.textContent = `${mb(r.servicos.liberadoTotalBytes)} liberados · ${r.servicos.acoes.length - falhas} ação(ões) concluída(s)${falhas ? `, ${falhas} com falha` : ""}. Gere o laudo de saída para registrar.`;
+      total.textContent = `${mb(r.servicos.liberadoTotalBytes)} liberados · ${r.servicos.acoes.length - falhas} ação(ões) concluída(s)${falhas ? `, ${falhas} com falha` : ""}.${r.servicos.requerReinicio ? " Reinicie o computador para aplicar todos os ajustes (o laudo de saída pode ser gerado depois de reiniciar)." : ""} Gere o laudo de saída para registrar.`;
     } else {
       total.className = "situacao critico";
       total.textContent = r.error;
