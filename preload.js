@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('api', {
   cancelarNota: (dados) => ipcRenderer.invoke('cancelar-nota', dados),
   deleteNota: (id) => ipcRenderer.invoke('delete-nota', id),
   openNotaArquivo: (dados) => ipcRenderer.invoke('open-nota-arquivo', dados),
+  testarCredenciaisFiscais: (dados) => ipcRenderer.invoke('testar-credenciais-fiscais', dados),
+  prepararNFSeIntegrada: (osId) => ipcRenderer.invoke('preparar-nfse-integrada', osId),
+  emitirNFSeIntegrada: (dados) => ipcRenderer.invoke('emitir-nfse-integrada', dados),
+  atualizarNota: (id) => ipcRenderer.invoke('atualizar-nota', id),
 
   // Barra de título própria
   plataforma: process.platform,

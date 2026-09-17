@@ -464,6 +464,12 @@ export default function ConfigNotaFiscal() {
 
 function FormCredenciais({ emissor, salvas, valores, onChange, bloqueio, salvando, onSalvar }) {
   const desabilitado = !!bloqueio || salvando;
+  const [teste, setTeste] = useState({ executando: false, tipo: "", texto: "" });
+  const testarConexao = async () => {
+    setTeste({ executando: true, tipo: "", texto: "" });
+    const r = await window.api.testarCredenciaisFiscais({ emissorId: emissor.id, apiKey: valores.apiKey || "" });
+    setTeste({ executando: false, tipo: r.success ? "success" : "error", texto: r.success ? r.mensagem : r.error });
+  };
   return (
     <Box>
       <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>Credenciais (cadastradas por você)</Typography>
@@ -499,7 +505,13 @@ function FormCredenciais({ emissor, salvas, valores, onChange, bloqueio, salvand
           </Grid>
         ))}
       </Grid>
-      <Box sx={{ mt: 1.5, display: "flex", justifyContent: "flex-end" }}>
+      {teste.texto && <Alert severity={teste.tipo} sx={{ mt: 1.5 }}>{teste.texto}</Alert>}
+      <Box sx={{ mt: 1.5, display: "flex", justifyContent: "flex-end", gap: 1 }}>
+        {emissor.id === "notaas" && (
+          <Button onClick={testarConexao} disabled={desabilitado || teste.executando}>
+            {teste.executando ? "Testando…" : "Testar conexão"}
+          </Button>
+        )}
         <Button variant="outlined" onClick={onSalvar} disabled={desabilitado}>Salvar credenciais</Button>
       </Box>
     </Box>

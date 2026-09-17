@@ -56,6 +56,7 @@
       "controle-acesso.js",
       "fiscal-emissores.js",
       "fiscal-certificado.js",
+      "fiscal-notaas.js",
       "build_resources/icon.ico",
       "package.json",
       "!node_modules/@types/",

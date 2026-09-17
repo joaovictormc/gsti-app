@@ -1670,7 +1670,7 @@ ipcMain.handle("get-os-list", async (event) => {
       os.numero_serie, os.status, os.data_entrada, os.valor_total,
       c.nome AS nome_cliente, c.telefone AS telefone_cliente,
       u.nome AS nome_atendente,
-      (SELECT COUNT(*) FROM notas_fiscais nf WHERE nf.id_os = os.id AND nf.status <> 'cancelada')::int AS notas
+      (SELECT COUNT(*) FROM notas_fiscais nf WHERE nf.id_os = os.id AND nf.status NOT IN ('cancelada', 'erro'))::int AS notas
     FROM ordens_servico AS os
     JOIN clientes AS c ON os.id_cliente = c.id
     LEFT JOIN usuarios u ON u.id = os.id_atendente
@@ -4325,6 +4325,7 @@ ipcMain.handle("get-fiscal-status", async () => {
     success: true,
     emissor: { id: emissor.id, nome: emissor.nome, integrado: emissor.integrado, status: emissor.status },
     integradoAtivo,
+    emiteIntegrado: integradoAtivo ? emissor.emite || [] : [],
     tiposNota: fiscalEmissores.TIPOS_NOTA,
   };
 });
@@ -4472,6 +4473,7 @@ ipcMain.handle("get-os-notas", async (event, osId) => {
     const { rows } = await dbPool.query(
       `SELECT nf.id, nf.tipo, nf.origem, nf.numero, nf.serie, nf.chave_acesso, nf.data_emissao, nf.valor,
               nf.status, nf.observacao, nf.motivo_cancelamento, nf.cancelada_em, nf.pdf_nome, nf.xml_nome,
+              nf.mensagem_erro,
               (nf.pdf IS NOT NULL) AS tem_pdf, (nf.xml IS NOT NULL) AS tem_xml, nf.criado_em, u.nome AS usuario
          FROM notas_fiscais nf LEFT JOIN usuarios u ON u.id = nf.id_usuario
         WHERE nf.id_os = $1 ORDER BY nf.criado_em DESC`,
@@ -4575,10 +4577,29 @@ ipcMain.handle("cancelar-nota", async (event, { id, motivo } = {}) => {
   try {
     const { nota, erro } = await notaDoUsuario(event, id);
     if (erro) return erro;
-    if (nota.origem !== "manual") return { success: false, error: "Cancelamento pelo emissor integrado ainda não disponível." };
     if (nota.status === "cancelada") return { success: false, error: "A nota já está cancelada." };
     const texto = textoCurto(motivo, 255);
     if (texto.length < 5) return { success: false, error: "Informe o motivo do cancelamento." };
+    if (nota.origem === "notaas") {
+      if (nota.status !== "emitida") return { success: false, error: "Só é possível cancelar uma NFS-e já emitida." };
+      const { rows } = await dbPool.query("SELECT id_externo FROM notas_fiscais WHERE id = $1", [id]);
+      try {
+        await clienteNotaas().cancelar(rows[0].id_externo, texto);
+      } catch (e) {
+        return { success: false, error: mensagemFiscal(e) };
+      }
+      await dbPool.query(
+        "UPDATE notas_fiscais SET status = 'cancelando', motivo_cancelamento = $2, atualizado_em = NOW() WHERE id = $1",
+        [id, texto]
+      );
+      let situacao = "cancelando";
+      try {
+        situacao = (await atualizarNotaIntegrada(id)).status;
+      } catch (_) {
+        /* a tela atualiza depois */
+      }
+      return { success: true, status: situacao };
+    }
     await dbPool.query(
       "UPDATE notas_fiscais SET status = 'cancelada', motivo_cancelamento = $2, cancelada_em = NOW(), atualizado_em = NOW() WHERE id = $1",
       [id, texto]
@@ -4597,7 +4618,9 @@ ipcMain.handle("delete-nota", async (event, id) => {
   try {
     const { nota, erro } = await notaDoUsuario(event, id);
     if (erro) return erro;
-    if (nota.origem !== "manual") return { success: false, error: "Notas emitidas pelo emissor integrado não podem ser excluídas; cancele-as." };
+    if (nota.origem !== "manual" && nota.status !== "erro") {
+      return { success: false, error: "Notas emitidas pelo emissor integrado não podem ser excluídas; cancele-as." };
+    }
     await dbPool.query("DELETE FROM notas_fiscais WHERE id = $1", [id]);
     return { success: true };
   } catch (error) {
@@ -4621,6 +4644,229 @@ ipcMain.handle("open-nota-arquivo", async (event, { id, tipo } = {}) => {
     return falha ? { success: false, error: falha } : { success: true };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+// --- Emissão integrada (Notaas) ---
+const { criarClienteNotaas, NotaasErro, SITUACAO: SITUACAO_NOTAAS } = require("./fiscal-notaas");
+
+function emissorIntegradoAtivo() {
+  const emissor = fiscalEmissores.buscarEmissor(appConfig.fiscal.emissor);
+  if (!emissor?.integrado || emissor.status !== "disponivel") return null;
+  if (!recursoLiberado(RECURSO_EMISSOR_FISCAL) || !termoFiscalAceito()) return null;
+  return emissor;
+}
+
+function clienteNotaas() {
+  return criarClienteNotaas({ apiKey: appConfig.fiscal.credenciais?.notaas?.apiKey });
+}
+
+const mensagemFiscal = (e) => (e instanceof NotaasErro ? e.message : "Erro inesperado ao falar com o emissor.");
+
+ipcMain.handle("testar-credenciais-fiscais", async (event, { emissorId, apiKey } = {}) => {
+  if (emissorId !== "notaas") return { success: false, error: "Teste de conexão indisponível para este emissor." };
+  try {
+    const chave = String(apiKey || "").trim() || appConfig.fiscal.credenciais?.notaas?.apiKey;
+    await criarClienteNotaas({ apiKey: chave }).validarChave();
+    return { success: true, mensagem: "Conexão com a Notaas confirmada. A chave é válida." };
+  } catch (e) {
+    return { success: false, error: mensagemFiscal(e) };
+  }
+});
+
+// Monta a NFS-e a partir da OS e lista o que falta para emitir.
+async function dadosNFSeDaOS(osId) {
+  const { rows } = await dbPool.query(
+    `SELECT os.id, os.status, os.valor_total, os.tipo_equipamento, os.marca, os.modelo, os.defeito_relatado,
+            os.solucao_aplicada, c.nome, c.cpf_cnpj, c.email, c.logradouro, c.numero, c.bairro, c.cidade,
+            c.estado, c.cep, c.endereco
+       FROM ordens_servico os JOIN clientes c ON c.id = os.id_cliente
+      WHERE os.id = $1`,
+    [osId]
+  );
+  const os = rows[0];
+  if (!os) return null;
+  const { rows: itens } = await dbPool.query(
+    `SELECT ps.descricao, oi.quantidade FROM os_itens oi JOIN produtos_servicos ps ON ps.id = oi.id_produto_servico
+      WHERE oi.id_os = $1 ORDER BY oi.id`,
+    [osId]
+  );
+  const empresa = appConfig.fiscal.empresa;
+  const documento = String(os.cpf_cnpj || "").replace(/\D/g, "");
+  const equipamento = [os.tipo_equipamento, os.marca, os.modelo].filter(Boolean).join(" ");
+  const descricaoItens = itens.map((i) => (i.quantidade > 1 ? `${i.quantidade}x ${i.descricao}` : i.descricao)).join("; ");
+  const descricao = [
+    `Serviço de assistência técnica — OS nº ${os.id}${equipamento ? ` (${equipamento})` : ""}.`,
+    os.solucao_aplicada ? `Serviço realizado: ${os.solucao_aplicada}.` : "",
+    descricaoItens ? `Itens: ${descricaoItens}.` : "",
+  ].filter(Boolean).join(" ");
+
+  const pendencias = [];
+  if (![11, 14].includes(documento.length)) pendencias.push("O cliente precisa de CPF ou CNPJ válido no cadastro.");
+  if (!empresa.aliquotaIss) pendencias.push("Informe a alíquota do ISS em Configurações > Nota fiscal.");
+  if (!/^\d{6}$/.test(String(empresa.codigoTributacao || "").replace(/\D/g, ""))) {
+    pendencias.push("Informe o código de tributação nacional (6 dígitos) em Configurações > Nota fiscal.");
+  }
+  if (!appConfig.fiscal.credenciais?.notaas?.apiKey) pendencias.push("Cadastre a chave da API Notaas em Configurações > Nota fiscal.");
+
+  return {
+    os,
+    sugestao: {
+      tomador: { nome: os.nome, documento, email: os.email || "" },
+      descricao: descricao.slice(0, 2000),
+      valor: Number(os.valor_total || 0),
+      codigoTributacao: String(empresa.codigoTributacao || "").replace(/\D/g, ""),
+      aliquotaIss: empresa.aliquotaIss ? Number(empresa.aliquotaIss) : null,
+    },
+    pendencias,
+  };
+}
+
+ipcMain.handle("preparar-nfse-integrada", async (event, osId) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  const emissor = emissorIntegradoAtivo();
+  if (!emissor) return { success: false, error: "Nenhum emissor integrado ativo." };
+  const negado = await negarOSAlheia(event, osId);
+  if (negado) return negado;
+  const dados = await dadosNFSeDaOS(osId);
+  if (!dados) return { success: false, error: "OS não encontrada." };
+  return { success: true, emissor: { id: emissor.id, nome: emissor.nome }, sugestao: dados.sugestao, pendencias: dados.pendencias };
+});
+
+// Consulta a situação no emissor e atualiza a nota (e baixa PDF/XML quando emitida).
+async function atualizarNotaIntegrada(id) {
+  const { rows } = await dbPool.query("SELECT * FROM notas_fiscais WHERE id = $1", [id]);
+  const nota = rows[0];
+  if (!nota || nota.origem !== "notaas" || !nota.id_externo) return nota;
+  const cliente = clienteNotaas();
+  const r = await cliente.consultar(nota.id_externo);
+  const situacao = SITUACAO_NOTAAS[r?.status] || nota.status;
+  const campos = { status: situacao };
+  if (situacao === "emitida") {
+    campos.numero = String(r.numeroNfe ?? r.numero ?? nota.numero ?? "").slice(0, 30);
+    campos.chave_acesso = r.chNFSe ? String(r.chNFSe).slice(0, 60) : nota.chave_acesso;
+    if (r.emittedAt) campos.data_emissao = String(r.emittedAt).slice(0, 10);
+    campos.mensagem_erro = null;
+  } else if (situacao === "erro") {
+    const detalhes = Array.isArray(r.errors) ? r.errors.map((x) => [x.Codigo, x.Descricao, x.Complemento].filter(Boolean).join(" - ")).join(" | ") : "";
+    campos.mensagem_erro = [r.errorMessage, detalhes].filter(Boolean).join(" — ").slice(0, 2000) || "Nota rejeitada pelo emissor.";
+  } else if (situacao === "cancelada" && nota.status !== "cancelada") {
+    campos.cancelada_em = new Date();
+  }
+  // Mantém "cancelando" até o emissor confirmar
+  if (nota.status === "cancelando" && situacao === "emitida") campos.status = "cancelando";
+  const nomes = Object.keys(campos);
+  await dbPool.query(
+    `UPDATE notas_fiscais SET ${nomes.map((c, i) => `${c} = $${i + 2}`).join(", ")}, atualizado_em = NOW() WHERE id = $1`,
+    [id, ...nomes.map((c) => campos[c])]
+  );
+  if (campos.status === "emitida" && (!nota.pdf || !nota.xml)) {
+    for (const tipo of ["pdf", "xml"]) {
+      if (nota[tipo]) continue;
+      try {
+        const conteudo = await cliente.baixarDocumento(nota.id_externo, tipo);
+        await dbPool.query(
+          `UPDATE notas_fiscais SET ${tipo} = $2, ${tipo}_nome = $3 WHERE id = $1`,
+          [id, tipo === "pdf" ? conteudo : conteudo.toString("utf8"), `nfse-${campos.numero || id}.${tipo}`]
+        );
+      } catch (e) {
+        console.warn(`[Notaas] ${tipo.toUpperCase()} ainda indisponível para a nota ${id}:`, e.message);
+      }
+    }
+  }
+  return { ...nota, ...campos };
+}
+
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+ipcMain.handle("emitir-nfse-integrada", async (event, { osId, descricao, valor } = {}) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  const emissor = emissorIntegradoAtivo();
+  if (!emissor) return { success: false, error: "Nenhum emissor integrado ativo. Verifique Configurações > Nota fiscal e o plano." };
+  if (emissor.id !== "notaas") return { success: false, error: "Emissor ainda não suportado." };
+  try {
+    osId = parseInt(osId, 10);
+    const negado = await negarOSAlheia(event, osId);
+    if (negado) return negado;
+    const dados = await dadosNFSeDaOS(osId);
+    if (!dados) return { success: false, error: "OS não encontrada." };
+    if (!["Finalizado", "Entregue"].includes(dados.os.status)) return { success: false, error: "Emita a nota depois de finalizar a OS." };
+    if (dados.pendencias.length) return { success: false, error: dados.pendencias.join(" ") };
+    const total = Number(String(valor ?? dados.sugestao.valor).replace(",", "."));
+    if (!Number.isFinite(total) || total <= 0) return { success: false, error: "Informe o valor do serviço." };
+    const texto = String(descricao ?? dados.sugestao.descricao).trim().slice(0, 2000);
+    if (texto.length < 5) return { success: false, error: "Descreva o serviço prestado." };
+
+    const { rows: ativas } = await dbPool.query(
+      "SELECT id FROM notas_fiscais WHERE id_os = $1 AND origem = 'notaas' AND status IN ('processando', 'emitida', 'cancelando')",
+      [osId]
+    );
+    if (ativas.length) return { success: false, error: "Esta OS já tem NFS-e emitida ou em processamento. Cancele-a antes de emitir outra." };
+
+    const { sugestao, os } = dados;
+    const endereco = os.logradouro
+      ? { logradouro: os.logradouro, numero: os.numero || "S/N", bairro: os.bairro || "", cidade: os.cidade || "", uf: os.estado || "", cep: String(os.cep || "").replace(/\D/g, "") }
+      : undefined;
+    const payload = {
+      tomador: {
+        nome: sugestao.tomador.nome,
+        ...(sugestao.tomador.documento.length === 14 ? { cnpj: sugestao.tomador.documento } : { cpf: sugestao.tomador.documento }),
+        ...(sugestao.tomador.email ? { email: sugestao.tomador.email } : {}),
+        ...(endereco ? { endereco } : {}),
+      },
+      servico: { descricao: texto, codigo: sugestao.codigoTributacao },
+      valores: { total: Math.round(total * 100) / 100, aliquotaIss: sugestao.aliquotaIss, issRetido: false },
+      competencia: new Date().toISOString().slice(0, 7),
+      referencia: `OS-${osId}`,
+    };
+
+    const { rows } = await dbPool.query(
+      `INSERT INTO notas_fiscais (id_os, tipo, origem, numero, data_emissao, valor, status, observacao, id_usuario)
+       VALUES ($1, 'NFS-e', 'notaas', '', CURRENT_DATE, $2, 'processando', $3, $4) RETURNING id`,
+      [osId, payload.valores.total, texto, acesso.usuarioDe(event)?.id || null]
+    );
+    const notaId = rows[0].id;
+
+    let resposta;
+    try {
+      resposta = await clienteNotaas().emitirNFSe(payload, `gsti-nota-${notaId}`);
+    } catch (e) {
+      await dbPool.query(
+        "UPDATE notas_fiscais SET status = 'erro', mensagem_erro = $2, atualizado_em = NOW() WHERE id = $1",
+        [notaId, mensagemFiscal(e)]
+      );
+      return { success: false, id: notaId, error: mensagemFiscal(e) };
+    }
+    await dbPool.query("UPDATE notas_fiscais SET id_externo = $2, atualizado_em = NOW() WHERE id = $1", [notaId, String(resposta.invoiceId)]);
+
+    // Acompanha por alguns segundos; se ainda estiver na fila, a tela atualiza depois.
+    let nota = null;
+    for (let tentativa = 0; tentativa < 5; tentativa++) {
+      await esperar(tentativa === 0 ? 800 : 2000);
+      try {
+        nota = await atualizarNotaIntegrada(notaId);
+      } catch (e) {
+        console.warn("[Notaas] Consulta de situação falhou:", e.message);
+      }
+      if (nota && nota.status !== "processando") break;
+    }
+    return { success: true, id: notaId, status: nota?.status || "processando", mensagemErro: nota?.mensagem_erro || null };
+  } catch (error) {
+    console.error("[Notaas] Erro ao emitir:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("atualizar-nota", async (event, id) => {
+  if (!dbPool) return { success: false, error: "Banco de dados não configurado." };
+  try {
+    const { nota, erro } = await notaDoUsuario(event, id);
+    if (erro) return erro;
+    if (nota.origem === "manual") return { success: true, status: nota.status };
+    const atualizada = await atualizarNotaIntegrada(id);
+    return { success: true, status: atualizada.status, mensagemErro: atualizada.mensagem_erro || null };
+  } catch (e) {
+    return { success: false, error: mensagemFiscal(e) };
   }
 });
 

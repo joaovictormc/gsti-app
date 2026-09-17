@@ -174,7 +174,41 @@ contratar.
 
 ---
 
-## 6. Recomendação inicial (antes do comparativo)
+## 6. Notaas na prática (integração feita em 16/09/2026)
+
+Verificado com a API real e implementado em `fiscal-notaas.js`:
+
+- **Não há sandbox separado.** A chave `ntaas_` é do projeto; o ambiente
+  (Homologação/Produção) é configurado **no projeto, no painel da Notaas**. Para testar
+  sem valor fiscal, o projeto precisa estar em Homologação.
+- Sem certificado A1 no projeto, `POST /emitir` responde **422 "Nenhum certificado A1
+  válido encontrado"** — nenhuma nota é emitida.
+- Chave inválida: 401. Invoice inexistente: 404 (um id fora do formato UUID devolve 500).
+- Emissão assíncrona: `202 queued` → `GET /invoices/{id}/status` (queued → processing →
+  issued | error). PDF/XML respondem 302 para a CDN (o app não repassa a chave no
+  redirecionamento).
+- Cobertura: `GET /cobertura/cidades?q=<nome>` (busca por **nome**; pelo código IBGE
+  retornou vazio). Ex.: Londrina → `SNNFSE Nacional`.
+- Cadastro de empresa, certificado e chaves por API existe só com **token de organização**
+  (`ntaas_org_`), em `/org/projects`. O GSTI App usa a chave do projeto, criada pelo
+  cliente no painel.
+
+## 7. Alternativas para teste (sem burocracia)
+
+- **PlugNotas (TecnoSpeed)** — sandbox **público**, sem cadastro:
+  `https://api.sandbox.plugnotas.com.br` com o token fixo
+  `2da392a6-79d2-4304-a8b7-959572c7e44d` (confirmado em 09/2026). Respostas simuladas (não
+  vão à prefeitura/SEFAZ), NFS-e, NF-e e NFC-e. Bom para desenvolver o adaptador; para
+  produção exige contrato comercial.
+- **NFE.io** — conta própria com empresa em modo "Development" (sem URL de sandbox; o
+  ambiente é da conta). Só NFS-e.
+- **WebmaniaBR** — teste gratuito liberado por atendimento (homologação `ambiente=2`).
+- **Emissor Nacional (API oficial)** — existe: SEFIN Nacional em **Produção Restrita**
+  (`sefin.producaorestrita.nfse.gov.br`), autenticação por **mTLS com o certificado A1** (não
+  há chave/token nem cadastro de desenvolvedor), DPS em XML assinado. Exige certificado
+  real da empresa e o DANFSe é gerado pelo sistema desde 07/2026.
+
+## 8. Recomendação inicial (antes do comparativo)
 
 **Arquitetura com "provedor de emissão" plugável** (`emissor-fiscal.js`), para não
 prender o app a um fornecedor:

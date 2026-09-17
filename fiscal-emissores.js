@@ -56,19 +56,22 @@ const EMISSORES = [
     id: "notaas",
     nome: "Notaas",
     integrado: true,
-    status: "em_desenvolvimento",
+    status: "disponivel",
+    emite: ["NFS-e"], // integrado no app hoje (NF-e/NFC-e: registro manual por enquanto)
     custo: { gratuito: true, texto: "Plano gratuito: 50 notas/mês (1 CNPJ); planos pagos a partir de R$ 99/mês" },
     documentos: TIPOS_NOTA,
     certificado: "emissor",
-    resumo: "Plataforma de emissão com plano gratuito. Emite NFS-e, NF-e e NFC-e; o certificado fica cadastrado na conta Notaas.",
+    resumo:
+      "Plataforma de emissão com plano gratuito, usando o padrão nacional da NFS-e na maioria dos municípios. No GSTI App emite NFS-e direto da OS; o certificado fica cadastrado na conta Notaas.",
     credenciais: [
-      { chave: "apiKey", rotulo: "Chave da API (x-api-key)", tipo: "segredo", obrigatorio: true, ajuda: "Gerada no painel da Notaas." },
-      { chave: "ambiente", rotulo: "Ambiente", tipo: "selecao", opcoes: [["sandbox", "Testes (sandbox)"], ["producao", "Produção"]], obrigatorio: true },
+      { chave: "apiKey", rotulo: "Chave da API do projeto (começa com ntaas_)", tipo: "segredo", obrigatorio: true, ajuda: "Gerada no painel da Notaas, dentro do projeto da sua empresa." },
     ],
     guia: [
       "Crie sua conta em notaas.com.br (a conta e o contrato são seus, em nome da sua empresa).",
-      "No painel da Notaas, cadastre a empresa e envie o certificado digital A1.",
-      "Gere uma chave de API de testes e cole abaixo; emita notas de teste antes de usar a chave de produção.",
+      "No painel da Notaas, crie o projeto da empresa (CNPJ, inscrição municipal, regime e município) e envie o certificado digital A1.",
+      "Para testar, deixe o projeto em Homologação no painel da Notaas: a Notaas não tem ambiente de testes separado, e em Produção as notas têm valor fiscal.",
+      "Gere a chave de API do projeto, cole abaixo e use \"Testar conexão\".",
+      "Preencha os dados fiscais abaixo (código de tributação nacional de 6 dígitos e alíquota do ISS) com seu contador.",
     ],
     site: "https://www.notaas.com.br/",
   },

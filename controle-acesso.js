@@ -158,6 +158,10 @@ const POLITICAS_IPC = {
   "add-nota-manual": "notas",
   "cancelar-nota": "notas",
   "delete-nota": "excluir", // também exige "notas" (verificado no handler)
+  "testar-credenciais-fiscais": "admin",
+  "preparar-nfse-integrada": "notas",
+  "emitir-nfse-integrada": "notas",
+  "atualizar-nota": "sessao",
 
   // Relatórios
   "get-os-by-client": "relatorios",

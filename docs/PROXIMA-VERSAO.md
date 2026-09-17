@@ -65,6 +65,11 @@ Atualizado em 2026-09-16.
 - [x] **Registro manual de nota na OS finalizada** (NFS-e, NF-e, NFC-e): número, série,
       data, valor, chave, PDF e XML guardados no banco; marcar como cancelada; OS com nota
       não pode ser excluída; permissão "Registrar e emitir nota fiscal" por perfil.
+- [x] **Emissão de NFS-e pela Notaas** direto da OS finalizada: pré-visualização com
+      pendências (CPF/CNPJ do cliente, código de tributação, alíquota, chave), descrição e
+      valor editáveis, acompanhamento da situação (processando, emitida, rejeitada com o
+      motivo, cancelando, cancelada), PDF/XML baixados para o banco, cancelamento no emissor,
+      bloqueio de NFS-e duplicada e "Testar conexão" nas credenciais.
 - [x] **Emissor integrado liberado por plano**: recurso `emissorFiscal` no token só com
       assinatura anual ativa (renovação automática) ou licença cortesia.
 
@@ -93,9 +98,10 @@ Atualizado em 2026-09-16.
 
 ## 2. Fila — próximas funcionalidades
 
-- **Emissores de nota fiscal integrados** — estrutura, registro manual, certificado A1 e
-  liberação por plano já entregues (ver seção 1). Próximo: adaptadores Focus NFe e Notaas
-  (aguardando contas de teste), depois Emissor Nacional direto. Detalhes em
+- **Emissores de nota fiscal integrados** — estrutura, registro manual, certificado A1,
+  liberação por plano e **Notaas (NFS-e)** entregues (ver seção 1). Próximos: validar a
+  Notaas com projeto em Homologação e certificado real; NF-e/NFC-e pela Notaas; adaptador
+  PlugNotas (sandbox público); Emissor Nacional direto. Detalhes em
   [PESQUISA-NOTA-FISCAL.md](./PESQUISA-NOTA-FISCAL.md).
 - **Portal do cliente: catálogo de emissores** com guias e "solicitar outro emissor"
   (ranking de pedidos no painel admin).
