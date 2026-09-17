@@ -100,6 +100,32 @@ function portal({ logado }) {
     <p class="form__erro" role="alert" hidden></p>
     <div data-licencas class="portal__licencas"><p class="carregando">Carregando…</p></div>
     <section class="portal__pedidos"><h2>Pedidos</h2><div data-pedidos></div></section>
+    <section class="portal__pedidos portal__chamados" id="emissores">
+      <div class="portal__secao-topo"><h2>Emissores de nota fiscal</h2><a class="btn btn--contorno btn--pequeno" href="/emissores">Ver guias</a></div>
+      <p class="portal__ajuda">Usa um emissor que ainda não está no GSTI App? Peça a integração: os mais pedidos entram primeiro e avisamos por e-mail quando chegar.</p>
+      <form class="form cartao suporte__cartao" id="emissor-form" novalidate>
+        <div class="form__linha">
+          <label class="campo"><span>Nome do emissor</span><input name="nome" required maxlength="80" placeholder="Ex.: Focus NFe, eNotas, portal da prefeitura"></label>
+          <label class="campo"><span>Site <em>(opcional)</em></span><input name="site" type="url" maxlength="200" placeholder="https://"></label>
+        </div>
+        <fieldset class="campo campo--grupo"><span>Notas que você emite</span>
+          <div class="opcoes">
+            <label class="aceite"><input type="checkbox" name="documentos" value="NFS-e" checked> <span>NFS-e (serviço)</span></label>
+            <label class="aceite"><input type="checkbox" name="documentos" value="NF-e"> <span>NF-e (produto)</span></label>
+            <label class="aceite"><input type="checkbox" name="documentos" value="NFC-e"> <span>NFC-e (consumidor)</span></label>
+          </div>
+        </fieldset>
+        <div class="form__linha">
+          <label class="campo"><span>Município <em>(opcional)</em></span><input name="municipio" maxlength="80"></label>
+          <label class="campo"><span>UF <em>(opcional)</em></span><input name="uf" maxlength="2" autocapitalize="characters"></label>
+        </div>
+        <label class="campo"><span>Observação <em>(opcional)</em></span><textarea name="observacao" maxlength="500" rows="3"></textarea></label>
+        <p class="form__erro" role="alert" hidden></p>
+        <p class="form__sucesso" role="status" hidden></p>
+        <button class="btn" type="submit"><span data-texto>Enviar pedido</span></button>
+      </form>
+      <div data-emissores></div>
+    </section>
     <section class="portal__pedidos portal__chamados" id="chamados">
       <div class="portal__secao-topo"><h2>Chamados de suporte</h2><a class="btn btn--pequeno" href="/suporte">Abrir chamado</a></div>
       <div data-chamados><p class="carregando">Carregando…</p></div>

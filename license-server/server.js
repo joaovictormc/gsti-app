@@ -67,6 +67,7 @@ app.get(/^\/admin(\/.*)?$/, csp, (_req, res) => {
 
 // Site público (landing, checkout, portal do cliente) e suporte
 app.use("/", require("./routes/suporte"));
+app.use("/", require("./routes/emissores"));
 app.use("/", require("./routes/site"));
 
 app.use((req, res) => {

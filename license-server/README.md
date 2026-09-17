@@ -8,6 +8,7 @@ Um único servidor Node que entrega:
 | `/checkout/retorno`, `/renovar/:id` | Retorno do Mercado Pago e página de renovação |
 | `/cliente` | Área do cliente (acesso por link no e-mail) |
 | `/suporte`, `/suporte/chamado/:id` | Abrir chamado e acompanhar (link assinado no e-mail ou sessão da área do cliente) |
+| `/emissores` | Guia público dos emissores de nota fiscal (catálogo de `/fiscal-emissores.js`, na raiz do repositório) |
 | `/admin` | **Painel da equipe** (licenças, clientes, pedidos, preços, textos, equipe) |
 | `/v2/*` | API do GSTI App (ativação, validação, transferência, trial) |
 | `/webhooks/mercadopago` | Notificações de pagamento |
@@ -81,7 +82,8 @@ em *Painel → Planos e preços*:
 | **Conteúdo do site** | Textos da landing, páginas legais e modelos de e-mail |
 | **Suporte** | Chamados de suporte (responder, notas internas, situação, responsável); ver clientes e licenças sem alterar |
 
-O papel **Licenças e clientes** também atende chamados.
+O papel **Licenças e clientes** também atende chamados e decide os **pedidos de emissores**
+(o papel Suporte só consulta).
 
 Uma pessoa pode ter vários papéis. Login com senha (mín. 10 caracteres) e
 **verificação em duas etapas** opcional (Minha conta). 5 senhas erradas bloqueiam
@@ -336,6 +338,20 @@ e captura da tela opcionais). A equipe atende em *Painel → Suporte*.
   (PDF e texto sempre como download).
 - **Proteções**: limite de chamados por IP e por e-mail, campo invisível contra robôs.
 
+### Pedidos de emissores de nota fiscal
+
+- O guia **/emissores** usa o mesmo catálogo do app (`fiscal-emissores.js` na raiz do
+  repositório — o servidor precisa do repositório completo, como no passo a passo da VPS).
+- Clientes pedem outro emissor na **área do cliente** ou no app (**Configurações → Nota
+  fiscal → Pedir outro emissor**, pelo token da licença). Nomes parecidos são agrupados
+  ("Focus NFe" = "focus-nfe"); cada e-mail conta uma vez por emissor.
+- *Painel → Pedidos de emissores*: ranking por número de clientes, notas e UFs pedidas.
+  Situações: Recebido, Em análise, Planejado, Disponível, Não previsto. A **nota para os
+  clientes** aparece na área do cliente; emissores *Em análise* e *Planejados* aparecem na
+  seção "Em estudo" do guia.
+- Com a situação **Disponível**, o botão **Avisar** envia o e-mail *Emissor de nota fiscal
+  disponível* para quem pediu (uma vez por pessoa).
+
 ## 7. Chaves de assinatura
 
 - Homologação e produção usam **chaves diferentes**; a build do app de produção deve
@@ -378,4 +394,5 @@ cd admin-ui && npm install && npm run dev    # painel com recarga em http://loca
 | POST | `/v2/trial` | `{ email, maquinaId }` | `{ success, token }` |
 | POST | `/v2/suporte/chamados` | cabeçalho `x-gsti-licenca`; `{ categoria, assunto, mensagem, email?, nome?, dadosTecnicos? }` | `{ success, numero, mensagemId, token, link }` (anexos: `POST /api/suporte/chamados/:id/mensagens/:mensagemId/anexos?t=token`) |
 | GET | `/v2/suporte/chamados` | cabeçalho `x-gsti-licenca` | `{ success, itens: [{ numero, assunto, status, atualizadoEm, link }] }` |
+| POST | `/v2/emissores/pedidos` | cabeçalho `x-gsti-licenca`; `{ nome, documentos, municipio?, uf?, site?, observacao? }` | `{ success, chave, status }` |
 | GET | `/health` | — | `{ ok, versao, kids }` |

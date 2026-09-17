@@ -113,6 +113,12 @@ async function roteiro(ctx) {
     r = await api(`openSupportLink("${BASE}/admin")`);
     ok(r.success === false, "não abre páginas que não são de suporte", r);
 
+    // Pedido de novo emissor de nota fiscal (Configurações → Nota fiscal)
+    r = await api(`requestFiscalEmitter({ nome: "Focus NFe", documentos: ["NFS-e"], uf: "SP" })`);
+    ok(r.success === true, "pedido de emissor pelo app", r);
+    r = await api(`requestFiscalEmitter({ nome: "Notaas", documentos: ["NFS-e"] })`);
+    ok(r.success === false && /já está no catálogo/.test(r.error), "emissor do catálogo não é pedido", r);
+
     r = await api(`openSupportTicket({ categoria: "erro", assunto: "oi", mensagem: "curta" })`);
     ok(r.success === false && /assunto/.test(r.error), "validação do servidor chega ao app", r);
   } finally {

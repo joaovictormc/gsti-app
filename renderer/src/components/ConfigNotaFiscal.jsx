@@ -26,6 +26,7 @@ import {
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import ConfirmDialog from "./ConfirmDialog";
+import PedirEmissorDialog from "./PedirEmissorDialog";
 
 // Configurações > Nota fiscal: como funciona (aceite), escolha do emissor,
 // credenciais, dados fiscais da empresa e certificado digital A1.
@@ -54,6 +55,7 @@ export default function ConfigNotaFiscal() {
   const [leuTermo, setLeuTermo] = useState(false);
   const [filtro, setFiltro] = useState("todos");
   const [detalhe, setDetalhe] = useState(null);
+  const [pedirEmissor, setPedirEmissor] = useState(false);
   const [empresa, setEmpresa] = useState({});
   const [credenciais, setCredenciais] = useState({});
   const [certArquivo, setCertArquivo] = useState(null);
@@ -307,6 +309,12 @@ export default function ConfigNotaFiscal() {
           );
         })}
       </Grid>
+      <Box sx={{ mt: 1.5, display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        <Typography variant="body2" color="text.secondary">Não encontrou o seu emissor?</Typography>
+        <Button size="small" onClick={() => setPedirEmissor(true)}>Pedir outro emissor</Button>
+        <Button size="small" onClick={() => window.api.openLicenseSite("emissores")}>Guias no site</Button>
+      </Box>
+      <PedirEmissorDialog aberto={pedirEmissor} onFechar={() => setPedirEmissor(false)} />
 
       {/* Detalhes do emissor */}
       {emissorDetalhe && (

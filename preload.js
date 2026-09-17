@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
   openSupportTicket: (dados) => ipcRenderer.invoke('support-open-ticket', dados),
   listSupportTickets: () => ipcRenderer.invoke('support-list-tickets'),
   openSupportLink: (url) => ipcRenderer.invoke('support-open-link', { url }),
+  requestFiscalEmitter: (dados) => ipcRenderer.invoke('request-fiscal-emitter', dados),
 
   // Atualização automática
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),

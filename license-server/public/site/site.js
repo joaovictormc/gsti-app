@@ -316,6 +316,59 @@
     }
     carregarChamados();
 
+    // Pedidos de novos emissores de nota fiscal
+    const formEmissor = $("#emissor-form");
+    async function carregarEmissores() {
+      const alvo = $("[data-emissores]", painel);
+      try {
+        const r = await api("GET", "/api/cliente/emissores");
+        if (!r.pedidos.length) return alvo.replaceChildren();
+        const corpo = el("tbody", {}, r.pedidos.map((p) => el("tr", {}, [
+          el("td", { text: p.nome }),
+          el("td", { text: p.documentos.join(", ") }),
+          el("td", {}, [el("span", { class: `status status--${p.status}`, text: p.statusRotulo }), p.nota_publica ? el("small", { class: "vazio", text: ` ${p.nota_publica}` }) : null]),
+          el("td", { text: data(p.criado_em) }),
+        ])));
+        alvo.replaceChildren(el("h3", { text: "Seus pedidos" }), el("div", { class: "tabela-rolagem" }, el("table", { class: "tabela" }, [
+          el("thead", {}, el("tr", {}, ["Emissor", "Notas", "Situação", "Pedido em"].map((t) => el("th", { text: t })))),
+          corpo,
+        ])));
+      } catch (e) {
+        alvo.replaceChildren(el("p", { class: "vazio", text: e.message }));
+      }
+    }
+    if (formEmissor) {
+      carregarEmissores();
+      formEmissor.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        mostrarErro(formEmissor, "");
+        const sucesso = $(".form__sucesso", formEmissor);
+        sucesso.hidden = true;
+        const documentos = $$("input[name=documentos]:checked", formEmissor).map((c) => c.value);
+        if (formEmissor.nome.value.trim().length < 3) { formEmissor.nome.focus(); return mostrarErro(formEmissor, "Informe o nome do emissor."); }
+        if (!documentos.length) return mostrarErro(formEmissor, "Marque quais notas você emite.");
+        const botao = $("button[type=submit]", formEmissor);
+        ocupado(botao, true, "Enviando…");
+        try {
+          if (!csrf) csrf = (await api("GET", "/api/cliente/me")).csrf;
+          await api("POST", "/api/cliente/emissores", {
+            nome: formEmissor.nome.value.trim(), site: formEmissor.site.value.trim(), documentos,
+            municipio: formEmissor.municipio.value.trim(), uf: formEmissor.uf.value.trim(), observacao: formEmissor.observacao.value.trim(),
+          }, csrf);
+          const nome = formEmissor.nome.value.trim();
+          formEmissor.reset();
+          sucesso.textContent = `Pedido de "${nome}" registrado. Avisaremos por e-mail quando estiver disponível.`;
+          sucesso.hidden = false;
+          carregarEmissores();
+        } catch (e) {
+          if (e.status === 401) return window.location.reload();
+          mostrarErro(formEmissor, e.message);
+        } finally {
+          ocupado(botao, false);
+        }
+      });
+    }
+
     $("[data-sair]", painel).addEventListener("click", async () => {
       await api("POST", "/api/cliente/sair").catch(() => {});
       window.location.assign("/cliente");

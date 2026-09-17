@@ -303,6 +303,38 @@ const MIGRACOES = [
   );
   CREATE INDEX ix_chamado_anexos ON chamado_anexos(chamado_id);
   `,
+
+  // 6 — pedidos de novos emissores de nota fiscal (um por e-mail + emissor) e avaliação da equipe
+  `
+  CREATE TABLE emissores_pedidos (
+    id            INTEGER PRIMARY KEY,
+    cliente_id    INTEGER REFERENCES clientes(id),
+    email         TEXT NOT NULL,
+    origem        TEXT NOT NULL,
+    nome          TEXT NOT NULL,
+    chave         TEXT NOT NULL,
+    documentos    TEXT NOT NULL,
+    municipio     TEXT,
+    uf            TEXT,
+    site          TEXT,
+    observacao    TEXT,
+    avisado_em    TEXT,
+    criado_em     TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX ux_emissores_pedidos ON emissores_pedidos(email, chave);
+  CREATE INDEX ix_emissores_pedidos_chave ON emissores_pedidos(chave);
+
+  CREATE TABLE emissores_avaliacao (
+    chave          TEXT PRIMARY KEY,
+    nome           TEXT NOT NULL,
+    status         TEXT NOT NULL CHECK (status IN ('novo', 'em_analise', 'planejado', 'disponivel', 'descartado')),
+    nota           TEXT,
+    nota_publica   TEXT,
+    atualizado_por TEXT,
+    atualizado_em  TEXT NOT NULL
+  );
+  `,
 ];
 
 let db = null;

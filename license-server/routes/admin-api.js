@@ -11,6 +11,7 @@ const vendas = require("../lib/vendas");
 const conteudo = require("../lib/conteudo");
 const uploads = require("../lib/uploads");
 const suporte = require("../lib/suporte");
+const emissores = require("../lib/emissores");
 const { enviarAnexo } = require("./suporte");
 const email = require("../lib/email");
 const mp = require("../lib/mercadopago");
@@ -481,6 +482,25 @@ r.get("/suporte/chamados/:id/anexos/:anexoId", eq("suporte.ver"), rota((req, res
   if (!a) throw new LicencaErro("NAO_ENCONTRADO", "Arquivo não encontrado.", 404);
   enviarAnexo(res, a);
 }));
+
+// ============================================================================
+// Pedidos de emissores de nota fiscal
+// ============================================================================
+
+r.get("/emissores", eq("emissores.ver"), rota((req) => ({
+  success: true,
+  itens: emissores.ranking({ status: req.query.status || undefined }),
+  status: emissores.STATUS,
+  catalogo: emissores.catalogo().map(({ id, nome, status }) => ({ id, nome, status })),
+})));
+
+r.get("/emissores/:chave", eq("emissores.ver"), rota((req) => ({ success: true, ...emissores.detalheDoEmissor(req.params.chave), status: emissores.STATUS })));
+
+r.put("/emissores/:chave", eq("emissores.gerenciar"), rota((req) =>
+  emissores.avaliar(req.params.chave, { nome: req.body?.nome, status: req.body?.status, nota: req.body?.nota, notaPublica: req.body?.notaPublica }, ator(req))
+));
+
+r.post("/emissores/:chave/avisar", eq("emissores.gerenciar"), rota((req) => emissores.avisarDisponivel(req.params.chave, ator(req))));
 
 // ============================================================================
 // Equipe

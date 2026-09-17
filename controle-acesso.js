@@ -82,6 +82,7 @@ const POLITICAS_IPC = {
   "support-open-ticket": "sessao",
   "support-list-tickets": "sessao",
   "support-open-link": "sessao",
+  "request-fiscal-emitter": "admin",
   "backup-database": "admin",
   "restore-database": "admin",
   "select-backup-folder": "admin",

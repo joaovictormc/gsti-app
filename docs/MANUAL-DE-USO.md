@@ -306,6 +306,8 @@ Painel com seletor de período (datas ou atalhos "Este mês", "Mês passado",
   **Testar conexão**), os **dados fiscais** da empresa e, se o emissor precisar, o
   **certificado digital A1** (.pfx). Credenciais e certificado ficam cifrados só neste
   computador.
+  Não encontrou o seu emissor? Use **Pedir outro emissor** (os mais pedidos entram primeiro e
+  você recebe um e-mail quando estiver disponível) ou veja os **Guias no site**.
 - **Permissões por perfil**: tabela com o que Funcionário e Técnico podem fazer.
 - **Notificações por e-mail**: avisar o cliente quando a OS é **finalizada** ou muda para
   os status escolhidos, e avisar o técnico quando uma **nova OS** é criada; mensagens por

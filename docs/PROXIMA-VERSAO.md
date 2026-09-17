@@ -2,10 +2,11 @@
 
 Documento único de planejamento: o que já foi entregue, o que está na fila e as
 decisões técnicas pendentes. Substitui o antigo `refinos-futuros.md`.
-Atualizado em 2026-09-16. Versão atual do app: **1.3.0** (ver [CHANGELOG](../CHANGELOG.md)).
+Atualizado em 2026-09-17. Versão atual do app: **1.3.0**; **1.4.0 em desenvolvimento** (ver [CHANGELOG](../CHANGELOG.md)).
 
 > Contexto: nada foi vendido ainda. O lançamento será feito **por módulos** — primeiro os
-> iniciais, depois os avançados (seção 2).
+> iniciais, depois os avançados (seção 2). A **preparação para produção** é a última etapa,
+> depois das funcionalidades (seção 8).
 
 ---
 
@@ -76,6 +77,18 @@ Atualizado em 2026-09-16. Versão atual do app: **1.3.0** (ver [CHANGELOG](../CH
 - [x] **Emissor integrado liberado por plano**: recurso `emissorFiscal` no token só com
       assinatura anual ativa (renovação automática) ou licença cortesia.
 
+### Versão 1.4.0 (em desenvolvimento)
+- [x] **Venda por módulos**: módulos por oferta, por licença e do teste no painel; app
+      esconde/bloqueia o que não foi contratado; área do cliente mostra os módulos.
+- [x] **Atualização automática do app** pelo servidor de licenças (só licenças válidas),
+      com aviso, notas da versão e seção em Configurações.
+- [x] **Suporte (helpdesk)**: /suporte no site, chamados no painel, acompanhamento por link
+      e na área do cliente, e-mails e botão **Suporte** no app com dados técnicos e captura.
+- [x] **Catálogo de emissores de nota fiscal** no site (/emissores, guias gerados do mesmo
+      catálogo do app) e **pedidos de novos emissores** pela área do cliente e pelo app, com
+      ranking, situação, nota pública e aviso por e-mail no painel.
+- [x] Legendas dos gráficos do Resumo Financeiro não cortam mais nomes longos.
+
 ### Segurança
 - [x] **Permissões checadas no processo principal** (`controle-acesso.js`): cada canal IPC
       declara quem pode chamá-lo (Admin, Financeiro, Relatórios, usuário logado, público);
@@ -102,7 +115,7 @@ Atualizado em 2026-09-16. Versão atual do app: **1.3.0** (ver [CHANGELOG](../CH
 
 ---
 
-## 2. Próxima versão (1.4.0) — proposta: preparar o lançamento por módulos
+## 2. Versão 1.4.0 — preparar o lançamento por módulos
 
 Objetivo: deixar o produto pronto para começar a vender só os módulos iniciais e liberar
 os avançados depois, sem gerar uma build diferente para cada plano.
@@ -122,9 +135,8 @@ os avançados depois, sem gerar uma build diferente para cada plano.
    dados técnicos e captura da tela. Ver [license-server/README.md](../license-server/README.md#suporte).
    *Pendente para depois:* suporte diferenciado por plano (prioridade/prazo) e respostas
    prontas.
-4. **Prontidão para produção** (em paralelo) — domínio novo, VPS com HTTPS, chaves de
-   licença de produção no `license-config.js`, backup do servidor, assinatura digital do
-   instalador e compra real de baixo valor testada.
+4. **Prontidão para produção** — movida para a **etapa final** (seção 8), depois das
+   funcionalidades.
 
 ### Divisão de módulos (implementada; ajustável por oferta no painel)
 
@@ -147,16 +159,17 @@ os avançados depois, sem gerar uma build diferente para cada plano.
   Registro manual, Notaas e Emissor Nacional. Próximos: validar a Notaas com projeto em
   Homologação e certificado real; Emissor Nacional direto; NF-e/NFC-e pela Notaas. Detalhes em
   [PESQUISA-NOTA-FISCAL.md](./PESQUISA-NOTA-FISCAL.md).
-- **Portal do cliente: catálogo de emissores** com guias e "solicitar outro emissor"
-  (ranking de pedidos no painel admin).
+- ~~**Portal do cliente: catálogo de emissores**~~ — **entregue** (seção 1, versão 1.4.0).
 - **Aviso automático também pelo WhatsApp** — hoje o botão abre a conversa com a
   mensagem pronta. Envio automático exige API paga (WhatsApp Business Cloud API,
   Z-API, Twilio); reavaliar se houver demanda.
-- **Página de suporte na landing page e helpdesk básico no admin** — planos com suporte
-  incluso precisam de uma página para receber relatos, erros e solicitações; o admin
-  responde e o cliente acompanha (tickets na área do cliente, e-mail ou mensagem no
-  celular). **Proposto para a 1.4.0** (seção 2, item 3).
-- **Legendas dos gráficos do Resumo Financeiro** cortam nomes longos ("Receitas Avul…").
+- ~~**Página de suporte e helpdesk básico**~~ — **entregue** (seção 1, versão 1.4.0).
+- ~~**Legendas dos gráficos do Resumo Financeiro**~~ — **corrigido**.
+- **Suporte por plano** (prioridade/prazo diferente) e **respostas prontas** no painel.
+
+> Itens que dependem de ação externa: validar a Notaas com certificado real, Emissor
+> Nacional direto (quando houver certificado A1) e WhatsApp automático (se houver demanda).
+> Próximo passo de desenvolvimento: **módulo de assistência e diagnóstico** (seção 4).
 
 ---
 
@@ -216,3 +229,16 @@ Com o sistema vendido por instância (cada cliente é dono do próprio app + ban
 - Backup de `license-server/data/` (chaves, banco e `config.key`).
 - `serverUrl` de produção com **HTTPS** no `license-config.js`.
 - Guia completo: [`license-server/README.md`](../license-server/README.md).
+
+---
+
+## 8. Etapa final — preparação para produção
+
+Feita por último, depois das funcionalidades:
+
+- [ ] Domínio novo do produto (sem vínculo com o domínio atual) e e-mails do domínio.
+- [ ] VPS com HTTPS (Nginx + certbot), serviço systemd e backup diário de `data/`.
+- [ ] Chaves de licença de **produção** no `license-config.js` e `serverUrl` HTTPS.
+- [ ] Mercado Pago em produção, SMTP real e **compra real de baixo valor** testada (e reembolsada).
+- [ ] **Assinatura digital do instalador** (certificado de assinatura de código).
+- [ ] Primeira publicação da atualização automática no servidor de produção.

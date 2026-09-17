@@ -359,6 +359,34 @@ body { overflow-x: clip; }
 .status--aguardando_cliente { background: #fff0d9; color: #8a4b00; }
 .status--resolvido { background: #dff3ea; color: #0f6b47; }
 .status--fechado { background: var(--papel-2); color: var(--texto-suave); }
+.portal__ajuda { color: var(--texto-suave); max-width: 70ch; }
+.campo--grupo { border: none; margin: 0; padding: 0; }
+.opcoes { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+.form__sucesso { margin: 0; color: #0f6b47; background: #dff3ea; border-radius: var(--raio-p); padding: .7em .9em; font-size: .94rem; }
+#emissor-form { margin-bottom: 18px; }
+.status--novo { background: var(--papel-2); color: var(--tinta); }
+.status--em_analise, .status--planejado { background: #e3ecfb; color: #1d4a8f; }
+.status--disponivel { background: #dff3ea; color: #0f6b47; }
+.status--descartado { background: var(--papel-2); color: var(--texto-suave); }
+.emissores__lista { display: grid; gap: 18px; margin-bottom: 36px; }
+.emissor { background: var(--branco); border: 1px solid var(--linha); border-radius: var(--raio); padding: 22px 24px; }
+.emissor--breve { background: transparent; }
+.emissor__topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: .6rem; }
+.emissor__topo h2 { font-size: 1.35rem; margin: 0; }
+.emissor__dados { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 0 0 14px; }
+.emissor__dados dt { font: 700 .68rem/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--texto-suave); margin-bottom: 6px; }
+.emissor__dados dd { margin: 0; font-weight: 600; color: var(--tinta); font-size: .95rem; }
+.etiquetas { display: flex; flex-wrap: wrap; gap: 6px; }
+.etiqueta { font: 700 .72rem/1 var(--f-mono); padding: .4em .6em; border: 1px solid var(--linha); border-radius: 5px; }
+.emissor__onde ul { margin: 0 0 12px; padding-left: 1.2em; }
+.emissor__guia { border-top: 1px solid var(--papel-2); padding-top: 10px; }
+.emissor__guia summary { cursor: pointer; font-weight: 600; color: var(--tinta); }
+.emissor__guia ol { margin: .7rem 0 0; padding-left: 1.3em; }
+.emissor__guia li { margin-bottom: .4em; }
+.emissor__site { margin: 10px 0 0; font-size: .95rem; }
+.emissores__planejados { margin-bottom: 36px; }
+.emissores__planejados ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.emissores__pedir h2 { font-size: 1.5rem; }
 @media (max-width: 720px) { .form__linha { grid-template-columns: 1fr; } }
 
 /* ---------- Responsivo ---------- */

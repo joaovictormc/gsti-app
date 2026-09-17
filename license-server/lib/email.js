@@ -81,6 +81,7 @@ const VARS_EXEMPLO = {
   mensagem: "Ao clicar em Imprimir, o sistema mostra uma mensagem de erro.",
   resposta: "Olá! Atualize para a versão mais recente e tente novamente.",
   link_painel: "#",
+  emissor: "Focus NFe",
 };
 
 const previa = (modelo) => montar(modelo, VARS_EXEMPLO);

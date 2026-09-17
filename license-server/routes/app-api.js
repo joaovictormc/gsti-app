@@ -2,6 +2,8 @@
 const express = require("express");
 const licencas = require("../lib/licencas");
 const suporte = require("../lib/suporte");
+const emissores = require("../lib/emissores");
+const { abrir } = require("../lib/db");
 const tokens = require("../lib/tokens");
 const { LicencaErro } = require("../lib/erros");
 const { limitar, rota } = require("../lib/http");
@@ -60,6 +62,17 @@ r.get(
       numero: c.numero, assunto: c.assunto, status: c.status, statusRotulo: suporte.STATUS[c.status], atualizadoEm: c.atualizado_em, link: c.link,
     }));
     return { success: true, itens };
+  })
+);
+
+// --- Pedido de novo emissor de nota fiscal (Configurações → Nota fiscal) ---
+r.post(
+  "/emissores/pedidos",
+  limitar(20, 60),
+  rota((req) => {
+    const p = licencaDoApp(req);
+    const lic = p.lic ? abrir().prepare("SELECT cliente_id FROM licencas WHERE id = ?").get(p.lic) : null;
+    return emissores.registrarPedido({ ...(req.body || {}), clienteId: lic?.cliente_id ?? null, email: p.email, origem: "app" });
   })
 );
 

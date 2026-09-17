@@ -425,7 +425,7 @@ function FinancialDashboard() {
                 <CircularProgress />
               </Box>
             ) : summary.totalOSRevenue + summary.totalMiscRevenue > 0 ? (
-              <Box sx={{ maxHeight: 260, display: "flex", justifyContent: "center" }}>
+              <Box sx={{ height: 300, position: "relative" }}>
                 <Doughnut
                   data={{
                     labels: ["Receita de OS", "Receitas Avulsas"],
@@ -438,9 +438,10 @@ function FinancialDashboard() {
                   }}
                   options={{
                     responsive: true,
-                    maintainAspectRatio: true,
+                    maintainAspectRatio: false,
                     plugins: {
-                      legend: { position: "right" },
+                      // Legenda embaixo: nomes longos quebram linha em vez de cortar
+                      legend: { position: "bottom", labels: { boxWidth: 12, padding: 12 } },
                       tooltip: {
                         callbacks: {
                           label: (ctx) =>
@@ -474,7 +475,7 @@ function FinancialDashboard() {
                 <CircularProgress />
               </Box>
             ) : expensesByCategory.length > 0 ? (
-              <Box sx={{ maxHeight: 260, display: "flex", justifyContent: "center" }}>
+              <Box sx={{ height: 300, position: "relative" }}>
                 <Doughnut
                   data={{
                     labels: expensesByCategory.map((e) => e.categoria),
@@ -487,9 +488,9 @@ function FinancialDashboard() {
                   }}
                   options={{
                     responsive: true,
-                    maintainAspectRatio: true,
+                    maintainAspectRatio: false,
                     plugins: {
-                      legend: { position: "right" },
+                      legend: { position: "bottom", labels: { boxWidth: 12, padding: 12 } },
                       tooltip: {
                         callbacks: {
                           label: (ctx) => {

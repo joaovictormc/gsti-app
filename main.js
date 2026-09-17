@@ -3622,7 +3622,7 @@ ipcMain.handle("send-warranty-email", async (event, { clienteEmail, clienteNome,
 ipcMain.handle("open-license-site", async (event, { pagina } = {}) => {
   const LICENSE_CONFIG = require("./license-config");
   const base = String(LICENSE_CONFIG.siteUrl || LICENSE_CONFIG.serverUrl || "").replace(/\/+$/, "");
-  const caminhos = { planos: "/#planos", cliente: "/cliente" };
+  const caminhos = { planos: "/#planos", cliente: "/cliente", emissores: "/emissores", pedirEmissor: "/cliente#emissores" };
   if (!/^https?:\/\//.test(base) || !caminhos[pagina]) return { success: false, error: "Site não configurado." };
   shell.openExternal(base + caminhos[pagina]);
   return { success: true };
@@ -5102,6 +5102,9 @@ ipcMain.handle("support-open-ticket", async (event, dados = {}) => {
 });
 
 ipcMain.handle("support-list-tickets", async () => suporteApp.listarChamados());
+
+// Pedido de novo emissor de nota fiscal (Configurações → Nota fiscal)
+ipcMain.handle("request-fiscal-emitter", async (_event, dados = {}) => suporteApp.pedirEmissor(dados));
 
 ipcMain.handle("support-open-link", async (_event, { url } = {}) => {
   const destino = url || suporteApp.urlSite();

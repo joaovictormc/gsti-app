@@ -28,6 +28,16 @@
     internas e anexos; papel de equipe **Suporte**; resumo no Painel.
   - E-mail a cada novidade (cliente e equipe); chamados parados esperando o cliente fecham
     sozinhos após 7 dias.
+- **Emissores de nota fiscal no site**: página **/emissores** com o catálogo e o passo a passo
+  de cada emissor. Clientes pedem a integração de **outro emissor** pela área do cliente ou
+  em **Configurações → Nota fiscal → Pedir outro emissor**; o painel mostra o ranking dos mais
+  pedidos, a situação (em análise, planejado, disponível…), uma nota para os clientes e avisa
+  por e-mail quem pediu quando o emissor fica disponível.
+
+### Correções
+- Legendas dos gráficos do Resumo Financeiro não cortam mais nomes longos.
+- Site: formulários marcados como ocultos continuavam visíveis (afetava o login da área do
+  cliente).
 
 ### Compatibilidade
 - Licenças já emitidas e tokens antigos continuam com todos os módulos.

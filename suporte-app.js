@@ -123,6 +123,23 @@ function criarSuporteApp({ app, obterServidor, obterToken, obterLicenca, erros, 
     }
   }
 
+  // Pedido de integração com outro emissor de nota fiscal (ranking no painel)
+  async function pedirEmissor({ nome, documentos, municipio, uf, site, observacao }) {
+    const token = obterToken();
+    if (!servidor() || !token) return { success: false, semLicenca: true, error: "Ative a licença para pedir um emissor, ou use a área do cliente no site." };
+    try {
+      const { data } = await cliente().post(
+        `${servidor()}/v2/emissores/pedidos`,
+        { nome, documentos, municipio, uf, site, observacao },
+        { headers: { "x-gsti-licenca": token }, timeout: 15000 }
+      );
+      return { success: true, status: data.status };
+    } catch (e) {
+      if (e?.response?.status === 401) return { success: false, error: "A licença não foi reconhecida pelo servidor. Peça pela área do cliente no site." };
+      return { success: false, error: mensagemErro(e) };
+    }
+  }
+
   // Só abre no navegador links do próprio servidor de suporte
   const linkPermitido = (url) => {
     let u;
@@ -137,7 +154,7 @@ function criarSuporteApp({ app, obterServidor, obterToken, obterLicenca, erros, 
     return /^https?:$/.test(u.protocol) && origemOk && /^\/suporte(\/chamado\/\d+)?$/.test(u.pathname);
   };
 
-  return { dadosTecnicos, contexto, abrirChamado, listarChamados, linkPermitido, urlSite: () => (servidor() ? `${servidor()}/suporte` : "") };
+  return { dadosTecnicos, contexto, abrirChamado, listarChamados, pedirEmissor, linkPermitido, urlSite: () => (servidor() ? `${servidor()}/suporte` : "") };
 }
 
 module.exports = { criarSuporteApp, criarRegistroErros, mensagemErro };

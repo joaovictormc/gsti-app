@@ -77,6 +77,7 @@ ${corpo}
     <ul class="rodape__links">
       <li><a href="/cliente">${e(n.linkCliente)}</a></li>
       ${n.linkSuporte ? `<li><a href="/suporte">${e(n.linkSuporte)}</a></li>` : ""}
+      ${n.linkEmissores ? `<li><a href="/emissores">${e(n.linkEmissores)}</a></li>` : ""}
       <li><a href="/termos">${e(n.linkTermos)}</a></li>
       <li><a href="/privacidade">${e(n.linkPrivacidade)}</a></li>
       ${n.linkEquipe ? `<li><a href="/admin" rel="nofollow">${e(n.linkEquipe)}</a></li>` : ""}
