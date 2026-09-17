@@ -308,7 +308,7 @@ function SecaoFinanceiro({ financeiro, loading }) {
 // ---------- Componente principal ----------
 
 export default function HomeScreen() {
-  const { currentUser } = useAuth();
+  const { currentUser, temModulo } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -368,7 +368,7 @@ export default function HomeScreen() {
     { key: "secaoFinanceiro", label: "Resumo Financeiro" },
   ];
   const WIDGET_LABELS = WIDGET_LABELS_TODOS.filter(
-    (w) => temFinanceiro || (w.key !== "cardLucro" && w.key !== "secaoFinanceiro")
+    (w) => (temFinanceiro || (w.key !== "cardLucro" && w.key !== "secaoFinanceiro")) && (temModulo("estoque") || w.key !== "secaoEstoque")
   );
   const totalCardsKpi = WIDGET_LABELS.filter((w) => w.key.startsWith("card")).length;
 
@@ -512,7 +512,7 @@ export default function HomeScreen() {
         )}
 
         {/* Estoque Crítico */}
-        {widgets.secaoEstoque && (
+        {widgets.secaoEstoque && temModulo("estoque") && (
           <Grid size={{ xs: 12, md: 6 }}>
             <SecaoEstoqueCritico />
           </Grid>

@@ -48,6 +48,9 @@ export function AuthProvider({ children }) {
     currentUser,
     // Permissões efetivas calculadas no processo principal (Admin: todas)
     permissoes: currentUser?.permissoes || {},
+    // Módulos contratados (null = todos)
+    modulos: currentUser?.modulos ?? null,
+    temModulo: (chave) => !Array.isArray(currentUser?.modulos) || currentUser.modulos.includes(chave),
     login,
     logout,
     loadingAuth, // Exporta o estado de loading inicial

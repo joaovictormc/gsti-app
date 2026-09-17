@@ -45,6 +45,9 @@ import Switch from "@mui/material/Switch";
 import { useAuth } from "../contexts/AuthContext"; // Para verificar se é admin
 import { PERFIS_CONFIGURAVEIS, PERMISSOES } from "../constants/perfis";
 import ConfigNotaFiscal from "./ConfigNotaFiscal";
+import { AvisoModulo } from "./ModuloBloqueado";
+import { MODULOS } from "../constants/modulos";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 
 // Pré-visualização de uma imagem escolhida em Configurações (logo ou fundo do login)
 function MiniaturaImagem({ caminho, tipo, largura, altura, vazio }) {
@@ -84,7 +87,7 @@ function MiniaturaImagem({ caminho, tipo, largura, altura, vazio }) {
 }
 
 function SettingsScreen() {
-  const { currentUser } = useAuth();
+  const { currentUser, temModulo, modulos } = useAuth();
   const [settings, setSettings] = useState({
     email: { host: "", port: 587, secure: false, user: "", pass: "", from: "" },
     branding: { companyName: "", logoPath: null, backgroundPath: null, logoComoIcone: false, loginSubtitulo: "", creditoExibir: true, creditoNome: "" },
@@ -182,6 +185,7 @@ function SettingsScreen() {
     try {
       const r = await window.api.revalidateLicense();
       if (r?.status) setLicenseStatus(r.status);
+      window.dispatchEvent(new Event("gsti:configuracoes-salvas")); // recarrega módulos da sessão
       setLicenseMsg(
         r?.online
           ? { type: "success", text: "Licença verificada com o servidor." }
@@ -596,6 +600,8 @@ function SettingsScreen() {
           helperText="Aparece no menu lateral, na tela de login e no título da janela."
         />
 
+        {!temModulo("marca") && <AvisoModulo modulo="marca" sx={{ mt: 3 }} />}
+        {temModulo("marca") && (<>
         <Divider sx={{ my: 3 }} />
 
         {/* Logo */}
@@ -692,6 +698,7 @@ function SettingsScreen() {
             inputProps={{ maxLength: 80 }}
           />
         )}
+        </>)}
       </Paper>
 
       {/* --- Dados da empresa e textos dos documentos --- */}
@@ -815,6 +822,30 @@ function SettingsScreen() {
           );
         })()}
 
+        {licenseStatus?.active && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.75 }}>
+              Módulos do plano (a base — clientes, equipamentos, produtos, OS, agenda, garantias, usuários e registro de nota — está sempre incluída)
+            </Typography>
+            <Stack direction="row" sx={{ flexWrap: "wrap", gap: 0.75 }}>
+              {MODULOS.map((m) => {
+                const incluido = temModulo(m.chave);
+                return (
+                  <Chip
+                    key={m.chave}
+                    size="small"
+                    label={m.nome}
+                    icon={incluido ? <CheckCircleIcon /> : <LockOutlinedIcon />}
+                    color={incluido ? "success" : "default"}
+                    variant={incluido ? "filled" : "outlined"}
+                    title={m.descricao}
+                  />
+                );
+              })}
+            </Stack>
+          </Box>
+        )}
+
         {licenseMsg.text && (
           <Alert severity={licenseMsg.type || "info"} sx={{ mb: 2 }} onClose={() => setLicenseMsg({ type: "", text: "" })}>
             {licenseMsg.text}
@@ -875,6 +906,10 @@ function SettingsScreen() {
           Defina o que cada perfil pode fazer. O perfil de cada pessoa é escolhido em
           Gerenciar Usuários. Administradores sempre têm acesso completo.
         </Typography>
+        {!temModulo("perfis") && (
+          <AvisoModulo modulo="perfis" sx={{ mb: 2 }} />
+        )}
+        {temModulo("perfis") && (
         <Box sx={{ overflowX: "auto" }}>
           <Table size="small" sx={{ minWidth: 520 }}>
             <TableHead>
@@ -909,6 +944,7 @@ function SettingsScreen() {
             </TableBody>
           </Table>
         </Box>
+        )}
       </Paper>
       {/* --- Fim Permissões --- */}
 
@@ -921,6 +957,8 @@ function SettingsScreen() {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Requer a configuração SMTP preenchida e salva acima.
         </Typography>
+        {!temModulo("automacoes") && <AvisoModulo modulo="automacoes" sx={{ mb: 2 }} />}
+        {temModulo("automacoes") && (<>
 
         <FormControlLabel
           control={
@@ -964,6 +1002,7 @@ function SettingsScreen() {
           }
           label="Notificar cliente quando a OS for finalizada (requer e-mail cadastrado no cliente)"
         />
+        </>)}
 
         <Divider sx={{ my: 2 }} />
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
@@ -982,8 +1021,9 @@ function SettingsScreen() {
             />
           }
           label="Enviar e-mail ao cliente quando a OS mudar para um dos status marcados"
+          disabled={!temModulo("automacoes")}
         />
-        {settings.emailNotifications.notifyClientStatus && padroes?.statusOS && (
+        {temModulo("automacoes") && settings.emailNotifications.notifyClientStatus && padroes?.statusOS && (
           <Box sx={{ ml: 4, display: "flex", flexWrap: "wrap", gap: 1 }}>
             {padroes.statusOS.map((st) => {
               const marcados = settings.emailNotifications.clientStatuses || [];
@@ -1102,6 +1142,8 @@ function SettingsScreen() {
         <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
           Backup Automático
         </Typography>
+        {!temModulo("automacoes") && <AvisoModulo modulo="automacoes" />}
+        {temModulo("automacoes") && (<>
         <FormControlLabel
           control={
             <Switch
@@ -1200,6 +1242,7 @@ function SettingsScreen() {
             </Typography>
           </Box>
         )}
+        </>)}
       </Paper>
       {/* --- Fim Backup e Restauração --- */}
 

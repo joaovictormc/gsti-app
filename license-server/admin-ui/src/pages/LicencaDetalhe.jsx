@@ -9,6 +9,7 @@ import { brl, data, dataHora, PLANOS, validade, MODALIDADES } from "../format";
 import { Cabecalho, Carregando, Confirmar, Erro, SegredoUnico, StatusChip, useAviso, useCarregar } from "../components/comum";
 import { useSessao } from "../sessao";
 import { statusLicenca } from "./Licencas";
+import { ChipsModulos, DialogoModulos } from "../components/Modulos";
 
 export function Campo({ rotulo, children }) {
   return (
@@ -45,11 +46,12 @@ export default function LicencaDetalhe() {
   const [aviso, avisar] = useAviso();
   const [dialogo, setDialogo] = useState(null);
   const [chave, setChave] = useState(null);
+  const [editandoModulos, setEditandoModulos] = useState(false);
   const { dados, erro, carregando, recarregar } = useCarregar(() => get(`/licencas/${id}`), [id]);
 
   if (carregando) return <Carregando />;
   if (erro) return <Erro erro={erro} onTentar={recarregar} />;
-  const { licenca: l, cliente, ativacoes, pedidos, assinaturas, historico } = dados;
+  const { licenca: l, cliente, ativacoes, pedidos, assinaturas, historico, catalogoModulos } = dados;
   const ativas = ativacoes.filter((a) => !a.desativado_em);
   const acao = (rota, corpo, msg) => async () => {
     await post(rota, corpo);
@@ -88,6 +90,12 @@ export default function LicencaDetalhe() {
               <Grid size={{ xs: 6, md: 3 }}><Campo rotulo="Validade">{validade(l.valida_ate)}</Campo></Grid>
               <Grid size={{ xs: 6, md: 3 }}><Campo rotulo="Computadores">{ativas.length} de {l.max_maquinas}</Campo></Grid>
               <Grid size={{ xs: 6, md: 3 }}><Campo rotulo="Emitida em">{data(l.criado_em)}</Campo></Grid>
+              <Grid size={12}>
+                <Campo rotulo="Módulos incluídos">
+                  <ChipsModulos catalogo={catalogoModulos} valor={l.modulos} />
+                  {l.modulosTodos && <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>Licença anterior à venda por módulos: inclui todos.</Typography>}
+                </Campo>
+              </Grid>
               {l.motivo_status && <Grid size={12}><Campo rotulo="Motivo da situação">{l.motivo_status}</Campo></Grid>}
               {l.observacao && <Grid size={12}><Campo rotulo="Observação">{l.observacao}</Campo></Grid>}
               <Grid size={12}><Typography variant="caption" color="text.secondary" sx={{ fontFamily: "JetBrains Mono, monospace" }}>id {l.id}</Typography></Grid>
@@ -157,6 +165,7 @@ export default function LicencaDetalhe() {
                 <Button variant="outlined" onClick={() => setDialogo("estender")}>Estender validade</Button>
                 {l.valida_ate && <Button variant="outlined" onClick={() => setDialogo("vitalicia")}>Tornar sem expiração</Button>}
                 <Button variant="outlined" onClick={() => setDialogo("maquinas")}>Alterar limite de computadores</Button>
+                <Button variant="outlined" onClick={() => setEditandoModulos(true)}>Alterar módulos</Button>
                 <Button variant="outlined" onClick={() => setDialogo("chave")} disabled={l.status === "revogada"}>Gerar nova chave e enviar</Button>
                 {l.status !== "ativa" && <Button variant="contained" onClick={() => setDialogo("reativar")}>Reativar</Button>}
                 {l.status === "ativa" && <Button variant="outlined" color="warning" onClick={() => setDialogo("suspender")}>Suspender</Button>}
@@ -168,6 +177,15 @@ export default function LicencaDetalhe() {
       </Grid>
 
       <Confirmar aberto={!!d} {...(d || {})} onFechar={() => setDialogo(null)} acao={d?.acao || (async () => {})} />
+      <DialogoModulos
+        aberto={editandoModulos}
+        titulo="Módulos da licença"
+        texto="O app recebe a mudança na próxima verificação online (ao abrir ou a cada 6 horas)."
+        catalogo={catalogoModulos}
+        inicial={l.modulos}
+        onFechar={() => setEditandoModulos(false)}
+        onSalvar={async (modulos) => { await post(`/licencas/${l.id}/modulos`, { modulos }); avisar("Módulos atualizados."); recarregar(); }}
+      />
       <SegredoUnico aberto={!!chave} titulo="Nova chave gerada" rotulo="Enviada por e-mail ao cliente" valor={chave || ""} onFechar={() => setChave(null)} />
       {aviso}
     </>

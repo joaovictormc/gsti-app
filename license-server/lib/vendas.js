@@ -22,6 +22,7 @@ const DIA_MS = 86400000;
 const PEDIDO_EXPIRA_DIAS = 3;
 const dataBR = (iso) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "sem expiração");
 const NOME_PLANO = { anual: "Anual", vitalicia: "Vitalícia", cortesia: "Cortesia", mensal: "Mensal" };
+const { normalizarModulos, lerModulos, unirModulos } = require("./modulos");
 
 // ============================================================================
 // Ofertas
@@ -46,16 +47,20 @@ function semearOfertas() {
   }
 }
 
+// Módulos da oferta como lista (coluna JSON)
+const comModulos = (o) => (o ? { ...o, modulos: lerModulos(o.modulos) ?? [] } : o);
+
 function listarOfertas({ apenasAtivas = false } = {}) {
   return abrir()
     .prepare(`SELECT * FROM ofertas ${apenasAtivas ? "WHERE ativo = 1" : ""} ORDER BY ordem, id`)
-    .all();
+    .all()
+    .map(comModulos);
 }
 
 function obterOferta(id) {
   const o = abrir().prepare("SELECT * FROM ofertas WHERE id = ?").get(String(id));
   if (!o) throw new LicencaErro("OFERTA_INEXISTENTE", "Plano não encontrado.", 404);
-  return o;
+  return comModulos(o);
 }
 
 function atualizarOferta(id, dados, ator) {
@@ -75,15 +80,19 @@ function atualizarOferta(id, dados, ator) {
     destaque: dados.destaque !== undefined ? (dados.destaque ? 1 : 0) : o.destaque,
     ativo: dados.ativo !== undefined ? (dados.ativo ? 1 : 0) : o.ativo,
     ordem: int(dados.ordem, 0, 100, o.ordem),
+    modulos: dados.modulos !== undefined ? normalizarModulos(dados.modulos) : o.modulos,
   };
   if (o.modalidade === "assinatura") novo.parcelas_max = 1;
   abrir()
     .prepare(
       `UPDATE ofertas SET nome = ?, descricao = ?, preco_centavos = ?, parcelas_max = ?, max_maquinas = ?,
-              destaque = ?, ativo = ?, ordem = ?, atualizado_em = ? WHERE id = ?`
+              destaque = ?, ativo = ?, ordem = ?, modulos = ?, atualizado_em = ? WHERE id = ?`
     )
-    .run(novo.nome, novo.descricao, novo.preco_centavos, novo.parcelas_max, novo.max_maquinas, novo.destaque, novo.ativo, novo.ordem, agoraIso(), o.id);
-  L.auditar(ator, "oferta_atualizar", o.id, { de: { preco: o.preco_centavos, ativo: o.ativo }, para: { preco: novo.preco_centavos, ativo: novo.ativo } });
+    .run(novo.nome, novo.descricao, novo.preco_centavos, novo.parcelas_max, novo.max_maquinas, novo.destaque, novo.ativo, novo.ordem, JSON.stringify(novo.modulos), agoraIso(), o.id);
+  L.auditar(ator, "oferta_atualizar", o.id, {
+    de: { preco: o.preco_centavos, ativo: o.ativo, modulos: o.modulos },
+    para: { preco: novo.preco_centavos, ativo: novo.ativo, modulos: novo.modulos },
+  });
   return obterOferta(o.id);
 }
 
@@ -216,6 +225,7 @@ function aplicarPagamento(pedido, pagamentoMp, origem) {
           plano: ped.plano,
           dias: ped.plano === "anual" ? cfg.DIAS_ANUAL : undefined,
           maxMaquinas: oferta?.max_maquinas || cfg.MAX_MAQUINAS_PADRAO,
+          modulos: lerModulos(oferta?.modulos) ?? [], // licença vendida: só os módulos da oferta
           observacao: `Pedido ${ped.id}`,
           ator: "mercadopago",
         });
@@ -227,7 +237,12 @@ function aplicarPagamento(pedido, pagamentoMp, origem) {
           download: conteudo.obter("site.geral").linkDownload || cfg.PUBLIC_URL,
         }]);
       } else {
-        const lic = L.estender(ped.licenca_id, { dias: cfg.DIAS_ANUAL }, "mercadopago");
+        let lic = L.estender(ped.licenca_id, { dias: cfg.DIAS_ANUAL }, "mercadopago");
+        // Renovação por uma oferta com mais módulos soma os módulos (nunca remove)
+        const modulosOferta = lerModulos(oferta?.modulos) ?? [];
+        const atuais = L.modulosDaLicenca(lic);
+        const unidos = unirModulos(atuais, modulosOferta);
+        if (unidos.length !== atuais.length) lic = L.definirModulos(lic.id, unidos, "mercadopago");
         if (lic.status === "suspensa") L.alterarStatus(lic.id, "ativa", null, "mercadopago");
         emails.push(["renovacao_confirmada", cliente.email, {
           nome: cliente.nome || "", plano: NOME_PLANO[lic.plano] || lic.plano, validade: dataBR(lic.valida_ate),

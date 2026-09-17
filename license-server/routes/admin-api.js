@@ -5,7 +5,8 @@
 const express = require("express");
 const QRCode = require("qrcode");
 const auth = require("../lib/auth");
-const L = require("../lib/licencas");
+const L = require("../lib/licencas");
+const { MODULOS } = require("../lib/modulos");
 const vendas = require("../lib/vendas");
 const conteudo = require("../lib/conteudo");
 const uploads = require("../lib/uploads");
@@ -150,7 +151,8 @@ r.get("/licencas/:id", eq("licencas.ver"), rota((req) => {
   const { chave_hash, ...seguro } = lic;
   return {
     success: true,
-    licenca: seguro,
+    licenca: { ...seguro, modulos: L.modulosDaLicenca(lic), modulosTodos: lic.modulos == null },
+    catalogoModulos: MODULOS,
     cliente: db.prepare("SELECT * FROM clientes WHERE id = ?").get(lic.cliente_id),
     ativacoes: db.prepare("SELECT * FROM ativacoes WHERE licenca_id = ? ORDER BY ativado_em DESC").all(lic.id),
     pedidos: db.prepare("SELECT * FROM pedidos WHERE licenca_id = ? ORDER BY criado_em DESC").all(lic.id),
@@ -163,7 +165,8 @@ r.post("/licencas", eq("licencas.editar"), rota(async (req) => {
   const b = req.body || {};
   const out = L.emitirLicenca({
     email: b.email, nome: b.nome, documento: b.documento, plano: b.plano,
-    dias: b.dias || undefined, ate: b.ate || undefined, maxMaquinas: b.maxMaquinas, observacao: b.observacao, ator: ator(req),
+    dias: b.dias || undefined, ate: b.ate || undefined, maxMaquinas: b.maxMaquinas, observacao: b.observacao,
+    modulos: Array.isArray(b.modulos) ? b.modulos : undefined, ator: ator(req),
   });
   if (b.enviarEmail) {
     await email.enviar("licenca_emitida", out.email, {
@@ -184,6 +187,11 @@ r.post("/licencas/:id/estender", eq("licencas.editar"), rota((req) => ({
   success: true,
   licenca: L.estender(req.params.id, { dias: req.body?.dias, ate: req.body?.ate, vitalicia: !!req.body?.vitalicia }, ator(req)),
 })));
+
+r.post("/licencas/:id/modulos", eq("licencas.editar"), rota((req) => {
+  if (!Array.isArray(req.body?.modulos)) throw new LicencaErro("MODULOS", "Informe a lista de módulos.");
+  return { success: true, licenca: L.definirModulos(req.params.id, req.body.modulos, ator(req)) };
+}));
 
 r.post("/licencas/:id/maquinas", eq("licencas.editar"), rota((req) => ({
   success: true,
@@ -328,8 +336,13 @@ r.post("/assinaturas/:id/cancelar", eq("pedidos.editar"), rota(async (req) => ({
 // ============================================================================
 
 r.get("/ofertas", eq(), exigirQualquer("pedidos.ver", "ofertas.editar", "conteudo.editar"), rota(() => ({
-  success: true, itens: vendas.listarOfertas(),
+  success: true, itens: vendas.listarOfertas(), catalogoModulos: MODULOS, modulosTrial: L.modulosDoTrial(),
 })));
+
+r.put("/ofertas-trial/modulos", eq("ofertas.editar"), rota((req) => {
+  if (!Array.isArray(req.body?.modulos)) throw new LicencaErro("MODULOS", "Informe a lista de módulos.");
+  return { success: true, modulos: L.definirModulosDoTrial(req.body.modulos, ator(req)) };
+}));
 
 r.put("/ofertas/:id", eq("ofertas.editar"), rota((req) => ({
   success: true, oferta: vendas.atualizarOferta(req.params.id, req.body || {}, ator(req)),

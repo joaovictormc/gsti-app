@@ -244,6 +244,18 @@ const MIGRACOES = [
     atualizado_em  TEXT NOT NULL
   );
   `,
+
+  // 4 — venda por módulos: módulos por licença (NULL = todos) e por oferta; parâmetros gerais
+  `
+  ALTER TABLE licencas ADD COLUMN modulos TEXT;
+  ALTER TABLE ofertas ADD COLUMN modulos TEXT NOT NULL DEFAULT '[]';
+  CREATE TABLE parametros (
+    chave          TEXT PRIMARY KEY,
+    valor          TEXT NOT NULL,
+    atualizado_por TEXT,
+    atualizado_em  TEXT NOT NULL
+  );
+  `,
 ];
 
 let db = null;

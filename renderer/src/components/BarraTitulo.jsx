@@ -50,7 +50,7 @@ export default function BarraTitulo() {
     const carregar = async () => {
       try {
         const r = await window.api.getAppSettings();
-        const branding = r?.settings?.branding || {};
+        const branding = r?.brandingAtivo || r?.settings?.branding || {};
         let logo = null;
         if (branding.logoPath) {
           const img = await window.api.loadLogoImage(branding.logoPath);

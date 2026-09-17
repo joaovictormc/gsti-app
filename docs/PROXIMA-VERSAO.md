@@ -107,11 +107,10 @@ Atualizado em 2026-09-16. Versão atual do app: **1.3.0** (ver [CHANGELOG](../CH
 Objetivo: deixar o produto pronto para começar a vender só os módulos iniciais e liberar
 os avançados depois, sem gerar uma build diferente para cada plano.
 
-1. **Módulos por plano (licença por módulos)** — generalizar o recurso que já existe no
-   token (`recursos`, hoje só `emissorFiscal`) para **módulos**: cada oferta do painel diz
-   quais módulos inclui; o app esconde menus/telas e o processo principal bloqueia os canais
-   dos módulos não contratados; a área do cliente mostra o que está incluso e como fazer
-   upgrade. Base pronta: `controle-acesso.js` (níveis por canal) e recursos no token.
+1. ~~**Módulos por plano (licença por módulos)**~~ — **entregue** (ver
+   [CHANGELOG](../CHANGELOG.md)): módulos por oferta, por licença e do teste no painel;
+   app esconde/bloqueia o que não foi contratado (processo principal e interface); área do
+   cliente mostra os módulos. Detalhes em [license-server/README.md](../license-server/README.md#venda-por-módulos).
 2. **Atualização automática do app** — receber versões e módulos novos sem reinstalar
    (electron-updater publicando no servidor/VPS ou no GitHub Releases), com aviso "nova
    versão disponível" e notas da versão.
@@ -123,7 +122,7 @@ os avançados depois, sem gerar uma build diferente para cada plano.
    licença de produção no `license-config.js`, backup do servidor, assinatura digital do
    instalador e compra real de baixo valor testada.
 
-### Sugestão de divisão de módulos (decisão comercial pendente)
+### Divisão de módulos (implementada; ajustável por oferta no painel)
 
 | Iniciais (lançamento) | Avançados (depois) |
 |---|---|

@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const { abrir, transacao } = require("./db");
 const tokens = require("./tokens");
 const cfg = require("./config");
+const { CHAVES: TODOS_MODULOS, normalizarModulos, lerModulos } = require("./modulos");
 
 const DIA_MS = 86400000;
 const ALFABETO = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford Base32 (sem I, L, O, U)
@@ -69,10 +70,42 @@ function recursosDaLicenca(lic) {
   return recursos;
 }
 
+// Módulos avançados da licença (NULL no banco = todos, licenças anteriores à venda por módulos).
+function modulosDaLicenca(lic) {
+  return lerModulos(lic.modulos) ?? [...TODOS_MODULOS];
+}
+
+// Módulos do teste grátis (Painel > Planos e preços). Padrão: todos.
+function modulosDoTrial() {
+  const p = abrir().prepare("SELECT valor FROM parametros WHERE chave = 'trial.modulos'").get();
+  return p ? lerModulos(p.valor) ?? [...TODOS_MODULOS] : [...TODOS_MODULOS];
+}
+
+function definirModulosDoTrial(modulos, ator = "admin") {
+  const lista = normalizarModulos(modulos);
+  abrir()
+    .prepare(
+      `INSERT INTO parametros (chave, valor, atualizado_por, atualizado_em) VALUES ('trial.modulos', ?, ?, ?)
+       ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_por = excluded.atualizado_por, atualizado_em = excluded.atualizado_em`
+    )
+    .run(JSON.stringify(lista), ator, agoraIso());
+  auditar(ator, "trial_modulos", "trial", { modulos: lista });
+  return lista;
+}
+
+function definirModulos(ref, modulos, ator = "admin") {
+  const lic = resolverLicenca(ref);
+  const lista = normalizarModulos(modulos);
+  abrir().prepare("UPDATE licencas SET modulos = ?, atualizado_em = ? WHERE id = ?").run(JSON.stringify(lista), agoraIso(), lic.id);
+  auditar(ator, "modulos", lic.id, { de: modulosDaLicenca(lic), para: lista });
+  return licencaComCliente(lic.id);
+}
+
 function detalhes(lic) {
   return {
     plano: lic.plano,
     recursos: recursosDaLicenca(lic),
+    modulos: modulosDaLicenca(lic),
     chaveFinal: lic.chave_final,
     validade: lic.valida_ate || null,
     maxMaquinas: lic.max_maquinas,
@@ -107,6 +140,7 @@ function tokenCompleto(lic, maquinaId) {
     email: lic.email,
     plano: lic.plano,
     recursos: recursosDaLicenca(lic),
+    modulos: modulosDaLicenca(lic),
     maquina: maquinaId,
     emitidoEm: agoraIso(),
     validade: lic.valida_ate || null,
@@ -121,6 +155,7 @@ function tokenTrial(email, maquinaId, expiraEm) {
     email,
     plano: "trial",
     recursos: [],
+    modulos: modulosDoTrial(),
     maquina: maquinaId,
     emitidoEm: agoraIso(),
     validade: expiraEm,
@@ -249,7 +284,8 @@ function iniciarTrial({ email, maquinaId }) {
 // Operações administrativas (CLI; futuramente webhook do gateway)
 // ============================================================================
 
-function emitirLicenca({ email, nome, documento, plano = "vitalicia", dias, ate, maxMaquinas, observacao, ator = "admin" }) {
+// modulos: lista de módulos avançados; omitido = todos (emissão manual pela equipe).
+function emitirLicenca({ email, nome, documento, plano = "vitalicia", dias, ate, maxMaquinas, observacao, modulos, ator = "admin" }) {
   const e = normEmail(email);
   if (!emailValido(e)) throw new LicencaErro("EMAIL_INVALIDO", "E-mail inválido.");
   if (!PLANOS.includes(plano)) throw new LicencaErro("PLANO_INVALIDO", `Plano deve ser: ${PLANOS.join(", ")}.`);
@@ -272,11 +308,13 @@ function emitirLicenca({ email, nome, documento, plano = "vitalicia", dias, ate,
     const id = crypto.randomUUID();
     db.prepare(
       `INSERT INTO licencas (id, cliente_id, chave_hash, chave_final, plano, status, max_maquinas,
-                             valida_ate, observacao, criado_em, atualizado_em)
-       VALUES (?, ?, ?, ?, ?, 'ativa', ?, ?, ?, ?, ?)`
-    ).run(id, cliente.id, hashChave(canonica), canonica.slice(-4), plano, max, validaAte, observacao || null, agora, agora);
-    auditar(ator, "emitir", id, { email: e, plano, validaAte, max });
-    return { id, chave, email: e, plano, validaAte, maxMaquinas: max };
+                             valida_ate, observacao, modulos, criado_em, atualizado_em)
+       VALUES (?, ?, ?, ?, ?, 'ativa', ?, ?, ?, ?, ?, ?)`
+    ).run(id, cliente.id, hashChave(canonica), canonica.slice(-4), plano, max, validaAte, observacao || null,
+      modulos === undefined ? null : JSON.stringify(normalizarModulos(modulos)), agora, agora);
+    const listaModulos = modulos === undefined ? [...TODOS_MODULOS] : normalizarModulos(modulos);
+    auditar(ator, "emitir", id, { email: e, plano, validaAte, max, modulos: listaModulos });
+    return { id, chave, email: e, plano, validaAte, maxMaquinas: max, modulos: listaModulos };
   });
 }
 
@@ -425,6 +463,10 @@ module.exports = {
   regenerarChave,
   licencaComCliente,
   detalhes,
+  modulosDaLicenca,
+  modulosDoTrial,
+  definirModulosDoTrial,
+  definirModulos,
   auditar,
   normEmail,
   emailValido,

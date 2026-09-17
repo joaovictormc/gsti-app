@@ -1,5 +1,20 @@
 # Histórico de versões — GSTI App
 
+## 1.4.0 — em desenvolvimento
+
+### Novidades
+- **Venda por módulos**: a licença informa os módulos avançados contratados (Financeiro
+  completo, Relatórios, Controle de estoque, Perfis e permissões avançadas, Personalização
+  da marca e Automações). A base está sempre incluída.
+  - O app esconde e bloqueia o que não foi contratado; o Admin vê os módulos com cadeado e
+    o botão "Ver planos". Configurações mostram os módulos do plano.
+  - Painel: módulos por oferta, por licença (upgrade) e do teste grátis; área do cliente
+    mostra os módulos incluídos.
+
+### Compatibilidade
+- Licenças já emitidas e tokens antigos continuam com todos os módulos.
+- Ofertas existentes passam a vender só a base até os módulos serem marcados no painel.
+
 ## 1.3.0 — 2026-09
 
 ### Novidades

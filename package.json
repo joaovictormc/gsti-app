@@ -56,6 +56,7 @@
       "script.sql",
       "config-segredos.js",
       "controle-acesso.js",
+      "modulos.js",
       "fiscal-emissores.js",
       "fiscal-certificado.js",
       "fiscal-notaas.js",

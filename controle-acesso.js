@@ -18,6 +18,11 @@
 // "Só OS atribuídas" (somenteOSAtribuidas) não é um nível: é aplicado nos handlers de OS.
 // Um canal pode aceitar mais de um nível (lista): basta atender a um deles.
 
+// Venda por módulos: níveis que pertencem a um módulo (sem o módulo, ninguém acessa —
+// nem o Admin) e canais avulsos de módulo (modulos.js).
+const { CANAIS_DE_MODULO, nomeDoModulo } = require("./modulos");
+const MODULO_DO_NIVEL = { financeiro: "financeiro", relatorios: "relatorios", estoque: "estoque" };
+
 // Perfis configuráveis (chave usada em config.permissions)
 const PERFIS = { Funcionario: "funcionario", Tecnico: "tecnico" };
 
@@ -175,8 +180,21 @@ const POLITICAS_IPC = {
 
 const NIVEIS = new Set(["publico", "setup", "sessao", "admin", ...Object.keys(NIVEL_PERMISSAO)]);
 
-function criarControleAcesso({ obterConfig, politicas = POLITICAS_IPC }) {
+// obterModulos(): lista de módulos contratados ou null (= todos, ex.: token antigo).
+function criarControleAcesso({ obterConfig, obterModulos = () => null, politicas = POLITICAS_IPC }) {
   const sessoes = new Map(); // id do webContents -> { id, nome, role }
+
+  function moduloLiberado(chave) {
+    const lista = obterModulos();
+    return !Array.isArray(lista) || lista.includes(chave);
+  }
+
+  // Módulo de um canal: explícito (modulos.js) ou pelo nível único da política
+  function moduloDoCanal(canal) {
+    if (CANAIS_DE_MODULO[canal]) return CANAIS_DE_MODULO[canal];
+    const nivel = politicas[canal];
+    return typeof nivel === "string" ? MODULO_DO_NIVEL[nivel] || null : null;
+  }
 
   for (const [canal, nivel] of Object.entries(politicas)) {
     for (const n of [].concat(nivel)) {
@@ -187,16 +205,32 @@ function criarControleAcesso({ obterConfig, politicas = POLITICAS_IPC }) {
   // Permissões efetivas do usuário (padrão do perfil + ajustes salvos em Configurações)
   function permissoesDe(usuario) {
     if (!usuario) return null;
-    if (usuario.role === "Admin") return { ...PERMISSOES_ADMIN };
-    const perfil = PERFIS[usuario.role];
-    if (!perfil) return { ...PERMISSOES_PADRAO.tecnico }; // papel desconhecido: o mais restrito
-    return { ...PERMISSOES_PADRAO[perfil], ...(obterConfig()?.permissions?.[perfil] || {}) };
+    let permissoes;
+    if (usuario.role === "Admin") permissoes = { ...PERMISSOES_ADMIN };
+    else {
+      const perfil = PERFIS[usuario.role];
+      if (!perfil) permissoes = { ...PERMISSOES_PADRAO.tecnico }; // papel desconhecido: o mais restrito
+      // Sem o módulo "perfis", vale o padrão do perfil (a tabela de Configurações não se aplica)
+      else if (!moduloLiberado("perfis")) permissoes = { ...PERMISSOES_PADRAO[perfil] };
+      else permissoes = { ...PERMISSOES_PADRAO[perfil], ...(obterConfig()?.permissions?.[perfil] || {}) };
+    }
+    // Módulos não contratados desligam as permissões correspondentes
+    if (!moduloLiberado("financeiro")) permissoes.canSeeFinancial = false;
+    if (!moduloLiberado("relatorios")) permissoes.canSeeReports = false;
+    if (!moduloLiberado("estoque")) permissoes.ajustarEstoque = false;
+    return permissoes;
   }
+
+  const modulosLiberados = () => {
+    const lista = obterModulos();
+    return Array.isArray(lista) ? [...lista] : null;
+  };
 
   function pode(usuario, nivel) {
     return [].concat(nivel).some((n) => {
       if (n === "publico") return true;
       if (n === "setup" && !obterConfig()?.setupComplete) return true;
+      if (MODULO_DO_NIVEL[n] && !moduloLiberado(MODULO_DO_NIVEL[n])) return false;
       if (!usuario) return false;
       if (usuario.role === "Admin") return true;
       if (n === "sessao") return true;
@@ -235,8 +269,17 @@ function criarControleAcesso({ obterConfig, politicas = POLITICAS_IPC }) {
     ipcMain.handle = (canal, handler) => {
       const nivel = politicas[canal];
       if (!nivel) throw new Error(`Canal IPC "${canal}" sem política de acesso em controle-acesso.js.`);
+      const modulo = moduloDoCanal(canal);
       return registrar(canal, async (event, ...args) => {
         const usuario = usuarioDe(event);
+        if (modulo && !moduloLiberado(modulo)) {
+          return {
+            success: false,
+            moduloBloqueado: true,
+            modulo,
+            error: `Recurso do módulo "${nomeDoModulo(modulo)}", que não está incluído no seu plano.`,
+          };
+        }
         if (!pode(usuario, nivel)) {
           console.warn(`[Acesso] Negado "${canal}" para ${usuario ? `${usuario.nome} (${usuario.role})` : "usuário sem login"}.`);
           return usuario
@@ -248,7 +291,7 @@ function criarControleAcesso({ obterConfig, politicas = POLITICAS_IPC }) {
     };
   }
 
-  return { pode, permissoesDe, restricaoOS, iniciarSessao, encerrarSessao, usuarioDe, protegerIpc };
+  return { pode, permissoesDe, restricaoOS, iniciarSessao, encerrarSessao, usuarioDe, protegerIpc, moduloLiberado, modulosLiberados };
 }
 
 module.exports = { criarControleAcesso, POLITICAS_IPC, PERFIS, PERMISSOES_PADRAO };

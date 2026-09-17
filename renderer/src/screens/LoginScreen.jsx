@@ -37,7 +37,7 @@ function LoginScreen({ onLoginSuccess }) {
     const loadBranding = async () => {
       try {
         const result = await window.api.getAppSettings();
-        const branding = result?.settings?.branding || {};
+        const branding = result?.brandingAtivo || result?.settings?.branding || {};
         if (!mounted) return;
         setMarca(branding);
         setVersao(result?.appVersion || "");

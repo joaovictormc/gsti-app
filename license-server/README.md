@@ -45,6 +45,31 @@ Visitante escolhe o plano no site
 - Cancelar a assinatura → a licença vale até o fim do período pago.
 - As ofertas são criadas **desativadas**: revise os preços em *Painel → Planos e preços*.
 
+### Venda por módulos
+
+A **base** (clientes, equipamentos, produtos, OS, agenda, garantias, usuários e registro
+manual de nota) vem em qualquer plano. Os módulos avançados são escolhidos **por oferta**
+em *Painel → Planos e preços*:
+
+| Chave | Módulo | O que libera |
+|---|---|---|
+| `financeiro` | Financeiro completo | Despesas, receitas avulsas, resumo, projeção, metas, Excel e valores na tela inicial |
+| `relatorios` | Relatórios | Todos os relatórios |
+| `estoque` | Controle de estoque | Tela de estoque, ajustes e alerta de estoque crítico |
+| `perfis` | Perfis e permissões avançadas | Perfil Técnico e tabela de permissões (sem ele valem os padrões) |
+| `marca` | Personalização da marca | Logo, fundo e mensagem do login e logo como ícone (o nome da empresa é da base) |
+| `automacoes` | Automações | E-mails automáticos e backup automático |
+
+- **Oferta** → módulos que a licença recebe na compra (ofertas novas: só a base).
+- **Renovação** por uma oferta com mais módulos **soma** os módulos (nunca remove).
+- **Licença** → *Licenças → detalhe → Alterar módulos* (upgrade/cortesia). O app recebe na
+  próxima verificação online (ao abrir e a cada 6 h).
+- **Teste grátis** → módulos configurados no topo de *Planos e preços* (padrão: todos).
+- Licenças anteriores à venda por módulos e tokens sem a lista incluem **todos** os módulos.
+- A emissão de nota integrada continua exigindo **assinatura anual ativa** (ou cortesia).
+- A lista de módulos existe em `lib/modulos.js`, `/modulos.js` e
+  `renderer/src/constants/modulos.js` (o teste `tests/unit/modulos.test.js` confere).
+
 ## 2. Papéis da equipe
 
 | Papel | Pode |
@@ -295,7 +320,7 @@ cd admin-ui && npm install && npm run dev    # painel com recarga em http://loca
 
 | Método | Rota | Corpo | Resposta |
 |--------|------|-------|----------|
-| POST | `/v2/ativar` | `{ chave, maquinaId, nomeMaquina, appVersao }` | `{ success, token, detalhes }` |
+| POST | `/v2/ativar` | `{ chave, maquinaId, nomeMaquina, appVersao }` | `{ success, token, detalhes }` (token e detalhes trazem `recursos` e `modulos`) |
 | POST | `/v2/validar` | `{ token }` | `{ valido, token?, detalhes?, motivo? }` |
 | POST | `/v2/desativar` | `{ token }` | `{ success }` |
 | POST | `/v2/trial` | `{ email, maquinaId }` | `{ success, token }` |

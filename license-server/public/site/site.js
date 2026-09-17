@@ -195,6 +195,7 @@
       item("Chave", `GSTI-••••-••••-••••-${l.chaveFinal}`);
       item("Validade", data(l.validade));
       item("Computadores", `${l.ativacoes.length} de ${l.maxMaquinas}`);
+      item("Módulos incluídos", l.modulos && l.modulos.length ? l.modulos.join(", ") : "Plano base");
       if (l.assinatura) item("Renovação automática", `${STATUS[l.assinatura.status] || l.assinatura.status}${l.assinatura.proxima_cobranca && l.assinatura.status === "authorized" ? ` · próxima em ${data(l.assinatura.proxima_cobranca)}` : ""}`);
       cartao.append(dados);
       if (l.motivo && l.status !== "ativa") cartao.append(el("p", { class: "form__erro", text: l.motivo }));

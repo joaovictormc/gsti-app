@@ -41,6 +41,12 @@ O sistema tem três perfis de usuário:
 | **Funcionário** | Módulos operacionais (Clientes, Equipamentos, Produtos/Serviços, OS, Agenda, Estoque, Garantias). Por padrão pode cadastrar, editar, excluir e ver custos; **Financeiro** e **Relatórios** vêm desligados. |
 | **Técnico** | Por padrão vê e trabalha **só nas OS em que é o responsável**; clientes, equipamentos, produtos e estoque ficam para consulta, sem custos e sem exclusão. |
 
+> **Módulos do plano:** alguns recursos são módulos que dependem do plano contratado —
+> Financeiro completo, Relatórios, Controle de estoque, Perfis e permissões avançadas,
+> Personalização da marca e Automações. Módulos não incluídos aparecem com **cadeado** para
+> o administrador (com o botão "Ver planos") e ficam ocultos para os demais usuários. A lista
+> do seu plano está em Configurações → Licenciamento.
+
 O que cada perfil (Funcionário e Técnico) pode fazer é ajustado pelo administrador em
 **Configurações → Permissões por perfil**. O menu e os botões mostram apenas o que o
 usuário atual pode usar — e as regras também valem internamente, não só na tela.
@@ -307,7 +313,8 @@ Painel com seletor de período (datas ou atalhos "Este mês", "Mês passado",
 - **Backup automático**: ativar, escolher **dias da semana**, **horário**,
   **pasta de destino** e **política de retenção** (dias).
 - **Licenciamento e Ativação**: mostra o status da licença (ativa/teste, validade,
-  dias restantes) e permite definir a **URL do servidor de ativação**.
+  dias restantes), os **módulos incluídos no plano** e o botão **Verificar agora** (aplica na
+  hora uma mudança de plano feita pelo suporte).
 
 🖼️ *Tela de configurações.*
 

@@ -45,7 +45,7 @@ const BLANK_USER = {
 // Papéis com rótulo (Admin, Funcionário, Técnico)
 
 function UserManagement() {
-  const { currentUser } = useAuth(); // Pega o usuário logado atual
+  const { currentUser, temModulo } = useAuth(); // Pega o usuário logado atual
   const [users, setUsers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -290,11 +290,15 @@ function UserManagement() {
                 label="Papel"
                 onChange={handleInputChange}
               >
-                {PAPEIS.map((papel) => (
-                  <MenuItem key={papel.valor} value={papel.valor}>
-                    {papel.rotulo}
-                  </MenuItem>
-                ))}
+                {PAPEIS.map((papel) => {
+                  // Perfil Técnico faz parte do módulo "Perfis e permissões avançadas"
+                  const semModulo = papel.valor === "Tecnico" && !temModulo("perfis");
+                  return (
+                    <MenuItem key={papel.valor} value={papel.valor} disabled={semModulo && editingUser.role !== "Tecnico"}>
+                      {papel.rotulo}{semModulo ? " (módulo Perfis e permissões avançadas)" : ""}
+                    </MenuItem>
+                  );
+                })}
               </Select>
             </FormControl>
 

@@ -42,7 +42,10 @@ import {
   Shield as ShieldIcon,
   ManageAccounts as ManageAccountsIcon,
   DevicesOther as DevicesOtherIcon,
+  LockOutlined as LockOutlinedIcon,
 } from "@mui/icons-material";
+import { ModuloBloqueado } from "./components/ModuloBloqueado";
+import { MODULO_DA_TELA } from "./constants/modulos";
 import { useAuth } from "./contexts/AuthContext";
 
 import LoginScreen from "./screens/LoginScreen";
@@ -131,7 +134,7 @@ function AppSidebar({
   isOpen,
   onToggle,
 }) {
-  const { logout, currentUser, permissoes } = useAuth();
+  const { logout, currentUser, permissoes, temModulo } = useAuth();
   const [reportsOpen, setReportsOpen] = useState(false);
   const st = getSidebarTheme(currentThemeMode);
 
@@ -141,6 +144,8 @@ function AppSidebar({
   const isAdmin = userRole === "Admin";
   const canSeeFinancial = !!permissoes.canSeeFinancial;
   const canSeeReports = !!permissoes.canSeeReports;
+  // Admin vê os módulos não contratados com cadeado (leva à tela "Ver planos")
+  const bloqueado = (label, modulo) => ({ label, component: `Bloqueado:${modulo}`, icon: <LockOutlinedIcon fontSize="small" />, bloqueado: true });
 
   const menuItems = [
     { label: "Início", component: "HomeScreen", icon: <HomeIcon /> },
@@ -153,9 +158,11 @@ function AppSidebar({
       { label: "Receitas Avulsas", component: "MiscRevenueGrid", icon: <TrendingUpIcon sx={{ color: st.revenueIcon }} /> },
       { label: "Resumo Financeiro", component: "FinancialDashboard", icon: <BarChartIcon /> },
     ] : []),
+    ...(isAdmin && !temModulo("financeiro") ? [bloqueado("Financeiro", "financeiro")] : []),
     { label: "Garantias", component: "WarrantyPanel", icon: <ShieldIcon /> },
     { label: "Agenda de OS", component: "OSAgenda", icon: <CalendarMonthIcon /> },
-    { label: "Estoque", component: "StockControl", icon: <InventoryStockIcon /> },
+    ...(temModulo("estoque") ? [{ label: "Estoque", component: "StockControl", icon: <InventoryStockIcon /> }] : []),
+    ...(isAdmin && !temModulo("estoque") ? [bloqueado("Estoque", "estoque")] : []),
     ...(canSeeReports ? [
       {
         label: "Relatórios",
@@ -172,6 +179,7 @@ function AppSidebar({
         ],
       },
     ] : []),
+    ...(isAdmin && !temModulo("relatorios") ? [bloqueado("Relatórios", "relatorios")] : []),
     ...(isAdmin ? [
       { label: "Gerenciar Usuários", component: "UserManagement", icon: <ManageAccountsIcon /> },
       { label: "Configurações", component: "SettingsScreen", icon: <SettingsIcon /> },
@@ -353,7 +361,7 @@ function AppSidebar({
 }
 
 function App() {
-  const { currentUser, login, permissoes } = useAuth();
+  const { currentUser, login, permissoes, temModulo } = useAuth();
   const [activeComponent, setActiveComponent] = useState("HomeScreen"); // Inicia na HomeScreen
   const [themeMode, setThemeMode] = useState(
     () => localStorage.getItem("themeMode") || "light"
@@ -452,10 +460,12 @@ function App() {
 
         try {
           const result = await window.api.getAppSettings();
-          if (result.success && result.settings?.branding) {
+          // brandingAtivo: sem o módulo "marca", só o nome da empresa é personalizado
+          const marcaAtiva = result.brandingAtivo || result.settings?.branding;
+          if (result.success && marcaAtiva) {
             currentCompanyName =
-              result.settings.branding.companyName || "GSTI App";
-            const logoPath = result.settings.branding.logoPath;
+              marcaAtiva.companyName || "GSTI App";
+            const logoPath = marcaAtiva.logoPath;
 
             // Se houver um caminho para a logo, tenta carregá-la
             if (logoPath) {
@@ -692,7 +702,10 @@ function App() {
       };
     }
 
-    const ComponentToRender = isAccessDenied
+    const moduloDaTela = activeComponent.startsWith("Bloqueado:") ? activeComponent.slice(10) : MODULO_DA_TELA[activeComponent];
+    const ComponentToRender = moduloDaTela && (activeComponent.startsWith("Bloqueado:") || !temModulo(moduloDaTela))
+      ? () => <ModuloBloqueado modulo={moduloDaTela} />
+      : isAccessDenied
       ? () => (
           <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
             <Typography color="error">

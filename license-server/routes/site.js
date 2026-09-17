@@ -7,6 +7,7 @@ const path = require("path");
 const express = require("express");
 const auth = require("../lib/auth");
 const L = require("../lib/licencas");
+const { MODULOS } = require("../lib/modulos");
 const vendas = require("../lib/vendas");
 const conteudo = require("../lib/conteudo");
 const uploads = require("../lib/uploads");
@@ -135,6 +136,7 @@ r.get("/api/cliente/me", exigirCliente, rota((req) => {
   const licencas = db.prepare("SELECT * FROM licencas WHERE cliente_id = ? ORDER BY criado_em DESC").all(c.id).map((l) => ({
     id: l.id, plano: l.plano, status: l.status, motivo: l.motivo_status, chaveFinal: l.chave_final, validade: l.valida_ate,
     maxMaquinas: l.max_maquinas,
+    modulos: L.modulosDaLicenca(l).map((chave) => MODULOS.find((m) => m.chave === chave)?.nome || chave),
     ativacoes: db.prepare("SELECT id, nome_maquina, app_versao, ativado_em, ultimo_contato FROM ativacoes WHERE licenca_id = ? AND desativado_em IS NULL ORDER BY ativado_em").all(l.id),
     assinatura: db.prepare("SELECT id, status, proxima_cobranca, valor_centavos FROM assinaturas WHERE licenca_id = ? ORDER BY criado_em DESC LIMIT 1").get(l.id) || null,
   }));

@@ -76,7 +76,14 @@ function salvarConfig() {
 
 // Toda chamada IPC passa pela política de acesso (ver controle-acesso.js).
 // Precisa vir antes do primeiro ipcMain.handle.
-const acesso = criarControleAcesso({ obterConfig: () => appConfig });
+// Módulos contratados vêm do token da licença (null = todos: token antigo ou sem licença ativa).
+const acesso = criarControleAcesso({
+  obterConfig: () => appConfig,
+  obterModulos: () => {
+    const status = licenseManager.evaluate();
+    return status.active && Array.isArray(status.modulos) ? status.modulos : null;
+  },
+});
 acesso.protegerIpc(ipcMain);
 
 // Estrutura padrão da configuração
@@ -340,6 +347,7 @@ function initializeMailTransporter() {
 // --- NOTIFICAÇÕES POR E-MAIL ---
 
 async function notifyOSCreated(osId, osData) {
+  if (!acesso.moduloLiberado("automacoes")) return;
   if (!mailTransporter || !appConfig.emailNotifications?.notifyOnCreate) return;
   const techEmail = appConfig.emailNotifications?.technicianEmail;
   if (!techEmail) return;
@@ -385,6 +393,7 @@ async function notifyOSCreated(osId, osData) {
 }
 
 async function notifyOSFinalized(osId, osData, total) {
+  if (!acesso.moduloLiberado("automacoes")) return;
   if (!mailTransporter || !appConfig.emailNotifications?.notifyOnFinalize) return;
   if (!dbPool) return;
 
@@ -447,6 +456,7 @@ async function dadosOSParaMensagem(osId) {
 
 // E-mail ao cliente quando a OS muda para um dos status escolhidos em Configurações.
 async function notifyClientStatusChange(osId) {
+  if (!acesso.moduloLiberado("automacoes")) return;
   const cfg = appConfig.emailNotifications || {};
   if (!mailTransporter || !cfg.notifyClientStatus || !dbPool) return;
   const os = await dadosOSParaMensagem(osId);
@@ -572,6 +582,7 @@ async function runAutoBackup() {
 }
 
 async function checkAndRunBackup() {
+  if (!acesso.moduloLiberado("automacoes")) return;
   const config = appConfig?.autoBackup;
   if (!config?.enabled || !config?.destinationPath) return;
 
@@ -876,7 +887,7 @@ ipcMain.handle(
       acesso.iniciarSessao(event, user);
       return {
         success: true,
-        user: { id: user.id, nome: user.nome, role: user.role, permissoes: acesso.permissoesDe(user) },
+        user: { id: user.id, nome: user.nome, role: user.role, permissoes: acesso.permissoesDe(user), modulos: acesso.modulosLiberados() },
       };
     } catch (error) {
       if (tempPool) await tempPool.end().catch(() => {});
@@ -936,16 +947,24 @@ function permissoesConfiguradas() {
   );
 }
 
+// Marca em uso: sem o módulo "marca", só o nome da empresa (base) é personalizado.
+function brandingAtivo() {
+  const branding = { ...defaultConfig.branding, ...appConfig.branding };
+  if (acesso.moduloLiberado("marca")) return branding;
+  return { ...defaultConfig.branding, companyName: branding.companyName };
+}
+
 // Handler para buscar as configurações atuais (para a tela de Settings)
 ipcMain.handle("get-app-settings", async (event) => {
-  // Sem Admin (tela de login, Funcionário): só o necessário para marca e menu.
   const branding = { ...defaultConfig.branding, ...appConfig.branding };
+  const comuns = { appVersion: app.getVersion(), brandingAtivo: brandingAtivo(), modulos: acesso.modulosLiberados() };
+  // Sem Admin (tela de login, Funcionário): só o necessário para marca e menu.
   if (!acesso.pode(acesso.usuarioDe(event), "admin")) {
     return {
       success: true,
-      appVersion: app.getVersion(),
+      ...comuns,
       settings: {
-        branding,
+        branding: comuns.brandingAtivo,
         permissions: permissoesConfiguradas(),
       },
     };
@@ -958,7 +977,7 @@ ipcMain.handle("get-app-settings", async (event) => {
   delete settingsToSend.fiscal; // tem tela própria (get-fiscal-settings), sem segredos
   return {
     success: true,
-    appVersion: app.getVersion(),
+    ...comuns,
     settings: settingsToSend,
     padroes: {
       statusOS: comunicacao.STATUS_OS,
@@ -982,22 +1001,31 @@ ipcMain.handle("save-app-settings", async (event, newSettings) => {
     const currentDbConfig = appConfig.database;
     const currentSetupStatus = appConfig.setupComplete;
 
+    // Seções de módulos não contratados não são alteradas (o nome da empresa é da base)
+    const novaMarca = acesso.moduloLiberado("marca")
+      ? newSettings.branding
+      : newSettings.branding?.companyName !== undefined
+        ? { companyName: newSettings.branding.companyName }
+        : undefined;
+    const automacoes = acesso.moduloLiberado("automacoes");
+    const novasPermissoes = acesso.moduloLiberado("perfis") ? newSettings.permissions : undefined;
+
     appConfig = {
       ...appConfig,
       email: { ...appConfig.email, ...novoEmail },
-      branding: { ...appConfig.branding, ...newSettings.branding },
-      emailNotifications: { ...appConfig.emailNotifications, ...(newSettings.emailNotifications || {}) },
+      branding: { ...appConfig.branding, ...novaMarca },
+      emailNotifications: { ...appConfig.emailNotifications, ...((automacoes && newSettings.emailNotifications) || {}) },
       permissions: Object.fromEntries(
         Object.values(PERFIS).map((perfil) => [
           perfil,
           {
             ...PERMISSOES_PADRAO[perfil],
             ...(appConfig.permissions?.[perfil] || {}),
-            ...(newSettings.permissions?.[perfil] || {}),
+            ...(novasPermissoes?.[perfil] || {}),
           },
         ])
       ),
-      autoBackup: { ...appConfig.autoBackup, ...(newSettings.autoBackup || {}) },
+      autoBackup: { ...appConfig.autoBackup, ...((automacoes && newSettings.autoBackup) || {}) },
       empresa: { ...(appConfig.empresa || {}), ...(newSettings.empresa || {}) },
       documentos: { ...(appConfig.documentos || {}), ...(newSettings.documentos || {}) },
       mensagensStatus: { ...(appConfig.mensagensStatus || {}), ...(newSettings.mensagensStatus || {}) },
@@ -1059,6 +1087,7 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
           nome: user.nome,
           role: user.role,
           permissoes: acesso.permissoesDe(user),
+          modulos: acesso.modulosLiberados(),
         },
       };
     } else {
@@ -1074,7 +1103,7 @@ ipcMain.handle("handle-login", async (event, { login, password }) => {
 // Sessão atual guardada no processo principal (a interface consulta ao abrir/recarregar).
 ipcMain.handle("get-current-session", async (event) => {
   const user = acesso.usuarioDe(event);
-  return { success: true, user: user && { ...user, permissoes: acesso.permissoesDe(user) } };
+  return { success: true, user: user && { ...user, permissoes: acesso.permissoesDe(user), modulos: acesso.modulosLiberados() } };
 });
 
 ipcMain.handle("logout", async (event) => {
@@ -1111,6 +1140,9 @@ ipcMain.handle("add-user", async (event, userData) => {
   // TODO: Adicionar validação de formato de email
   if (!PAPEIS_USUARIO.includes(role)) {
     return { success: false, error: "Papel inválido." };
+  }
+  if (role === "Tecnico" && !acesso.moduloLiberado("perfis")) {
+    return { success: false, moduloBloqueado: true, modulo: "perfis", error: "O perfil Técnico faz parte do módulo \"Perfis e permissões avançadas\", que não está incluído no seu plano." };
   }
 
   try {
@@ -1167,6 +1199,12 @@ ipcMain.handle("update-user", async (event, userData) => {
   }
   if (!PAPEIS_USUARIO.includes(role)) {
     return { success: false, error: "Papel inválido." };
+  }
+  if (role === "Tecnico" && !acesso.moduloLiberado("perfis")) {
+    const { rows: atual } = await dbPool.query("SELECT role FROM usuarios WHERE id = $1", [id]);
+    if (atual[0]?.role !== "Tecnico") {
+      return { success: false, moduloBloqueado: true, modulo: "perfis", error: "O perfil Técnico faz parte do módulo \"Perfis e permissões avançadas\", que não está incluído no seu plano." };
+    }
   }
 
   try {
@@ -4883,9 +4921,9 @@ ipcMain.handle("atualizar-nota", async (event, id) => {
 // Configurações e for PNG/JPG) ou o ícone padrão do GSTI App. O atalho e o
 // instalador sempre usam o ícone embutido no executável.
 function aplicarIconeJanela() {
-  const branding = appConfig?.branding || {};
+  const branding = appConfig ? brandingAtivo() : {};
   let icone = null;
-  if (branding.logoComoIcone && branding.logoPath && /.(png|jpe?g)$/i.test(branding.logoPath) && fs.existsSync(branding.logoPath)) {
+  if (branding.logoComoIcone && branding.logoPath && /\.(png|jpe?g)$/i.test(branding.logoPath) && fs.existsSync(branding.logoPath)) {
     icone = nativeImage.createFromPath(branding.logoPath);
   }
   if (!icone || icone.isEmpty()) {

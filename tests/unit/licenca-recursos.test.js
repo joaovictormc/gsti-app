@@ -49,6 +49,59 @@ test("assinatura anual ativa libera; cancelada perde na revalidação", () => {
   assert.deepEqual(recursos(v.token), []);
 });
 
+const { CHAVES: TODOS } = require(path.join(LS, "modulos.js"));
+const modulos = (token) => tokens.decodificar(token).modulos;
+
+test("módulos: emissão manual traz todos; lista explícita é respeitada e pode ser alterada", () => {
+  const manual = L.emitirLicenca({ email: "manual@teste.local", plano: "anual", dias: 365 });
+  assert.deepEqual(manual.modulos, TODOS);
+  assert.deepEqual(modulos(L.ativar({ chave: manual.chave, maquinaId: maquina() }).token), TODOS);
+
+  const base = L.emitirLicenca({ email: "base@teste.local", plano: "anual", dias: 365, modulos: ["relatorios", "invalido"] });
+  assert.deepEqual(base.modulos, ["relatorios"]);
+  const r = L.ativar({ chave: base.chave, maquinaId: maquina() });
+  assert.deepEqual(modulos(r.token), ["relatorios"]);
+  assert.deepEqual(r.detalhes.modulos, ["relatorios"]);
+
+  L.definirModulos(base.id, ["financeiro", "relatorios"], "teste");
+  assert.deepEqual(modulos(L.validar({ token: r.token }).token), ["financeiro", "relatorios"], "revalidação traz os módulos novos");
+});
+
+test("módulos: licença anterior à venda por módulos (NULL) inclui todos", () => {
+  const antiga = L.emitirLicenca({ email: "antiga@teste.local", plano: "vitalicia", modulos: [] });
+  abrir().prepare("UPDATE licencas SET modulos = NULL WHERE id = ?").run(antiga.id);
+  assert.deepEqual(L.modulosDaLicenca(L.licencaComCliente(antiga.id)), TODOS);
+});
+
+test("módulos: teste grátis usa a configuração do painel (padrão: todos)", () => {
+  assert.deepEqual(modulos(L.iniciarTrial({ email: "trial-mod1@teste.local", maquinaId: maquina() }).token), TODOS);
+  L.definirModulosDoTrial(["financeiro"], "teste");
+  assert.deepEqual(modulos(L.iniciarTrial({ email: "trial-mod2@teste.local", maquinaId: maquina() }).token), ["financeiro"]);
+});
+
+test("venda: licença nasce com os módulos da oferta e a renovação soma módulos", () => {
+  const vendas = require(path.join(LS, "vendas.js"));
+  vendas.semearOfertas();
+  const oferta = vendas.atualizarOferta("anual-avulso", { modulos: ["estoque"] }, "teste");
+  assert.deepEqual(oferta.modulos, ["estoque"]);
+  const maior = vendas.atualizarOferta("vitalicia-avulso", { modulos: ["financeiro", "relatorios"] }, "teste");
+  assert.deepEqual(maior.modulos, ["financeiro", "relatorios"]);
+
+  const db = abrir();
+  const agora = new Date().toISOString();
+  db.prepare("INSERT INTO clientes (email, nome, criado_em) VALUES ('compra@teste.local', 'Compra', ?)").run(agora);
+  const cliente = db.prepare("SELECT id FROM clientes WHERE email = 'compra@teste.local'").get();
+  db.prepare("INSERT INTO pedidos (id, cliente_id, oferta_id, plano, modalidade, tipo, valor_centavos, status, criado_em, atualizado_em) VALUES ('pv1', ?, 'anual-avulso', 'anual', 'avulso', 'nova', 49700, 'pendente', ?, ?)").run(cliente.id, agora, agora);
+  vendas.aplicarPagamento(vendas.obterPedido("pv1"), { id: 9001, status: "approved", transaction_amount: 497 }, "checkout");
+  const licId = vendas.obterPedido("pv1").licenca_id;
+  assert.deepEqual(L.modulosDaLicenca(L.licencaComCliente(licId)), ["estoque"]);
+
+  // Renovação usando uma oferta com outros módulos: soma, não remove
+  db.prepare("INSERT INTO pedidos (id, cliente_id, oferta_id, plano, modalidade, tipo, valor_centavos, status, licenca_id, criado_em, atualizado_em) VALUES ('pv2', ?, 'vitalicia-avulso', 'anual', 'avulso', 'renovacao', 129700, 'pendente', ?, ?, ?)").run(cliente.id, licId, agora, agora);
+  vendas.aplicarPagamento(vendas.obterPedido("pv2"), { id: 9002, status: "approved", transaction_amount: 1297 }, "checkout");
+  assert.deepEqual(L.modulosDaLicenca(L.licencaComCliente(licId)), ["financeiro", "relatorios", "estoque"]);
+});
+
 test("licença cortesia (emitida pela equipe) libera", () => {
   const cortesia = L.emitirLicenca({ email: "cortesia@teste.local", plano: "cortesia" });
   assert.ok(recursos(L.ativar({ chave: cortesia.chave, maquinaId: maquina() }).token).includes("emissorFiscal"));
