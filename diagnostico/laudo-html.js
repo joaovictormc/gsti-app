@@ -13,14 +13,27 @@ const SAUDE = { Healthy: "Saudável", Warning: "Atenção", Unhealthy: "Com falh
 const PLATAFORMA = { windows: "Windows", macos: "macOS", linux: "Linux" };
 const mbOuGb = (bytes) => (bytes >= 1073741824 ? `${(bytes / 1073741824).toFixed(1)} GB` : `${Math.round((bytes || 0) / 1048576)} MB`);
 
+// Drivers: dispositivos sem driver/com erro e os mais antigos
+function blocoDrivers(d) {
+  if (!d) return "";
+  const antigos = (d.lista || []).filter((x) => x.data && (Date.now() - new Date(x.data).getTime()) / (365.25 * 86400000) >= 3).slice(0, 10);
+  return `<h2>Drivers</h2>
+  <p class="nota">${esc(d.total)} driver(s) de fabricantes · ${esc(d.antigos)} com mais de 3 anos · ${esc((d.semDriver || []).length)} dispositivo(s) sem driver</p>
+  ${(d.semDriver || []).length ? `<table class="fixa"><colgroup><col style="width:40%"><col style="width:18%"><col></colgroup><thead><tr><th>Sem driver</th><th>Tipo</th><th>ID de hardware</th></tr></thead><tbody>
+  ${d.semDriver.map((x) => `<tr><td>${esc(x.nome)}</td><td>${esc(x.classe)}</td><td>${esc(x.hardwareId)}</td></tr>`).join("")}</tbody></table>` : ""}
+  ${antigos.length ? `<table class="fixa" style="margin-top:6px"><colgroup><col style="width:40%"><col style="width:22%"><col style="width:20%"><col></colgroup><thead><tr><th>Drivers mais antigos</th><th>Fabricante</th><th>Versão</th><th>Data</th></tr></thead><tbody>
+  ${antigos.map((x) => `<tr><td>${esc(x.nome)}</td><td>${esc(x.provedor)}</td><td>${esc(x.versao)}</td><td>${data(x.data)}</td></tr>`).join("")}</tbody></table>` : ""}`;
+}
+
 // Otimizações executadas pelo agente (registradas no laudo gerado depois delas)
 function blocoServicos(servicos) {
   if (!servicos?.acoes?.length) return "";
   const status = { ok: "Concluída", erro: "Falhou", pulado: "Não executada" };
+  const grupo = { drivers: "Drivers", programas: "Programa" };
   return `<h2>Serviços executados pelo agente</h2>
   <p class="nota">${dataHora(servicos.executadoEm)} · autorizado por <b>${esc(servicos.autorizadoPor)}</b>${servicos.tecnico ? ` · técnico ${esc(servicos.tecnico)}` : ""} · espaço liberado: <b>${mbOuGb(servicos.liberadoTotalBytes)}</b>${servicos.acoes.some((a) => a.categoria === "desempenho" && a.status === "ok") ? " · ajustes de desempenho reversíveis pelo agente (Desfazer ajustes)" : ""}</p>
   <table class="fixa"><colgroup><col style="width:34%"><col style="width:12%"><col style="width:12%"><col></colgroup><thead><tr><th>Ação</th><th>Situação</th><th>Liberado</th><th>Detalhe</th></tr></thead><tbody>
-  ${servicos.acoes.map((a) => `<tr><td>${esc(a.nome)}${a.personalizado ? ' <small class="nota">(script da assistência)</small>' : ""}</td><td class="${a.status === "ok" ? "melhorou" : "piorou"}">${esc(status[a.status] || a.status)}</td><td>${a.liberadoBytes ? mbOuGb(a.liberadoBytes) : "—"}</td><td>${esc(a.detalhe)}</td></tr>`).join("")}
+  ${servicos.acoes.map((a) => `<tr><td>${grupo[a.categoria] ? `<small class="nota">${grupo[a.categoria]}:</small> ` : ""}${esc(a.nome)}${a.personalizado ? ' <small class="nota">(da assistência)</small>' : ""}</td><td class="${a.status === "ok" ? "melhorou" : "piorou"}">${esc(status[a.status] || a.status)}</td><td>${a.liberadoBytes ? mbOuGb(a.liberadoBytes) : "—"}</td><td>${esc(a.detalhe)}</td></tr>`).join("")}
   </tbody></table>`;
 }
 
@@ -159,6 +172,7 @@ function laudoHtml(laudo, { empresa } = {}) {
   ${l.eventos.errosRecentes.slice(0, 8).map((x) => `<tr><td style="white-space:nowrap">${dataHora(x.data)}</td><td>${esc(x.origem)}</td><td>${esc(x.mensagem)}</td></tr>`).join("")}
   </tbody></table>` : ""}
 
+  ${blocoDrivers(l.drivers)}
   ${blocoServicos(l.servicos)}
   ${l.observacao ? `<h2>Observações do técnico</h2><p>${esc(l.observacao)}</p>` : ""}
   ${(l.limitacoes || []).length ? `<p class="nota">${l.limitacoes.map(esc).join(" ")}</p>` : ""}

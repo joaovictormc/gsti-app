@@ -100,3 +100,14 @@ input:focus, textarea:focus { outline: 2px solid #c7d2fe; border-color: var(--pr
 .etapas li.erro-etapa::before { background: var(--critico); border-color: var(--critico); }
 .etapas li small { display: block; font-weight: 400; color: var(--suave); }
 @media (max-width: 860px) { .grade, .linha { grid-template-columns: 1fr; } }
+
+/* Pós-formatação */
+.pos-formatacao { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 14px; }
+.cartao .pos-formatacao { margin-top: 0; }
+.pos-formatacao h2 { margin-bottom: 0; }
+.pos-formatacao__botoes { display: flex; gap: 10px; flex: none; justify-content: flex-end; }
+.colunas { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); align-items: start; }
+.lista-simples { margin: 8px 0 0; padding-left: 18px; }
+.lista-simples li { margin: 3px 0; }
+.lista-simples small { color: var(--suave); }
+form + .grupos, .grupos + form { margin-top: 14px; }

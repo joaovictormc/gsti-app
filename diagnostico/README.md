@@ -1,8 +1,9 @@
-# GSTI Diagnóstico — agente portátil, laudos e otimização
+# GSTI Diagnóstico — agente portátil, laudos, otimização e pós-formatação
 
 Módulo vendável **Diagnóstico** (chave `diagnostico`). O técnico roda o agente a partir de um
 pen drive no computador do cliente (**Windows, macOS ou Linux**), gera o **laudo técnico**,
-executa a **otimização** autorizada pelo cliente e anexa os laudos à **OS** no GSTI App, na
+executa a **otimização** e a **pós-formatação** (drivers e programas) autorizadas pelo cliente e
+anexa os laudos à **OS** no GSTI App, na
 entrada e na saída do reparo (com comparativo antes/depois).
 
 ## Peças
@@ -15,6 +16,10 @@ entrada e na saída do reparo (com comparativo antes/depois).
 | `coleta-linux.js` | agente | `/proc`, `/sys`, `lscpu`, `lsblk`, `df`, `lspci`, `journalctl` e, com root, `smartctl` e `dmidecode` |
 | `testes-rapidos.js` | agente | Gravação no disco (256 MB com fsync, apagado ao final), internet (DNS, latência, download de 10 MB) e uso de CPU |
 | `otimizacao.js` | agente | Catálogo de ações por sistema, scripts da assistência e execução com registro |
+| `drivers.js` | agente | Leitura de INF, índice do repositório/backup, comparação de versões e plano de instalação |
+| `drivers-windows.js` | agente | Inventário de dispositivos, backup (`pnputil /export-driver`), instalação de INF, Windows Update e ferramentas Dell/Lenovo/HP |
+| `programas.js` | agente | Catálogo de programas (winget, Homebrew, Flathub), `programas.json` da assistência e instalação |
+| `verificar-catalogo.js` | CI | Confere se os IDs do catálogo existem na fonte oficial do sistema |
 | `laudo.js` | agente e app | Formato `gsti-laudo` v1, alertas, situação, integridade (sha256), comparação, resumo |
 | `laudo-html.js` | agente e app | Laudo e comparativo em HTML A4 (visualizar e gerar PDF) |
 | `rede-local.js` | agente e app | Descoberta por UDP (porta 47851) e envio HTTP com código de 6 dígitos |
@@ -36,7 +41,9 @@ entrada e na saída do reparo (com comparativo antes/depois).
    ou **por arquivo** `.gstilaudo`).
 4. **Otimizar este computador** (opcional): marcar as ações, informar **quem autorizou** e
    confirmar. Ao terminar, **Gerar laudo de saída agora** registra as ações no laudo.
-5. Na OS: PDF de cada laudo e **comparativo** entrada × saída (inclui espaço liberado).
+5. **Drivers** e **Instalar programas** (pós-formatação, opcional): ver abaixo. Otimização, drivers e
+   programas da mesma visita entram juntos no laudo de saída.
+6. Na OS: PDF de cada laudo e **comparativo** entrada × saída (inclui espaço liberado e drivers).
 
 ## Otimização
 
@@ -83,6 +90,61 @@ No macOS/Linux use `resultado <bytes> "detalhe"` (funções `tam`, `livre` e `re
 estão disponíveis). Sem a linha de resultado, vale o código de saída (0 = ok). O laudo registra
 o nome e o hash (sha256) do script executado.
 
+## Pós-formatação
+
+### Drivers (Windows)
+
+O laudo de entrada já traz o **inventário**: drivers de fabricantes, os com mais de 3 anos,
+dispositivos sem driver (código 28) e com erro. Na tela **Drivers**:
+
+1. **Antes de formatar — Fazer backup dos drivers**: `pnputil /export-driver` para
+   `drivers-backup/<número de série>_<data>/` no pen drive, com `manifesto.json`
+   (`gsti-drivers-backup`: pacotes, versões e o que é antigo).
+2. **Depois de formatar — Instalar drivers**, nesta ordem:
+   1. driver de **rede** (placa de rede/Wi-Fi) do repositório ou do backup — sem rede não há o resto;
+   2. **Windows Update** (API oficial, só drivers);
+   3. **ferramenta do fabricante**, se for Dell (Dell Command | Update), Lenovo (System Update) ou
+      HP (HP Image Assistant) — instalada pelo winget quando faltar;
+   4. novo inventário e, do plano escolhido, só o que **ainda falta ou continua mais antigo**;
+   5. `pnputil /scan-devices` e lista do que ficou sem driver.
+
+Regras do plano: hardware ID exato vale mais que ID compatível; atualização só do **mesmo
+fornecedor** (não troca o driver da Realtek por um genérico da Microsoft) e **nunca rebaixa**;
+o **repositório da assistência** (`drivers/windows/`, ver
+[REPOSITORIO-DE-DRIVERS.md](../docs/REPOSITORIO-DE-DRIVERS.md)) tem prioridade sobre o backup;
+INF sem catálogo assinado (`.cat`) vem desmarcado. BIOS/firmware não são atualizados.
+
+### Programas
+
+Instalação silenciosa e selecionável pela fonte oficial de cada sistema, sempre na versão mais
+recente: **winget** no Windows (registra o "Instalador de Aplicativo" se faltar), **Homebrew**
+(casks) no macOS e **Flathub** (`--user`) no Linux. Programa já instalado é mantido.
+
+Categorias: navegadores (Chrome, Firefox, Brave, Opera), escritório (LibreOffice, ONLYOFFICE,
+WPS, Microsoft 365), PDF (Acrobat Reader, Foxit, SumatraPDF, PDF24, Okular), compactadores
+(7-Zip/Keka/PeaZip, WinRAR), áudio e vídeo, comunicação (WhatsApp, Zoom, Teams, Telegram,
+Discord), acesso remoto, nuvem, componentes essenciais do Windows (Visual C++, .NET, Java) e
+utilitários. Vêm marcados os básicos: Chrome, Acrobat Reader, 7-Zip, VLC e Visual C++.
+
+Programas da assistência (inclusive **instaladores offline**) ficam em
+`programas/programas.json`, ao lado do agente:
+
+```json
+[
+  { "nome": "Sistema do banco X", "categoria": "utilitarios", "padrao": true,
+    "windows": { "instalador": "banco-x.exe", "argumentos": ["/S"] } },
+  { "nome": "Leitor de NF-e", "nota": "Pedido pelo cliente",
+    "windows": { "winget": "Fornecedor.Programa" }, "macos": { "brew": "cask" }, "linux": { "flatpak": "org.x.Y" } }
+]
+```
+
+O instalador precisa estar na própria pasta `programas/`; `argumentos` são os de instalação
+silenciosa do fabricante. Os IDs do catálogo padrão são conferidos no CI
+(`node diagnostico/verificar-catalogo.js`).
+
+Licenças: Microsoft 365, WinRAR, AnyDesk e TeamViewer (uso comercial) dependem da licença do
+cliente — a tela avisa e a confirmação de autorização cita isso.
+
 ## Segurança e limites
 
 - A coleta não altera nada; o teste de disco usa um arquivo temporário apagado em seguida.
@@ -105,15 +167,16 @@ npm run diagnostico:cli           # diagnóstico no terminal
 
 O workflow **`.github/workflows/diagnostico.yml`** (Actions → *GSTI Diagnóstico* → *Run
 workflow*, ou tag `diagnostico-v*`) roda a coleta real em Windows, macOS e Ubuntu (usuário e
-root), guarda os laudos gerados e produz os três agentes como artefatos.
+root), confere o catálogo de programas (winget, Homebrew, Flathub), guarda os laudos gerados
+e produz os três agentes como artefatos.
 
 Publicar no servidor de licenças, um arquivo por plataforma:
 
 ```bash
-node admin.js publicar-diagnostico GSTI-Diagnostico-1.1.0-windows-x64.exe
-node admin.js publicar-diagnostico GSTI-Diagnostico-1.1.0-macos-arm64.zip
-node admin.js publicar-diagnostico GSTI-Diagnostico-1.1.0-macos-x64.zip
-node admin.js publicar-diagnostico GSTI-Diagnostico-1.1.0-linux-x64.AppImage
+node admin.js publicar-diagnostico GSTI-Diagnostico-1.2.0-windows-x64.exe
+node admin.js publicar-diagnostico GSTI-Diagnostico-1.2.0-macos-arm64.zip
+node admin.js publicar-diagnostico GSTI-Diagnostico-1.2.0-macos-x64.zip
+node admin.js publicar-diagnostico GSTI-Diagnostico-1.2.0-linux-x64.AppImage
 ```
 
 A versão do agente fica em `diagnostico/versao.json`.

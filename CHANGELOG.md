@@ -56,6 +56,17 @@
     Todo ajuste guarda o valor original e pode ser revertido com **Desfazer ajustes**.
   - Limpeza extra: relatórios de erro e despejos de memória e cache dos navegadores (sem apagar
     senhas, histórico ou logins).
+  - **Pós-formatação** (agente 1.2.0):
+    - **Drivers** (Windows): inventário no laudo (sem driver, com erro, com mais de 3 anos),
+      backup dos drivers no pen drive antes de formatar e instalação em camadas — rede primeiro,
+      Windows Update, ferramenta do fabricante (Dell, Lenovo, HP) e repositório da assistência
+      ou backup. Nunca rebaixa nem troca o driver por outro de fornecedor diferente.
+    - **Instalar programas**: navegadores, escritório (LibreOffice, ONLYOFFICE, WPS, Microsoft
+      365), leitores de PDF, compactadores, mídia, comunicação, acesso remoto e essenciais,
+      selecionáveis, pelas fontes oficiais (winget, Homebrew, Flathub), mais os programas e
+      instaladores offline da própria assistência.
+    - Tudo com autorização registrada e no laudo de saída; o comparativo mostra os drivers
+      antes e depois.
 
 ### Correções
 - Legendas dos gráficos do Resumo Financeiro não cortam mais nomes longos.

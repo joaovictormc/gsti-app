@@ -9,7 +9,7 @@
     "name": "gsti-diagnostico",
     "main": "diagnostico/agente/main.js",
     "description": "Agente portátil de diagnóstico e laudo técnico do GSTI App",
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "files": [
     "diagnostico/agente/**",

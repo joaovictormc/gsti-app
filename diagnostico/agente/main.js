@@ -1,6 +1,7 @@
 // GSTI Diagnóstico — agente portátil (roda do pen drive no computador em reparo).
 // Coleta hardware/saúde, faz testes rápidos, gera o laudo (arquivo + PDF) e envia ao
-// GSTI App pela rede local. Nada é instalado nem alterado no computador do cliente.
+// GSTI App pela rede local. O diagnóstico só lê; otimização, drivers e programas só rodam
+// quando o técnico escolhe e informa quem autorizou (tudo vai para o laudo de saída).
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs");
@@ -192,7 +193,95 @@ ipcMain.handle("agente:otimizar", async (event, { ids = [], autorizadoPor, tecni
   }
 });
 
-ipcMain.handle("agente:descobrir", async () => ({ success: true, itens: await rede.descobrir() }));
+// --- Pós-formatação: drivers (Windows) ---
+const pastaRepositorioDrivers = () => path.join(PASTA_BASE, "drivers", "windows");
+const servicosDe = (acoes, { autorizadoPor, tecnico }) => ({
+  executadoEm: new Date().toISOString(), plataforma: process.platform,
+  autorizadoPor: String(autorizadoPor || "").trim().slice(0, 120), tecnico: String(tecnico || "").trim().slice(0, 80),
+  liberadoTotalBytes: 0, requerReinicio: acoes.some((a) => a.reinicio && a.status === "ok"), acoes,
+});
+// Índices da última análise (repositório e backup do computador), usados na execução
+let analiseDrivers = null;
+
+ipcMain.handle("agente:drivers-analisar", async (_e, { numeroSerie } = {}) => {
+  if (process.platform !== "win32") return { success: false, error: "Drivers pelo agente: disponível no Windows." };
+  try {
+    const drivers = require("../drivers");
+    const dw = require("../drivers-windows");
+    const inv = await dw.inventario();
+    const repositorio = drivers.indexarPasta(pastaRepositorioDrivers(), { fonte: "repositorio" });
+    const backupDoPc = dw.backupsDoComputador(PASTA_BASE, numeroSerie || inv.numeroSerie).find((b) => b.mesmoComputador) || null;
+    const backup = backupDoPc ? drivers.indexarPasta(backupDoPc.pasta, { fonte: "backup" }).entradas : [];
+    const plano = drivers.planejar({ dispositivos: inv.dispositivos, repositorio: repositorio.entradas, backup });
+    analiseDrivers = { repositorio: repositorio.entradas, backup };
+    const marca = dw.marcaDoFabricante(inv.fabricante);
+    return {
+      success: true,
+      fabricante: inv.fabricante, modelo: inv.modelo,
+      ferramenta: marca ? dw.FERRAMENTAS[marca].nome : null,
+      resumo: drivers.resumoDrivers(inv.dispositivos),
+      pendentes: drivers.pendentes(inv.dispositivos).map((d) => ({ nome: d.nome || "Dispositivo desconhecido", classe: d.classe, hardwareId: d.hardwareIds[0] || "" })),
+      plano: plano.map((i) => ({ ...i, arquivo: path.basename(i.arquivo) })),
+      repositorio: { pasta: pastaRepositorioDrivers(), pacotes: repositorio.entradas.length, erros: repositorio.erros.length },
+      backup: backupDoPc ? { pasta: backupDoPc.pasta, geradoEm: backupDoPc.geradoEm, pacotes: backup.length } : null,
+    };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle("agente:drivers-backup", async (_e, { equipamento } = {}) => {
+  if (process.platform !== "win32") return { success: false, error: "Backup de drivers: disponível no Windows." };
+  try {
+    return { success: true, ...(await require("../drivers-windows").backup({ pastaBase: PASTA_BASE, equipamento: equipamento || {} })) };
+  } catch (e) {
+    return { success: false, error: `Não foi possível gravar o backup: ${e.message}` };
+  }
+});
+
+ipcMain.handle("agente:drivers-executar", async (event, { selecionados = [], incluirWindowsUpdate, incluirFabricante, autorizadoPor, tecnico } = {}) => {
+  if (process.platform !== "win32" || !analiseDrivers) return { success: false, error: "Analise os drivers antes de instalar." };
+  if (!String(autorizadoPor || "").trim()) return { success: false, error: "Informe quem autorizou." };
+  try {
+    const drivers = require("../drivers");
+    const dw = require("../drivers-windows");
+    const inv = await dw.inventario();
+    const plano = drivers.planejar({ dispositivos: inv.dispositivos, ...analiseDrivers });
+    const r = await dw.executarPlano({
+      plano, selecionados, incluirWindowsUpdate: !!incluirWindowsUpdate, incluirFabricante: !!incluirFabricante, ...analiseDrivers,
+      aoProgredir: (p) => event.sender.send("agente:otimizacao-progresso", p),
+    });
+    return { success: true, servicos: servicosDe(r.acoes, { autorizadoPor, tecnico }), pendentes: r.pendentes };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// --- Pós-formatação: programas ---
+ipcMain.handle("agente:programas-catalogo", async () => {
+  const programas = require("../programas");
+  return {
+    success: true,
+    categorias: programas.CATEGORIAS,
+    programas: programas.paraTela(programas.catalogo({ pastaBase: PASTA_BASE })),
+    pastaProgramas: path.join(PASTA_BASE, "programas"),
+  };
+});
+
+ipcMain.handle("agente:programas-instalar", async (event, { ids = [], autorizadoPor, tecnico } = {}) => {
+  if (!String(autorizadoPor || "").trim()) return { success: false, error: "Informe quem autorizou." };
+  try {
+    const r = await require("../programas").instalar(ids.map(String), {
+      pastaBase: PASTA_BASE,
+      aoProgredir: (p) => event.sender.send("agente:otimizacao-progresso", p),
+    });
+    return { success: true, servicos: servicosDe(r.acoes, { autorizadoPor, tecnico }) };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle("agente:descobrir",async () => ({ success: true, itens: await rede.descobrir() }));
 
 ipcMain.handle("agente:enviar", async (_e, { destino, codigo, laudo }) => {
   if (!/^\d{6}$/.test(String(codigo || "").trim())) return { success: false, error: "Digite o código de 6 dígitos mostrado no GSTI App." };

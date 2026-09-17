@@ -165,6 +165,8 @@ function montarLaudoDeSecoes(secoes, { testes = null, momento = "entrada", os = 
     bateria: s.bateria || null,
     temperaturas: s.temperaturas || [],
     rede: s.rede || [],
+    // Windows: drivers de terceiros, antigos (3+ anos) e dispositivos sem driver
+    drivers: s.drivers || null,
     eventos: { desligamentosInesperados30d: 0, errosRecentes: [], ...(s.eventos || {}) },
     testes: testes || null,
     // Otimizações executadas pelo agente nesta visita (registradas no laudo de saída)
@@ -218,6 +220,13 @@ function gerarAlertas(l) {
   }
   if (l.sistema?.ativado === false) add("atencao", "Sistema", `Windows: ${l.sistema.ativacao}`, "O Windows não está ativado.");
   if ((l.plataforma || "windows") === "windows" && l.sistema && !(l.sistema.antivirus || []).length) add("atencao", "Segurança", "Nenhum antivírus registrado", "");
+  if (l.drivers) {
+    const sem = l.drivers.semDriver || [];
+    if (sem.length) add("atencao", "Drivers", `${sem.length} dispositivo(s) sem driver`, sem.slice(0, 4).map((d) => d.nome).join(", "));
+    const comErro = l.drivers.comErro || [];
+    if (comErro.length) add("atencao", "Drivers", `${comErro.length} dispositivo(s) com erro`, comErro.slice(0, 4).map((d) => `${d.nome} (código ${d.codigo})`).join(", "));
+    if (l.drivers.antigos) add("info", "Drivers", `${l.drivers.antigos} de ${l.drivers.total} driver(s) com mais de 3 anos`, "Vale atualizar pelo Windows Update, pela ferramenta do fabricante ou pelo repositório da assistência.");
+  }
   const desl = l.eventos?.desligamentosInesperados30d || 0;
   if (desl >= 3) add("atencao", "Estabilidade", `${desl} desligamentos inesperados em 30 dias`, "Travamentos, queda de energia ou problema de fonte/bateria.");
 
@@ -310,6 +319,10 @@ function comparar(entrada, saida) {
   add("Testes", "Gravação no disco (MB/s)", entrada.testes?.disco?.escritaMBs, saida.testes?.disco?.escritaMBs, "maior");
   add("Testes", "Download (Mbps)", entrada.testes?.rede?.downloadMbps, saida.testes?.rede?.downloadMbps, "maior");
   add("Testes", "Uso da memória (%)", entrada.memoria?.emUsoPct, saida.memoria?.emUsoPct, "menor");
+  if (entrada.drivers && saida.drivers) {
+    add("Drivers", "Dispositivos sem driver", (entrada.drivers.semDriver || []).length, (saida.drivers.semDriver || []).length, "menor");
+    add("Drivers", "Drivers com mais de 3 anos", entrada.drivers.antigos, saida.drivers.antigos, "menor");
+  }
   if (saida.servicos?.liberadoTotalBytes) {
     linhas.push({ grupo: "Otimização", item: "Espaço liberado pelo agente", antes: "—", depois: `${Math.round(saida.servicos.liberadoTotalBytes / 1048576)} MB`, efeito: "melhorou" });
   }

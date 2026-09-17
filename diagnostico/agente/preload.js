@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld("agente", {
     ipcRenderer.on("agente:otimizacao-progresso", ouvinte);
     return () => ipcRenderer.removeListener("agente:otimizacao-progresso", ouvinte);
   },
+  driversAnalisar: (dados) => ipcRenderer.invoke("agente:drivers-analisar", dados),
+  driversBackup: (dados) => ipcRenderer.invoke("agente:drivers-backup", dados),
+  driversExecutar: (dados) => ipcRenderer.invoke("agente:drivers-executar", dados),
+  programasCatalogo: () => ipcRenderer.invoke("agente:programas-catalogo"),
+  programasInstalar: (dados) => ipcRenderer.invoke("agente:programas-instalar", dados),
   descobrir: () => ipcRenderer.invoke("agente:descobrir"),
   enviar: (dados) => ipcRenderer.invoke("agente:enviar", dados),
   abrirPasta: () => ipcRenderer.invoke("agente:abrir-pasta"),

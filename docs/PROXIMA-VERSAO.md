@@ -189,7 +189,14 @@ repositório, laudo anexado à OS por rede local ou arquivo) — ver
 Entregue também: coleta no **macOS e Linux**, **otimização** com registro e **scripts da
 assistência**.
 
-**Em decisão — drivers pós-formatação.** Estratégia proposta: o backup é **rede de segurança**,
+**Entregue (agente 1.2) — drivers e programas pós-formatação**, conforme a estratégia abaixo
+(inventário no laudo, backup, camadas rede → Windows Update → fabricante → repositório/backup,
+nunca rebaixar) e instalação selecionável de programas (winget, Homebrew, Flathub e
+`programas.json` da assistência). **Falta**: versão antes × depois driver a driver no laudo;
+Linux (`ubuntu-drivers`, `fwupdmgr`); ler direto os catálogos Dell/Lenovo/HP (hoje usa as
+ferramentas oficiais); validar em notebooks Dell/Lenovo/HP reais.
+
+Estratégia: o backup é **rede de segurança**,
 não a fonte principal; a formatação termina sempre com a versão **mais nova disponível**:
 1. **Inventário na entrada**: cada driver de terceiros com dispositivo, fabricante, versão,
    data e hardware ID (Get-PnpDevice/Win32_PnPSignedDriver + pci.ids), e dispositivos sem

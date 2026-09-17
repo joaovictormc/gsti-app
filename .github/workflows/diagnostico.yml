@@ -26,10 +26,15 @@ jobs:
         with:
           node-version: 22
       - name: Testes do diagnóstico (sem dependências)
-        run: node --test tests/unit/diagnostico.test.js tests/unit/diagnostico-plataformas.test.js tests/unit/otimizacao.test.js tests/unit/empacotamento.test.js
+        run: node --test tests/unit/diagnostico.test.js tests/unit/diagnostico-plataformas.test.js tests/unit/otimizacao.test.js tests/unit/drivers-programas.test.js tests/unit/empacotamento.test.js
+      - name: Flatpak e Flathub (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q flatpak && flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Catálogo de programas na fonte oficial (winget, Homebrew, Flathub)
+        run: node diagnostico/verificar-catalogo.js
       - name: smartmontools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update -q && sudo apt-get install -y -q smartmontools
+        run: sudo apt-get install -y -q smartmontools
       - name: Coleta como usuário comum
         run: node diagnostico/cli.js --sem-disco --saida laudo-usuario.gstilaudo --html laudo-usuario.html
       - name: Coleta como root (Linux e macOS)

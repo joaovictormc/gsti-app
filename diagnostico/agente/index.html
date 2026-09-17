@@ -40,6 +40,16 @@
         </div>
         <button class="botao botao--grande" type="submit">Iniciar diagnóstico</button>
       </form>
+      <div class="cartao pos-formatacao">
+        <div>
+          <h2>Pós-formatação</h2>
+          <p class="nota">Drivers (backup antes de formatar, repositório da assistência, Windows Update e ferramenta do fabricante) e instalação dos programas do cliente.</p>
+        </div>
+        <div class="pos-formatacao__botoes">
+          <button class="botao botao--contorno" type="button" data-acao="drivers" data-so-windows>Drivers</button>
+          <button class="botao botao--contorno" type="button" data-acao="programas">Instalar programas</button>
+        </div>
+      </div>
     </section>
 
     <!-- Progresso -->
@@ -79,6 +89,8 @@
           <button class="botao botao--contorno" type="button" data-acao="arquivo">Salvar arquivo do laudo</button>
           <button class="botao botao--contorno" type="button" data-acao="comparar" data-so-saida hidden>Comparar com o laudo de entrada</button>
           <button class="botao botao--contorno" type="button" data-acao="otimizar">Otimizar este computador</button>
+          <button class="botao botao--contorno" type="button" data-acao="drivers" data-so-windows>Drivers</button>
+          <button class="botao botao--contorno" type="button" data-acao="programas">Instalar programas</button>
           <p class="nota" data-mensagem role="status"></p>
           <button class="link" type="button" data-acao="pasta">Abrir pasta de laudos</button>
         </div>
@@ -92,7 +104,7 @@
           <h1>Otimizar este computador</h1>
           <p class="sub">Escolha as ações. As que apagam dados do cliente vêm desmarcadas e só devem ser usadas com autorização. Tudo fica registrado no laudo de saída.</p>
         </div>
-        <button class="botao botao--leve" type="button" data-acao="voltar-resultado">Voltar</button>
+        <button class="botao botao--leve" type="button" data-acao="voltar">Voltar</button>
       </div>
       <form class="formulario" id="form-otimizacao">
         <div data-grupos class="grupos"></div>
@@ -105,7 +117,68 @@
       </form>
     </section>
 
-    <!-- Execução da otimização -->
+    <!-- Drivers (Windows) -->
+    <section class="tela" data-tela="drivers" hidden>
+      <div class="resultado__topo">
+        <div>
+          <p class="rotulo">Pós-formatação</p>
+          <h1>Drivers</h1>
+          <p class="sub">Antes de formatar, faça o backup. Depois da formatação, a ordem é: driver de rede, Windows Update, ferramenta do fabricante e o que ainda faltar pelo repositório da assistência ou pelo backup. Nenhum driver é rebaixado nem trocado por outro de fabricante diferente.</p>
+        </div>
+        <button class="botao botao--leve" type="button" data-acao="voltar">Voltar</button>
+      </div>
+      <div class="grupos">
+        <div class="cartao" data-drivers-situacao><p class="nota">Lendo os dispositivos…</p></div>
+        <div class="cartao">
+          <h2>Backup antes de formatar</h2>
+          <p class="nota">Exporta os drivers instalados (pnputil) para <b>drivers-backup</b> no pen drive, com manifesto. Depois da formatação, o agente reconhece o backup pelo número de série.</p>
+          <p class="nota" data-drivers-backup-info></p>
+          <button class="botao botao--contorno" type="button" data-acao="drivers-backup">Fazer backup dos drivers</button>
+          <p class="nota" data-drivers-backup-msg role="status"></p>
+        </div>
+      </div>
+      <form class="formulario" id="form-drivers">
+        <div class="cartao grupo" data-drivers-fontes></div>
+        <div class="cartao formulario">
+          <label class="campo"><span>Autorizado por (cliente ou responsável)</span><input name="autorizadoPor" maxlength="120" required></label>
+          <label class="check-autorizacao"><input type="checkbox" name="confirmo"> O cliente foi informado e autorizou a instalação dos drivers.</label>
+          <p class="erro" data-erro-drivers hidden></p>
+          <button class="botao botao--grande" type="submit">Instalar drivers</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Programas -->
+    <section class="tela" data-tela="programas" hidden>
+      <div class="resultado__topo">
+        <div>
+          <p class="rotulo">Pós-formatação</p>
+          <h1>Instalar programas</h1>
+          <p class="sub" data-programas-sub></p>
+        </div>
+        <button class="botao botao--leve" type="button" data-acao="voltar">Voltar</button>
+      </div>
+      <form class="formulario" id="form-programas">
+        <div class="cartao">
+          <div class="pos-formatacao">
+            <p class="nota" data-programas-contagem></p>
+            <div class="pos-formatacao__botoes">
+              <button class="link" type="button" data-acao="programas-padrao">Marcar os básicos</button>
+              <button class="link" type="button" data-acao="programas-nenhum">Desmarcar todos</button>
+            </div>
+          </div>
+        </div>
+        <div data-programas class="grupos colunas"></div>
+        <div class="cartao formulario">
+          <label class="campo"><span>Autorizado por (cliente ou responsável)</span><input name="autorizadoPor" maxlength="120" required></label>
+          <label class="check-autorizacao"><input type="checkbox" name="confirmo"> O cliente escolheu os programas e está ciente das licenças (ex.: Microsoft 365, WinRAR).</label>
+          <p class="erro" data-erro-programas hidden></p>
+          <button class="botao botao--grande" type="submit">Instalar programas</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Execução da otimização / drivers / programas -->
     <section class="tela" data-tela="otimizando" hidden>
       <h1 data-titulo-otimizando>Otimizando…</h1>
       <p class="sub" data-sub-otimizando>Não desligue o computador. Ações demoradas podem levar vários minutos; no macOS e no Linux o sistema pede a senha de administrador uma vez.</p>
@@ -113,7 +186,7 @@
       <div class="cartao acoes" data-fim-otimizacao hidden>
         <p class="situacao ok" data-total-otimizacao></p>
         <button class="botao" type="button" data-acao="laudo-saida">Gerar laudo de saída agora</button>
-        <button class="botao botao--leve" type="button" data-acao="voltar-resultado">Voltar ao laudo</button>
+        <button class="botao botao--leve" type="button" data-acao="voltar">Voltar</button>
       </div>
     </section>
   </main>

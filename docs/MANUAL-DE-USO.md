@@ -194,6 +194,19 @@ Os ajustes de **Desempenho e aparência** (efeitos visuais, plano de energia, ba
 podem ser revertidos a qualquer momento pelo próprio agente em **Desfazer ajustes**; os marcados
 com **Reiniciar** só valem depois de reiniciar o computador.
 
+**Pós-formatação**: na tela inicial ou no resultado do agente,
+- **Drivers** (Windows): **antes de formatar**, clique em **Fazer backup dos drivers** (fica no
+  pen drive). **Depois de formatar**, abra o agente de novo em **Drivers**: marque **Windows
+  Update**, a ferramenta do fabricante (Dell, Lenovo ou HP, quando for o caso) e os drivers do
+  repositório da assistência ou do backup; informe quem autorizou e clique em **Instalar
+  drivers**. A placa de rede é instalada primeiro; nenhum driver é trocado por uma versão mais
+  antiga. No fim aparece o que ainda ficou sem driver.
+- **Instalar programas**: marque os programas do cliente (navegadores, Office/LibreOffice/WPS,
+  leitor de PDF, 7-Zip, WhatsApp…) e clique em **Instalar programas**. Precisa de internet.
+  Programas pagos (Microsoft 365, WinRAR) dependem da licença do cliente.
+
+Gere o **laudo de saída** no final: ele registra otimização, drivers e programas instalados.
+
 O laudo aponta problemas **críticos** (disco com falha, SSD gasto, bateria muito fraca,
 superaquecimento, pouco espaço) e **pontos de atenção** (Windows não ativado, sem antivírus,
 desligamentos inesperados, pouca memória). Na primeira vez que receber pela rede, o Windows
