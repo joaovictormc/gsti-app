@@ -157,7 +157,10 @@ const defaultConfig = {
 function normalizarFiscal(fiscal) {
   const padrao = JSON.parse(JSON.stringify(defaultConfig.fiscal));
   const atual = fiscal && typeof fiscal === "object" ? fiscal : {};
-  return { ...padrao, ...atual, empresa: { ...padrao.empresa, ...(atual.empresa || {}) } };
+  const normalizado = { ...padrao, ...atual, empresa: { ...padrao.empresa, ...(atual.empresa || {}) } };
+  // Emissor que saiu do catálogo volta para o registro manual
+  if (!fiscalEmissores.buscarEmissor(normalizado.emissor)) normalizado.emissor = "manual";
+  return normalizado;
 }
 
 // Função para carregar a configuração
@@ -4402,6 +4405,10 @@ ipcMain.handle("save-fiscal-settings", async (event, dados = {}) => {
     }
   }
 
+  // Descarta credenciais de emissores que não existem mais no catálogo
+  fiscal.credenciais = Object.fromEntries(
+    Object.entries(fiscal.credenciais || {}).filter(([id]) => fiscalEmissores.buscarEmissor(id))
+  );
   salvarConfig();
   return { success: true, fiscal: dadosFiscaisParaTela() };
 });

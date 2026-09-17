@@ -147,6 +147,10 @@ contratar.
 
 ## 5. Estratégia definida
 
+> **Decisão de 16/09/2026:** o catálogo do app fica com três emissores — **Registro manual**,
+> **Notaas** e **Emissor Nacional** (direto). A Focus NFe saiu (conta de teste exige muita
+> burocracia); PlugNotas, WebmaniaBR e Spedy seguem só como referência.
+
 - **Emissores integrados, escolhidos e configurados pelo cliente no app.** Cada provedor é um
   adaptador com as mesmas operações (validar configuração, emitir, consultar, cancelar,
   baixar PDF/XML) e declara os campos de configuração; a tela é gerada a partir disso.
@@ -166,11 +170,10 @@ contratar.
 ### Ordem de implementação sugerida
 
 1. Estrutura de adaptadores + tabela `notas_fiscais` + modo "emito por fora" + recurso
-   por plano na licença.
-2. Adaptador **Focus NFe** (NFS-e municipal/Nacional; depois NF-e/NFC-e).
-3. Adaptador **Notaas** (opção de entrada gratuita).
-4. Demais (PlugNotas, WebmaniaBR, Spedy) conforme o ranking de pedidos do portal.
-5. Emissor Nacional direto (NFS-e grátis), se houver demanda.
+   por plano na licença. **(feito)**
+2. Adaptador **Notaas** — NFS-e. **(feito; falta validar com projeto em Homologação)**
+3. **Emissor Nacional** direto (NFS-e grátis, certificado A1 no app).
+4. NF-e/NFC-e pela Notaas, se houver demanda.
 
 ---
 

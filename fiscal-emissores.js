@@ -1,4 +1,4 @@
-// Catálogo de emissores de nota fiscal.
+// Catálogo de emissores de nota fiscal: Registro manual, Notaas e Emissor Nacional.
 // Cada emissor declara o que oferece, quanto custa, se precisa de certificado e quais
 // credenciais o cliente cadastra; a tela de Configurações é montada a partir daqui.
 // Emissores integrados ganham um adaptador (emitir, consultar, cancelar, PDF/XML) e
@@ -74,28 +74,7 @@ const EMISSORES = [
       "Preencha os dados fiscais abaixo (código de tributação nacional de 6 dígitos e alíquota do ISS) com seu contador.",
     ],
     site: "https://www.notaas.com.br/",
-  },
-  {
-    id: "focusnfe",
-    nome: "Focus NFe",
-    integrado: true,
-    status: "em_desenvolvimento",
-    custo: { gratuito: false, texto: "Pago: a partir de R$ 89,90/mês (1 CNPJ, 100 notas); teste de 30 dias" },
-    documentos: TIPOS_NOTA,
-    certificado: "emissor",
-    resumo:
-      "Uma das maiores plataformas de emissão do país: NFS-e municipal e nacional, NF-e e NFC-e, com mais de 3.000 municípios.",
-    credenciais: [
-      { chave: "token", rotulo: "Token de acesso", tipo: "segredo", obrigatorio: true, ajuda: "Disponível no painel da Focus NFe (use o token de homologação para testes)." },
-      { chave: "ambiente", rotulo: "Ambiente", tipo: "selecao", opcoes: [["homologacao", "Testes (homologação)"], ["producao", "Produção"]], obrigatorio: true },
-    ],
-    guia: [
-      "Contrate um plano em focusnfe.com.br (a conta e o contrato são seus, em nome da sua empresa).",
-      "No painel da Focus NFe, cadastre a empresa e envie o certificado digital A1.",
-      "Copie o token de homologação, cole abaixo e emita notas de teste antes de usar o token de produção.",
-    ],
-    site: "https://focusnfe.com.br/",
-  },
+  }
 ];
 
 const buscarEmissor = (id) => EMISSORES.find((e) => e.id === id) || null;

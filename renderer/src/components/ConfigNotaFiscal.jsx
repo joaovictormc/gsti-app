@@ -402,8 +402,8 @@ export default function ConfigNotaFiscal() {
       {/* Certificado digital */}
       <Typography variant="subtitle1" fontWeight={600}>Certificado digital A1</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Necessário para emitir direto pelo Emissor Nacional. Na Notaas e na Focus NFe o certificado é enviado ao painel
-        deles; no Registro manual não é preciso. O arquivo fica cifrado <strong>somente neste computador</strong>.
+        Necessário para emitir direto pelo Emissor Nacional. Na Notaas o certificado é enviado ao painel dela; no
+        Registro manual não é preciso. O arquivo fica cifrado <strong>somente neste computador</strong>.
       </Typography>
       {cert ? (
         <Card variant="outlined">

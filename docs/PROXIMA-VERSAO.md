@@ -99,9 +99,9 @@ Atualizado em 2026-09-16.
 ## 2. Fila — próximas funcionalidades
 
 - **Emissores de nota fiscal integrados** — estrutura, registro manual, certificado A1,
-  liberação por plano e **Notaas (NFS-e)** entregues (ver seção 1). Próximos: validar a
-  Notaas com projeto em Homologação e certificado real; NF-e/NFC-e pela Notaas; adaptador
-  PlugNotas (sandbox público); Emissor Nacional direto. Detalhes em
+  liberação por plano e **Notaas (NFS-e)** entregues (ver seção 1). Catálogo definido:
+  Registro manual, Notaas e Emissor Nacional. Próximos: validar a Notaas com projeto em
+  Homologação e certificado real; Emissor Nacional direto; NF-e/NFC-e pela Notaas. Detalhes em
   [PESQUISA-NOTA-FISCAL.md](./PESQUISA-NOTA-FISCAL.md).
 - **Portal do cliente: catálogo de emissores** com guias e "solicitar outro emissor"
   (ranking de pedidos no painel admin).
